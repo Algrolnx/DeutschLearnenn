@@ -1,0 +1,6 @@
+{
+  "name": "DeutschLern",
+  "description": "Interactive German language learning app with Leitner spaced repetition, interactive flashcards, bilingual Ukrainian-English translations, and thematic packs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

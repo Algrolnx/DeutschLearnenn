@@ -1,0 +1,635 @@
+package com.example.data.repository
+
+import com.example.data.model.WordEntity
+
+data class PixabaySearchStep(
+    val query: String,
+    val lang: String = "en",
+    val isSubtopicFallback: Boolean = false
+)
+
+data class PhotoScoringProfile(
+    val subjectTokens: Set<String>,
+    val preferredTags: Set<String>,
+    val avoidTags: Set<String>,
+    val allowGraphicStyle: Boolean = false
+)
+
+enum class PersonGenderHint {
+    NONE,
+    MALE,
+    FEMALE
+}
+
+data class StockPhotoQueryPlan(
+    val steps: List<PixabaySearchStep>,
+    val scoringProfile: PhotoScoringProfile,
+    val genderHint: PersonGenderHint = PersonGenderHint.NONE
+)
+
+/**
+ * Builds concise 1-2 word Pixabay search queries and subtopic-aware tag scoring profiles
+ * so Pixabay hits match the actual meaning (e.g., pharmacy storefront instead of loose pills,
+ * office room instead of a laptop close-up, school building/classroom instead of random portraits,
+ * and distinct female/male portraits for gendered profession pairs like Lehrer/Lehrerin).
+ */
+object StockPhotoQueryBuilder {
+
+    private val parentheticalRegex = Regex("\\([^)]*\\)")
+    private val nonEnWordRegex = Regex("[^a-zA-Z0-9\\s-]")
+    private val nonDeWordRegex = Regex("[^\\p{L}0-9\\s-]")
+    private val multiSpaceRegex = Regex("\\s+")
+    private val germanTokenRegex = Regex("[\\p{L}-]+")
+
+    private val explicitFemaleRegex = Regex(
+        "\\b(female|woman|women|girl|waitress|actress|policewoman|saleswoman|postwoman|businesswoman|wife|mother|sister|daughter|grandmother|aunt|niece|girlfriend|bride|queen|princess)\\b"
+    )
+    private val explicitMaleRegex = Regex(
+        "\\b(male|man|men|boy|waiter|actor|policeman|salesman|postman|businessman|craftsman|husband|father|brother|son|grandfather|uncle|nephew|boyfriend|groom|king|prince)\\b"
+    )
+    private val personRoleSubtopics = setOf(
+        "city_jobs", "people_family", "people_relationships", "work_career", "work_trades",
+        "education_school", "education_university", "food_restaurant", "city_shopping",
+        "city_services", "shopping_stores", "society_politics", "society_media"
+    )
+    private val masculinePersonRoles = setOf(
+        "teacher", "doctor", "dentist", "vet", "veterinarian", "firefighter", "cook", "chef",
+        "engineer", "baker", "butcher", "hairdresser", "driver", "pharmacist", "architect",
+        "painter", "carpenter", "electrician", "plumber", "gardener", "mechanic", "journalist",
+        "photographer", "lawyer", "cashier", "customer", "student", "professor", "friend",
+        "neighbour", "neighbor", "colleague", "partner", "flatmate", "classmate", "boss",
+        "employee", "citizen", "singer", "artist", "chancellor", "minister"
+    )
+    private val roleQueryAliases = mapOf(
+        "vet" to "veterinarian",
+        "flatmate" to "roommate",
+        "neighbour" to "neighbor",
+        "student peer" to "college student"
+    )
+
+    private val germanNonNounCapitalized = setOf(
+        "ich", "du", "er", "sie", "es", "wir", "ihr", "man", "ein", "eine", "einen", "einem", "einer",
+        "der", "die", "das", "den", "dem", "des", "dieser", "diese", "dieses", "mein", "meine",
+        "dein", "deine", "sein", "seine", "unser", "unsere", "alle", "alles", "viele", "sehr",
+        "nicht", "kein", "keine", "sich", "hier", "dort", "heute", "morgen", "gestern", "immer",
+        "oft", "bitte", "danke", "vorsicht", "achtung", "leider", "natürlich", "vielleicht",
+        "wenn", "weil", "dass", "aber", "oder", "und", "mit", "für", "auf", "bei", "nach", "von",
+        "aus", "zum", "zur", "im", "am", "um", "über", "unter", "vor", "hinter", "zwischen"
+    )
+
+    // Curated concise 1-2 word Pixabay queries for places, rooms, objects, and abstract words
+    private val specialGermanQueries: Map<String, List<String>> = mapOf(
+        // City places & buildings (prefer actual buildings/interiors over tangential objects/portraits)
+        "apotheke" to listOf("pharmacy shop", "pharmacy store", "apothecary"),
+        "büro" to listOf("office room", "office interior", "workspace office"),
+        "schule" to listOf("school building", "classroom", "schoolhouse"),
+        "krankenhaus" to listOf("hospital building", "hospital exterior", "hospital"),
+        "universität" to listOf("university building", "university campus", "university"),
+        "bibliothek" to listOf("library interior", "library shelves", "library"),
+        "supermarkt" to listOf("supermarket aisle", "grocery store", "supermarket"),
+        "bäckerei" to listOf("bakery shop", "bakery bread", "bakery"),
+        "metzgerei" to listOf("butcher shop", "meat market"),
+        "buchhandlung" to listOf("bookstore", "bookshop"),
+        "blumenladen" to listOf("flower shop", "florist shop"),
+        "friseur" to listOf("hair salon", "barber shop"),
+        "geschäft" to listOf("storefront shop", "retail store", "shop"),
+        "laden" to listOf("shop storefront", "boutique shop"),
+        "kaufhaus" to listOf("department store", "shopping mall"),
+        "post" to listOf("post office", "mailbox"),
+        "rathaus" to listOf("city hall", "town hall"),
+        "kirche" to listOf("church building", "church"),
+        "dom" to listOf("cathedral building", "cathedral"),
+        "museum" to listOf("museum gallery", "museum building", "museum"),
+        "theater" to listOf("theater stage", "theater hall"),
+        "kino" to listOf("cinema theater", "movie theater"),
+        "restaurant" to listOf("restaurant interior", "restaurant dining"),
+        "café" to listOf("coffee shop", "cafe interior"),
+        "hotel" to listOf("hotel building", "hotel lobby", "hotel"),
+        "bahnhof" to listOf("train station", "railway station"),
+        "flughafen" to listOf("airport terminal", "airport"),
+        "tankstelle" to listOf("gas station", "petrol station"),
+        "parkplatz" to listOf("parking lot", "car park"),
+        "werkstatt" to listOf("car workshop", "garage workshop"),
+        "fabrik" to listOf("factory building", "industrial factory"),
+        "kindergarten" to listOf("kindergarten classroom", "preschool room"),
+        "schwimmbad" to listOf("swimming pool"),
+        "stadion" to listOf("football stadium", "stadium"),
+        "park" to listOf("city park", "green park"),
+
+        // Home rooms
+        "wohnung" to listOf("apartment interior", "modern apartment"),
+        "haus" to listOf("modern house", "family house"),
+        "küche" to listOf("kitchen interior", "modern kitchen"),
+        "wohnzimmer" to listOf("living room", "sofa room"),
+        "schlafzimmer" to listOf("bedroom interior", "bedroom"),
+        "badezimmer" to listOf("bathroom interior", "modern bathroom"),
+        "balkon" to listOf("apartment balcony", "balcony"),
+        "flur" to listOf("hallway interior", "corridor"),
+
+        // Travel & abstract station/service terms
+        "verspätung" to listOf("train clock", "train station"),
+        "abfahrt" to listOf("train departure", "train station"),
+        "ankunft" to listOf("airport arrival", "airport terminal"),
+        "fahrplan" to listOf("train timetable", "train schedule"),
+        "gleis" to listOf("railway tracks", "train track"),
+        "bahnsteig" to listOf("train platform", "railway platform"),
+        "durchsage" to listOf("megaphone", "loudspeaker"),
+        "sicherheitskontrolle" to listOf("airport security", "airport checkpoint"),
+        "zoll" to listOf("passport control", "customs"),
+        "umsteigen" to listOf("train platform", "train station"),
+        "auskunft" to listOf("information desk", "reception desk"),
+        "kontoauszug" to listOf("bank receipt", "financial document"),
+        "geldautomat" to listOf("atm machine", "cash machine"),
+        "führerschein" to listOf("driver license"),
+        "personalausweis" to listOf("identity card"),
+        "reisepass" to listOf("passport"),
+        "krankenwagen" to listOf("ambulance"),
+        "feuerwehr" to listOf("fire truck"),
+
+        // Vegetables, fruits & concrete objects
+        "aubergine" to listOf("eggplant"),
+        "blumenkohl" to listOf("cauliflower"),
+        "zucchini" to listOf("zucchini"),
+        "spargel" to listOf("asparagus"),
+        "radieschen" to listOf("radish"),
+        "paprika" to listOf("bell pepper"),
+        "pilz" to listOf("mushroom"),
+        "champignon" to listOf("mushroom"),
+        "kohl" to listOf("cabbage"),
+        "erbse" to listOf("green peas"),
+        "bohne" to listOf("green beans"),
+        "lauch" to listOf("leek"),
+        "sellerie" to listOf("celery"),
+        "fenchel" to listOf("fennel"),
+        "ingwer" to listOf("ginger"),
+        "artischocke" to listOf("artichoke"),
+        "rote bete" to listOf("beetroot"),
+        "handy" to listOf("smartphone"),
+        "kühlschrank" to listOf("refrigerator"),
+        "staubsauger" to listOf("vacuum cleaner"),
+        "waschmaschine" to listOf("washing machine"),
+        "trocken" to listOf("dry desert"),
+        "silbergrau" to listOf("silver metal"),
+        "passend" to listOf("puzzle"),
+        "mitgliedschaft" to listOf("membership card")
+    )
+
+    // True homonyms where subtopic determines meaning
+    private val homonymDisambiguation: Map<Pair<String, String>, String> = mapOf(
+        ("orange" to "food_fruits") to "orange fruit",
+        ("orange" to "adj_colors") to "orange color",
+        ("date" to "food_fruits") to "date fruit",
+        ("mouse" to "tech_devices") to "computer mouse",
+        ("mouse" to "tech_computers") to "computer mouse",
+        ("mouse" to "nature_animals") to "mouse animal",
+        ("bank" to "city_places") to "bank building",
+        ("bank" to "city_services") to "bank building",
+        ("bank" to "nature_landscape") to "river bank",
+        ("police" to "city_places") to "police station",
+        ("police" to "city_emergency") to "police car",
+        ("spring" to "nature_weather") to "spring flowers",
+        ("fall" to "nature_weather") to "autumn leaves",
+        ("glasses" to "shopping_clothing") to "eyeglasses",
+        ("light" to "adj_qualities") to "feather",
+        ("glass" to "food_drinks") to "water glass",
+        ("glass" to "home_kitchen") to "drinking glass",
+        ("turkey" to "food_meat_fish") to "roast turkey",
+        ("turkey" to "nature_animals") to "turkey bird",
+        ("seal" to "nature_animals") to "seal animal",
+        ("bat" to "nature_animals") to "bat animal",
+        ("crane" to "nature_animals") to "crane bird",
+        ("jam" to "food_sweets") to "fruit jam",
+        ("toast" to "food_meals") to "toast bread",
+        ("chips" to "food_sweets") to "potato chips",
+        ("match" to "sports_games") to "sports match"
+    )
+
+    internal fun detectPersonGenderHint(
+        word: WordEntity,
+        cleanDe: String,
+        enSenses: List<String>
+    ): PersonGenderHint {
+        val enLower = word.translationEn.lowercase()
+        val ukLower = word.translationUk.lowercase()
+        val articleLower = word.article.lowercase().trim()
+
+        // Explicit (f)/(m) markers take highest priority
+        if (enLower.contains("(f)") || ukLower.contains("(жінка)")) {
+            return PersonGenderHint.FEMALE
+        }
+        if (enLower.contains("(m)")) {
+            return PersonGenderHint.MALE
+        }
+
+        // Check male before female for compounds like "male nurse"
+        if (enLower.contains("male nurse") || explicitMaleRegex.containsMatchIn(enLower)) {
+            return PersonGenderHint.MALE
+        }
+        if (explicitFemaleRegex.containsMatchIn(enLower) ||
+            (enLower.contains("nurse") && !enLower.contains("male"))
+        ) {
+            return PersonGenderHint.FEMALE
+        }
+
+        // German feminine profession/role endings (e.g., Feuerwehrfrau, Lehrerin, Ärztin)
+        if (articleLower == "die") {
+            if (cleanDe.endsWith("frau")) {
+                return PersonGenderHint.FEMALE
+            }
+            if (cleanDe.length >= 5 && cleanDe.endsWith("in") && word.subtopicId in personRoleSubtopics) {
+                return PersonGenderHint.FEMALE
+            }
+        }
+
+        // German masculine profession/role nouns (e.g., Feuerwehrmann, der Lehrer in education_school)
+        if (articleLower == "der") {
+            if (cleanDe.endsWith("mann")) {
+                return PersonGenderHint.MALE
+            }
+            if (word.subtopicId in personRoleSubtopics &&
+                enSenses.any { it.lowercase() in masculinePersonRoles }
+            ) {
+                return PersonGenderHint.MALE
+            }
+        }
+
+        return PersonGenderHint.NONE
+    }
+
+    fun build(word: WordEntity): StockPhotoQueryPlan {
+        val steps = ArrayList<PixabaySearchStep>(8)
+        val seen = HashSet<String>()
+
+        fun addStep(query: String, lang: String = "en", isFallback: Boolean = false) {
+            val normalized = query.trim().take(60)
+            if (normalized.length < 2) return
+            val key = "$lang:${normalized.lowercase()}"
+            if (seen.add(key)) {
+                steps.add(PixabaySearchStep(normalized, lang, isFallback))
+            }
+        }
+
+        val cleanDe = cleanGermanTerm(word.german)
+        val enSenses = extractEnglishSenses(word.translationEn)
+        val primaryEn = enSenses.firstOrNull().orEmpty()
+        val genderHint = detectPersonGenderHint(word, cleanDe, enSenses)
+
+        // 1. Homonym disambiguation (subtopic-specific beats generic override)
+        if (primaryEn.isNotBlank()) {
+            homonymDisambiguation[primaryEn to word.subtopicId]?.let { disambiguated ->
+                addStep(disambiguated, "en")
+            }
+        }
+
+        // 2. Gender-aware person/profession queries (e.g., Lehrer vs Lehrerin, Feuerwehrmann vs Feuerwehrfrau)
+        if (genderHint != PersonGenderHint.NONE) {
+            addGenderedPersonSteps(
+                genderHint = genderHint,
+                enSenses = enSenses,
+                cleanDe = cleanDe,
+                addStep = ::addStep
+            )
+        } else {
+            // 3. Curated exact override(s) for places, rooms, and tricky non-person words
+            specialGermanQueries[cleanDe]?.forEach { curated ->
+                addStep(curated, "en")
+            }
+
+            // 4. Primary English sense (concise 1-2 words)
+            if (primaryEn.isNotBlank()) {
+                val concisePrimary = conciseQuery(primaryEn)
+                addStep(concisePrimary, "en")
+                val parts = concisePrimary.split(' ').filter { it.length >= 3 }
+                if (parts.size >= 2) {
+                    addStep(parts.last(), "en")
+                }
+            }
+
+            // 5. Secondary English sense after '/' or ',' (e.g., "untidy / messy" -> "messy")
+            if (enSenses.size > 1) {
+                addStep(conciseQuery(enSenses[1]), "en")
+            }
+
+            // 6. Native German word search (Pixabay indexes German tags natively)
+            if (cleanDe.length >= 3 && !cleanDe.equals(primaryEn, ignoreCase = true)) {
+                addStep(cleanDe, "de")
+            }
+
+            // 7. Concrete capitalized German noun from exampleDe for abstract words
+            extractExampleNoun(word.exampleDe, cleanDe)?.let { exampleNoun ->
+                addStep(exampleNoun, "de")
+            }
+        }
+
+        // 8. Guaranteed visual fallback for subtopic
+        addStep(subtopicFallbackQuery(word.subtopicId, word.categoryId), "en", isFallback = true)
+
+        val profile = buildScoringProfile(word, cleanDe, enSenses, genderHint)
+        return StockPhotoQueryPlan(steps = steps, scoringProfile = profile, genderHint = genderHint)
+    }
+
+    private fun addGenderedPersonSteps(
+        genderHint: PersonGenderHint,
+        enSenses: List<String>,
+        cleanDe: String,
+        addStep: (query: String, lang: String, isFallback: Boolean) -> Unit
+    ) {
+        val rawPrimary = enSenses.firstOrNull().orEmpty()
+        val rawSecondary = enSenses.getOrNull(1).orEmpty()
+
+        val basePrimary = stripGenderPrefix(rawPrimary).let { roleQueryAliases[it] ?: it }
+        val baseSecondary = stripGenderPrefix(rawSecondary).let { roleQueryAliases[it] ?: it }
+        // Prefer "chef" over "cook" when paired as "cook / chef" since Pixabay chef tags are cleaner
+        val leadRole = if (basePrimary == "cook" && baseSecondary == "chef") "chef" else basePrimary
+
+        when (genderHint) {
+            PersonGenderHint.FEMALE -> {
+                if (leadRole.isNotBlank()) {
+                    if (leadRole.endsWith("woman")) {
+                        val stem = leadRole.removeSuffix("woman").trim()
+                        addStep(leadRole, "en", false)
+                        if (stem.length >= 3) {
+                            addStep("$stem woman", "en", false)
+                            addStep("female $stem", "en", false)
+                        }
+                    } else if (leadRole in setOf("waitress", "actress", "wife", "mother", "sister", "daughter", "grandmother", "aunt", "niece", "girlfriend", "bride", "queen", "princess", "woman", "girl")) {
+                        addStep(leadRole, "en", false)
+                        addStep("$leadRole woman", "en", false)
+                    } else {
+                        val conciseRole = conciseQuery(leadRole)
+                        addStep("$conciseRole woman", "en", false)
+                        addStep("female $conciseRole", "en", false)
+                    }
+                }
+                if (baseSecondary.isNotBlank() && baseSecondary != leadRole) {
+                    val conciseSecondary = conciseQuery(baseSecondary)
+                    addStep("$conciseSecondary woman", "en", false)
+                }
+                if (cleanDe.length >= 3) {
+                    addStep(cleanDe, "de", false)
+                }
+                if (leadRole.isNotBlank()) {
+                    addStep(conciseQuery(leadRole), "en", false)
+                }
+            }
+
+            PersonGenderHint.MALE -> {
+                if (leadRole.isNotBlank()) {
+                    if (leadRole.endsWith("man") && leadRole != "woman") {
+                        val stem = leadRole.removeSuffix("man").trim()
+                        addStep(leadRole, "en", false)
+                        if (stem.length >= 3) {
+                            addStep("$stem man", "en", false)
+                        }
+                    } else if (leadRole in setOf("waiter", "actor", "husband", "father", "brother", "son", "grandfather", "uncle", "nephew", "boyfriend", "groom", "king", "prince", "man", "boy")) {
+                        addStep(leadRole, "en", false)
+                        addStep("$leadRole man", "en", false)
+                    } else {
+                        val conciseRole = conciseQuery(leadRole)
+                        addStep("$conciseRole man", "en", false)
+                        addStep("male $conciseRole", "en", false)
+                    }
+                }
+                if (baseSecondary.isNotBlank() && baseSecondary != leadRole) {
+                    val conciseSecondary = conciseQuery(baseSecondary)
+                    addStep("$conciseSecondary man", "en", false)
+                }
+                if (cleanDe.length >= 3) {
+                    addStep(cleanDe, "de", false)
+                }
+                if (leadRole.isNotBlank()) {
+                    addStep(conciseQuery(leadRole), "en", false)
+                }
+            }
+
+            PersonGenderHint.NONE -> Unit
+        }
+    }
+
+    private fun stripGenderPrefix(sense: String): String {
+        return sense.lowercase()
+            .trim()
+            .removePrefix("female ")
+            .removePrefix("male ")
+            .trim()
+    }
+
+    internal fun buildScoringProfile(
+        word: WordEntity,
+        cleanDe: String,
+        enSenses: List<String>,
+        genderHint: PersonGenderHint = detectPersonGenderHint(word, cleanDe, enSenses)
+    ): PhotoScoringProfile {
+        val subjectTokens = LinkedHashSet<String>()
+        enSenses.take(2).forEach { sense ->
+            sense.split(' ').filter { it.length >= 3 }.forEach { token ->
+                val lower = token.lowercase()
+                subjectTokens.add(lower)
+                roleQueryAliases[lower]?.let { subjectTokens.add(it) }
+            }
+        }
+        cleanDe.split(' ').filter { it.length >= 3 }.forEach { subjectTokens.add(it.lowercase()) }
+        if (genderHint == PersonGenderHint.NONE) {
+            specialGermanQueries[cleanDe]?.firstOrNull()?.split(' ')
+                ?.filter { it.length >= 3 }
+                ?.forEach { subjectTokens.add(it.lowercase()) }
+        }
+
+        val (preferred, avoid, allowGraphic) = when {
+            genderHint == PersonGenderHint.FEMALE -> Triple(
+                setOf(
+                    "woman", "female", "lady", "girl", "person", "people",
+                    "portrait", "worker", "professional", "uniform"
+                ),
+                setOf(
+                    "man", "men", "male", "gentleman", "boy", "boys", "beard", "mustache",
+                    "empty", "building", "landscape", "abstract"
+                ),
+                false
+            )
+            genderHint == PersonGenderHint.MALE -> Triple(
+                setOf(
+                    "man", "male", "gentleman", "person", "people",
+                    "portrait", "worker", "professional", "uniform"
+                ),
+                setOf(
+                    "woman", "women", "female", "lady", "girl", "girls",
+                    "empty", "building", "landscape", "abstract"
+                ),
+                false
+            )
+            word.subtopicId in setOf("city_places", "shopping_stores", "travel_station", "travel_hotel") -> Triple(
+                setOf(
+                    "building", "architecture", "facade", "exterior", "interior", "store", "shop",
+                    "storefront", "classroom", "hall", "room", "workspace", "entrance", "street",
+                    "city", "urban", "shelves", "counter", "lobby", "terminal", "station", "campus",
+                    "pharmacy", "hospital", "school", "office", "library", "bakery", "supermarket"
+                ),
+                setOf(
+                    "pills", "pill", "tablet", "tablets", "capsule", "capsules", "medication",
+                    "children", "child", "kids", "kid", "girl", "girls", "boy", "boys", "baby",
+                    "portrait", "smiling", "smile", "face", "woman", "man", "selfie", "people",
+                    "laptop", "notebook", "pen", "pencil", "smartphone", "phone", "keyboard",
+                    "stethoscope", "syringe", "hands", "hand"
+                ),
+                false
+            )
+            word.subtopicId == "home_rooms" -> Triple(
+                setOf("room", "interior", "home", "house", "apartment", "furniture", "modern", "design", "living", "architecture"),
+                setOf("portrait", "face", "woman", "man", "child", "children", "girl", "boy", "cat", "dog", "pet"),
+                false
+            )
+            word.subtopicId == "work_office" -> Triple(
+                setOf("office", "workspace", "desk", "room", "interior", "chair", "business", "corporate", "meeting"),
+                setOf("child", "children", "baby", "animal", "pet", "flower"),
+                false
+            )
+            word.categoryId == "food" && word.subtopicId != "food_restaurant" -> Triple(
+                setOf("food", "fruit", "vegetable", "fresh", "dish", "meal", "drink", "eat", "healthy", "organic", "ripe", "sweet", "bakery", "cooking", "ingredient"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "children", "people", "person", "face", "selfie"),
+                false
+            )
+            word.subtopicId in setOf("nature_animals", "nature_wildlife") -> Triple(
+                setOf("animal", "wildlife", "mammal", "bird", "pet", "nature", "fauna", "wild"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "people", "toy", "plush", "statue", "sculpture", "tattoo"),
+                false
+            )
+            word.subtopicId in setOf("nature_plants", "nature_landscape", "nature_weather") -> Triple(
+                setOf("nature", "plant", "flower", "tree", "landscape", "outdoor", "sky", "forest", "mountain", "water", "weather"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "selfie"),
+                false
+            )
+            word.subtopicId in setOf("city_jobs", "people_family", "people_relationships", "work_career", "work_trades") -> Triple(
+                setOf("person", "people", "portrait", "worker", "professional", "uniform", "doctor", "teacher", "chef", "family", "friends", "team"),
+                setOf("empty", "building", "landscape", "abstract"),
+                false
+            )
+            word.subtopicId in setOf("art_creativity", "adj_colors") -> Triple(
+                setOf("color", "colorful", "art", "paint", "painting", "palette", "texture", "canvas"),
+                setOf("portrait", "selfie"),
+                true
+            )
+            else -> Triple(
+                emptySet(),
+                emptySet(),
+                false
+            )
+        }
+
+        // Never penalize a tag that is literally one of the word's own subject tokens!
+        val safeAvoid = avoid.filterNot { it in subjectTokens }.toSet()
+
+        return PhotoScoringProfile(
+            subjectTokens = subjectTokens,
+            preferredTags = preferred,
+            avoidTags = safeAvoid,
+            allowGraphicStyle = allowGraphic
+        )
+    }
+
+    internal fun extractEnglishSenses(raw: String): List<String> {
+        return raw.split('/', ';', ',')
+            .mapNotNull { part ->
+                val cleaned = cleanEnglishTerm(part)
+                cleaned.takeIf { it.isNotBlank() }
+            }
+            .distinct()
+    }
+
+    internal fun cleanEnglishTerm(raw: String): String {
+        val stripped = parentheticalRegex.replace(raw, " ")
+            .lowercase()
+            .trim()
+            .removePrefix("to be ")
+            .removePrefix("to ")
+            .removePrefix("the ")
+            .removePrefix("a ")
+            .removePrefix("an ")
+            .removePrefix("one's ")
+            .removePrefix("someone ")
+            .removePrefix("something ")
+        return multiSpaceRegex
+            .replace(nonEnWordRegex.replace(stripped, " "), " ")
+            .trim()
+    }
+
+    internal fun cleanGermanTerm(raw: String): String {
+        val firstSense = raw
+            .split('/', ';', ',')
+            .firstOrNull()
+            .orEmpty()
+        val stripped = parentheticalRegex.replace(firstSense, " ")
+            .lowercase()
+            .trim()
+            .removePrefix("der ")
+            .removePrefix("die ")
+            .removePrefix("das ")
+            .removePrefix("sich ")
+            .trim()
+        return multiSpaceRegex
+            .replace(nonDeWordRegex.replace(stripped, " "), " ")
+            .trim()
+    }
+
+    internal fun extractExampleNoun(exampleDe: String, excludeLower: String): String? {
+        if (exampleDe.isBlank()) return null
+        val tokens = germanTokenRegex.findAll(exampleDe).map { it.value }.toList()
+        if (tokens.isEmpty()) return null
+
+        val midSentenceNoun = tokens.drop(1).firstOrNull { token ->
+            token.length >= 4 &&
+                token[0].isUpperCase() &&
+                token.lowercase() != excludeLower &&
+                token.lowercase() !in germanNonNounCapitalized
+        }
+        if (midSentenceNoun != null) return midSentenceNoun
+
+        val first = tokens.first()
+        if (first.length >= 4 &&
+            first[0].isUpperCase() &&
+            first.lowercase() != excludeLower &&
+            first.lowercase() !in germanNonNounCapitalized
+        ) {
+            return first
+        }
+        return null
+    }
+
+    private fun conciseQuery(cleaned: String): String {
+        val words = cleaned.split(' ').filter { it.isNotBlank() }
+        return if (words.size <= 2) cleaned else words.take(2).joinToString(" ")
+    }
+
+    internal fun subtopicFallbackQuery(subtopicId: String, categoryId: String): String = when {
+        subtopicId == "food_fruits" -> "fruit"
+        subtopicId == "food_vegetables" -> "vegetables"
+        subtopicId == "food_drinks" -> "drink"
+        subtopicId == "food_sweets" -> "dessert"
+        subtopicId == "food_meals" -> "food"
+        subtopicId == "food_meat_fish" -> "cooking"
+        subtopicId == "nature_animals" || subtopicId == "nature_wildlife" -> "animal"
+        subtopicId == "nature_plants" -> "plant"
+        subtopicId == "nature_weather" -> "weather"
+        subtopicId == "travel_station" -> "train station"
+        subtopicId == "travel_transport" -> "transport"
+        subtopicId == "city_places" -> "city building"
+        subtopicId == "home_rooms" -> "room interior"
+        subtopicId == "adj_colors" -> "colorful"
+        subtopicId == "music_instruments" -> "music"
+        subtopicId == "sports_games" -> "sport"
+        categoryId == "food" -> "food"
+        categoryId == "nature" -> "nature"
+        categoryId == "travel" -> "travel"
+        categoryId == "body" -> "health"
+        categoryId == "city" -> "city"
+        categoryId == "home" -> "interior"
+        categoryId == "work" -> "office"
+        categoryId == "tech" -> "technology"
+        categoryId == "education" -> "books"
+        categoryId == "shopping" -> "shopping"
+        categoryId == "emotions" -> "people"
+        categoryId == "family" -> "family"
+        categoryId == "time" -> "clock"
+        else -> "lifestyle"
+    }
+}

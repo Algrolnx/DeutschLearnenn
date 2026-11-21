@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Open book left page -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M30,38 C36,36 44,37 52,40 L52,74 C44,71 36,70 30,72 Z" />
+        <!-- Open book right page -->
+        <path
+            android:fillColor="#F1F5F9"
+            android:pathData="M56,40 C64,37 72,36 78,38 L78,72 C72,70 64,71 56,74 Z" />
+        <!-- Book spine / center fold -->
+        <path
+            android:fillColor="#E2E8F0"
+            android:pathData="M52,40 L56,40 L56,74 L52,74 Z" />
+        <!-- Ribbon bookmark - German flag red & gold accent -->
+        <path
+            android:fillColor="#EF4444"
+            android:pathData="M52,38 L56,38 L56,54 L54,51 L52,54 Z" />
+        <path
+            android:fillColor="#F59E0B"
+            android:pathData="M52,54 L56,54 L56,62 L54,59 L52,62 Z" />
+        <!-- Floating Flashcard Accent in upper right -->
+        <path
+            android:fillColor="#60A5FA"
+            android:pathData="M66,26 L76,28 L72,42 L62,40 Z" />
+        <!-- Sparkle Star in upper left -->
+        <path
+            android:fillColor="#FBBF24"
+            android:pathData="M34,26 L36,31 L41,33 L36,35 L34,40 L32,35 L27,33 L32,31 Z" />
+    </group>
+</vector>
