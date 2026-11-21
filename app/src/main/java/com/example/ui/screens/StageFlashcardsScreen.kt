@@ -199,12 +199,18 @@ fun StageFlashcardsScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 if (isFinished || currentWord == null) {
+                    val nextEnabled = viewModel.getNextEnabledStage(1)
                     Spacer(modifier = Modifier.weight(0.3f))
                     StageCompletedSuccessCard(
                         stageNumber = 1,
+                        nextStageNumber = nextEnabled,
                         title = "Етап 1 пройдено!",
-                        subtitle = "Ви ознайомилися з усіма словами. Тепер розблоковано Етап 2: Слухання!",
-                        onNextStage = { viewModel.startStage2(subtopicId) },
+                        subtitle = if (nextEnabled != null) {
+                            "Ви ознайомилися з усіма словами. Далі відкрито Етап $nextEnabled!"
+                        } else {
+                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 1) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                     Spacer(modifier = Modifier.weight(0.7f))
@@ -298,6 +304,7 @@ fun StageCompletedSuccessCard(
     subtitle: String,
     onNextStage: () -> Unit,
     onBackToHub: () -> Unit,
+    nextStageNumber: Int? = if (stageNumber < 6) stageNumber + 1 else null,
     modifier: Modifier = Modifier
 ) {
     val extended = LocalAppExtendedColors.current
@@ -361,7 +368,7 @@ fun StageCompletedSuccessCard(
                     .height(50.dp)
             ) {
                 Text(
-                    if (stageNumber < 6) "Перейти до Етапу ${stageNumber + 1}" else "Завершити тему",
+                    if (nextStageNumber != null) "Перейти до Етапу $nextStageNumber" else "Завершити тему",
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )

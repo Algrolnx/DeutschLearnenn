@@ -9,10 +9,16 @@ import com.example.data.repository.PhotoCandidate
 import com.example.data.repository.StockPhotoProvider
 import com.example.data.repository.StockPhotoQueryBuilder
 import com.example.data.repository.StockPhotoRepository
+import com.example.ui.LearningViewModel
+import com.example.ui.ReviewDashboardState
 import com.example.ui.components.illustrations.WordArtworkKey
 import com.example.ui.components.illustrations.WordArtworkResolver
+import com.example.util.SpacedRepetition
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -382,5 +388,90 @@ class ExampleUnitTest {
             usedUrlsByOtherWords = setOf(photo2.imageUrl)
         )
         assertEquals(photo3, cycled)
+    }
+
+    @Test
+    fun stage6SpellingAutoSpaceAndOneLetterHintWorkCleanly() {
+        // Auto-space insertion after word boundaries
+        assertEquals(
+            "Rote ",
+            LearningViewModel.autoAdvanceSeparators("Rote", "Rote Bete")
+        )
+        assertEquals(
+            "Tag der ",
+            LearningViewModel.autoAdvanceSeparators("Tag der", "Tag der Deutschen Einheit")
+        )
+
+        // Backspace skips trailing auto-inserted space and deletes preceding letter
+        assertEquals(
+            "Rot",
+            LearningViewModel.backspaceOverSeparators("Rote ")
+        )
+        assertEquals(
+            "Rote",
+            LearningViewModel.backspaceOverSeparators("Rote B")
+        )
+
+        // Interactive 1-letter hint progression & wrong-suffix repair
+        assertEquals("T", LearningViewModel.computeNextHintInput("", "Tomate"))
+        assertEquals("To", LearningViewModel.computeNextHintInput("T", "Tomate"))
+        assertEquals("Tom", LearningViewModel.computeNextHintInput("Ton", "Tomate"))
+        assertEquals("Rote B", LearningViewModel.computeNextHintInput("Rote", "Rote Bete"))
+        assertEquals("Rote B", LearningViewModel.computeNextHintInput("Rote ", "Rote Bete"))
+        assertEquals("Rote ", LearningViewModel.computeNextHintInput("Rot", "Rote Bete"))
+    }
+
+    @Test
+    fun spacedRepetition16StepCycleAndDailyLimitWorkCorrectly() {
+        val t0 = 1_700_000_000_000L
+
+        // Initial enrollment schedules first review in 6 hours (same day)
+        assertEquals(t0 + TimeUnit.HOURS.toMillis(6L), SpacedRepetition.initialEnrollmentTimestamp(t0))
+
+        // Step 0 -> 1 schedules next review in 1 day (24h)
+        val r1 = SpacedRepetition.calculate16StepReview(currentStep = 0, isCorrect = true, now = t0)
+        assertEquals(1, r1.newStep)
+        assertEquals(24L, r1.intervalHours)
+        assertFalse(r1.isMastered)
+
+        // Step 1 -> 2 schedules next review in 2 days (48h)
+        val r2 = SpacedRepetition.calculate16StepReview(currentStep = 1, isCorrect = true, now = t0)
+        assertEquals(2, r2.newStep)
+        assertEquals(48L, r2.intervalHours)
+
+        // Complete all 16 repetitions -> reaches mastered state and box 5
+        var step = 0
+        var lastResult = r1
+        repeat(16) {
+            lastResult = SpacedRepetition.calculate16StepReview(currentStep = step, isCorrect = true, now = t0)
+            step = lastResult.newStep
+        }
+        assertEquals(16, step)
+        assertTrue(lastResult.isMastered)
+        assertEquals(5, lastResult.newBox)
+
+        // Mistake gently steps back by 2 (never wipes progress to 0 from mid-progress)
+        val mistake = SpacedRepetition.calculate16StepReview(currentStep = 6, isCorrect = false, now = t0)
+        assertEquals(4, mistake.newStep)
+        assertEquals(12L, mistake.intervalHours)
+        assertFalse(mistake.isMastered)
+
+        // Daily anti-overload quota calculation
+        val dashboard = ReviewDashboardState(
+            dueCount = 135,
+            enrolledCount = 200,
+            mastered16Count = 12,
+            reviewsDoneToday = 15,
+            dailyLimit = 60
+        )
+        assertEquals(45, dashboard.remainingDailyQuota)
+        assertEquals(45, dashboard.availableTodayCount)
+        assertEquals(90, dashboard.deferredToTomorrowCount)
+
+        // Enabled stage skipping
+        val customStages = setOf(1, 3, 6)
+        assertEquals(3, LearningViewModel.nextEnabledStage(customStages, 1))
+        assertEquals(6, LearningViewModel.nextEnabledStage(customStages, 3))
+        assertNull(LearningViewModel.nextEnabledStage(customStages, 6))
     }
 }

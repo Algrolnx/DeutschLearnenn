@@ -10,6 +10,7 @@ import com.example.data.model.TopicCatalog
 import com.example.data.model.WordEntity
 import com.example.util.ReviewRating
 import com.example.util.SpacedRepetition
+import com.example.util.SrsStepResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -23,14 +24,27 @@ data class ImportSummary(
     val skippedCount: Int
 )
 
+data class ReviewDashboardSnapshot(
+    val dueCount: Int = 0,
+    val enrolledCount: Int = 0,
+    val mastered16Count: Int = 0,
+    val nextReviewTimestamp: Long? = null
+)
+
 class VocabularyRepository(
     private val wordDao: WordDao,
     private val appContext: Context? = null
 ) {
 
+    private val srsPrefs by lazy {
+        appContext?.getSharedPreferences("deutschlern_srs_steps", Context.MODE_PRIVATE)
+    }
+
     fun observeWordCount(): Flow<Int> = wordDao.observeWordCount()
 
     fun observeFavoriteCount(): Flow<Int> = wordDao.observeFavoriteCount()
+
+    fun observeEnrolledWordCount(): Flow<Int> = wordDao.observeEnrolledWordCount()
 
     fun observeBoxCounts(): Flow<List<BoxCount>> = wordDao.observeBoxCounts()
 
@@ -351,11 +365,91 @@ class VocabularyRepository(
         ImportSummary(imported, updated, skipped)
     }
 
-    suspend fun completeStage(subtopicId: String, stage: Int, score: Int) = withContext(Dispatchers.IO) {
+    fun getWordSrsStep(word: WordEntity): Int {
+        val stored = srsPrefs?.getInt("step_${word.id}", -1) ?: -1
+        if (stored >= 0) return stored.coerceIn(0, SpacedRepetition.TARGET_REPETITIONS)
+        return if (word.nextReviewTimestamp > 0L) {
+            ((word.box - 1) * 3).coerceIn(0, 12)
+        } else {
+            0
+        }
+    }
+
+    private fun saveWordSrsStep(wordId: Int, step: Int) {
+        srsPrefs?.edit()?.putInt("step_$wordId", step.coerceIn(0, SpacedRepetition.TARGET_REPETITIONS))?.apply()
+    }
+
+    private fun countMastered16StepWords(): Int {
+        val all = srsPrefs?.all ?: return 0
+        var count = 0
+        for ((k, v) in all) {
+            if (k.startsWith("step_") && (v as? Int ?: 0) >= SpacedRepetition.TARGET_REPETITIONS) {
+                count++
+            }
+        }
+        return count
+    }
+
+    suspend fun getReviewDashboardSnapshot(now: Long = System.currentTimeMillis()): ReviewDashboardSnapshot =
+        withContext(Dispatchers.IO) {
+            ReviewDashboardSnapshot(
+                dueCount = wordDao.countDueEnrolledWords(now),
+                enrolledCount = wordDao.countEnrolledWords(),
+                mastered16Count = countMastered16StepWords(),
+                nextReviewTimestamp = wordDao.getNextUpcomingReviewTimestamp(now)
+            )
+        }
+
+    suspend fun getDueWordsForMixedReview(
+        now: Long = System.currentTimeMillis(),
+        limit: Int = 15
+    ): List<WordEntity> = withContext(Dispatchers.IO) {
+        if (limit <= 0) return@withContext emptyList()
+        wordDao.getDueEnrolledWordsOnce(now, limit)
+    }
+
+    suspend fun getEarlyWordsForMixedReview(limit: Int = 10): List<WordEntity> = withContext(Dispatchers.IO) {
+        if (limit <= 0) return@withContext emptyList()
+        wordDao.getEarlyReviewEnrolledWordsOnce(limit)
+    }
+
+    suspend fun enrollSubtopicWordsForSrs(
+        subtopicId: String,
+        level: String,
+        now: Long = System.currentTimeMillis()
+    ) = withContext(Dispatchers.IO) {
+        val words = getWordsBySubtopicAndLevelOnce(subtopicId, level, 15)
+        val firstDue = SpacedRepetition.initialEnrollmentTimestamp(now)
+        for (word in words) {
+            if (word.nextReviewTimestamp == 0L) {
+                wordDao.enrollWordForSrs(word.id, firstDue)
+                if ((srsPrefs?.getInt("step_${word.id}", -1) ?: -1) < 0) {
+                    saveWordSrsStep(word.id, 0)
+                }
+            }
+        }
+    }
+
+    suspend fun completeStage(
+        subtopicId: String,
+        stage: Int,
+        score: Int,
+        enabledStages: Set<Int> = setOf(1, 2, 3, 4, 5, 6),
+        level: String = "A1"
+    ) = withContext(Dispatchers.IO) {
         val currentProgress = wordDao.getSubtopicProgress(subtopicId).firstOrNull()
             ?: SubtopicProgressEntity(subtopicId = subtopicId)
-        val newUnlocked = maxOf(currentProgress.unlockedStage, (stage + 1).coerceAtMost(6))
-        val newCompleted = maxOf(currentProgress.completedStages, stage)
+        val nextEnabled = enabledStages.filter { it > stage }.minOrNull()
+        val newUnlocked = if (nextEnabled != null) {
+            maxOf(currentProgress.unlockedStage, nextEnabled)
+        } else {
+            6
+        }
+        val newCompleted = if (nextEnabled == null) {
+            6
+        } else {
+            maxOf(currentProgress.completedStages, stage)
+        }
         val newStars = currentProgress.stars + if (score >= 4) 3 else if (score >= 2) 2 else 1
 
         val updated = when (stage) {
@@ -368,18 +462,52 @@ class VocabularyRepository(
             else -> currentProgress
         }
         wordDao.saveSubtopicProgress(updated)
+
+        // When the learner completes the final enabled stage of a subtopic,
+        // ensure every word in that subtopic enters the 6h -> 16-repetition cycle.
+        if (nextEnabled == null) {
+            enrollSubtopicWordsForSrs(subtopicId, level)
+        }
     }
 
+    /**
+     * Records a practice answer during initial subtopic stages (Stages 1..6).
+     * Enrolls newly seen words into the 6-hour first review slot without prematurely
+     * skipping steps in the 16-repetition cycle.
+     */
     suspend fun recordReview(wordId: Int, rating: ReviewRating) = withContext(Dispatchers.IO) {
         val word = wordDao.getWordById(wordId) ?: return@withContext
-        val result = SpacedRepetition.calculateNextReview(word.box, rating)
-        val isCorrectDelta = if (result.isCorrect) 1 else 0
+        val isCorrectDelta = if (rating != ReviewRating.AGAIN) 1 else 0
+        if (word.nextReviewTimestamp == 0L) {
+            val firstReview = SpacedRepetition.initialEnrollmentTimestamp()
+            saveWordSrsStep(wordId, 0)
+            wordDao.updateReviewResult(
+                id = wordId,
+                newBox = 1,
+                nextReview = firstReview,
+                isCorrectDelta = isCorrectDelta
+            )
+        } else {
+            wordDao.incrementWordCountsOnly(wordId, isCorrectDelta)
+        }
+    }
+
+    /**
+     * Records an answer inside the Spaced-Repetition Mixed Review tab,
+     * advancing or gently stepping back the 16-repetition schedule.
+     */
+    suspend fun recordSpacedReview(wordId: Int, isCorrect: Boolean): SrsStepResult? = withContext(Dispatchers.IO) {
+        val word = wordDao.getWordById(wordId) ?: return@withContext null
+        val currentStep = getWordSrsStep(word)
+        val result = SpacedRepetition.calculate16StepReview(currentStep, isCorrect)
+        saveWordSrsStep(wordId, result.newStep)
         wordDao.updateReviewResult(
             id = wordId,
             newBox = result.newBox,
             nextReview = result.nextReviewTimestamp,
-            isCorrectDelta = isCorrectDelta
+            isCorrectDelta = if (isCorrect) 1 else 0
         )
+        result
     }
 
     suspend fun toggleFavorite(wordId: Int, isFavorite: Boolean) = withContext(Dispatchers.IO) {
@@ -392,5 +520,6 @@ class VocabularyRepository(
         initialWords.chunked(500).forEach { chunk ->
             wordDao.insertAll(chunk)
         }
+        srsPrefs?.edit()?.clear()?.apply()
     }
 }

@@ -176,11 +176,17 @@ fun StageArticleScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (isFinished || currentQ == null) {
+                    val nextEnabled = viewModel.getNextEnabledStage(4)
                     StageCompletedSuccessCard(
                         stageNumber = 4,
+                        nextStageNumber = nextEnabled,
                         title = "Етап 4 пройдено!",
-                        subtitle = "Ви відмінно орієнтуєтеся в граматичних родах! Розблоковано Етап 5: Доповнення пропусків у реченнях.",
-                        onNextStage = { viewModel.startStage5(subtopicId) },
+                        subtitle = if (nextEnabled != null) {
+                            "Ви відмінно орієнтуєтеся в граматичних родах! Далі відкрито Етап $nextEnabled."
+                        } else {
+                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 4) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {

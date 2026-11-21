@@ -174,11 +174,17 @@ fun StageListeningScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (isFinished || currentQ == null) {
+                    val nextEnabled = viewModel.getNextEnabledStage(2)
                     StageCompletedSuccessCard(
                         stageNumber = 2,
+                        nextStageNumber = nextEnabled,
                         title = "Етап 2 пройдено!",
-                        subtitle = "Ви чудово розпізнаєте німецьку мову на слух. Розблоковано Етап 3: Тест!",
-                        onNextStage = { viewModel.startStage3(subtopicId) },
+                        subtitle = if (nextEnabled != null) {
+                            "Ви чудово розпізнаєте німецьку мову на слух. Далі відкрито Етап $nextEnabled!"
+                        } else {
+                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 2) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {

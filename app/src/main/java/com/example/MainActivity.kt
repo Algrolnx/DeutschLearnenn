@@ -17,6 +17,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.LearningViewModel
 import com.example.ui.Screen
 import com.example.ui.screens.MainTopicsScreen
+import com.example.ui.screens.MixedReviewSessionScreen
 import com.example.ui.screens.ProgressScreen
 import com.example.ui.screens.StageArticleScreen
 import com.example.ui.screens.StageFillBlankScreen
@@ -78,6 +79,7 @@ class MainActivity : ComponentActivity() {
                                 subtopicId = screen.subtopicId,
                                 viewModel = viewModel
                             )
+                            is Screen.MixedReview -> MixedReviewSessionScreen(viewModel = viewModel)
                             is Screen.Progress -> ProgressScreen(viewModel = viewModel)
                         }
                     }

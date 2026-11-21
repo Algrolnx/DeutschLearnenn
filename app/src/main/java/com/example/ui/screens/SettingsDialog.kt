@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,12 +30,15 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -94,6 +99,8 @@ fun SettingsDialog(
     val selectedVoiceName by viewModel.ttsManager.selectedVoiceName.collectAsStateWithLifecycle()
     val totalWords by viewModel.totalWordCount.collectAsStateWithLifecycle()
     val ioStatus by viewModel.ioStatusMessage.collectAsStateWithLifecycle()
+    val enabledStages by viewModel.enabledStages.collectAsStateWithLifecycle()
+    val dailyReviewLimit by viewModel.dailyReviewLimit.collectAsStateWithLifecycle()
 
     val exportJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -127,7 +134,10 @@ fun SettingsDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -135,19 +145,18 @@ fun SettingsDialog(
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             border = BorderStroke(1.dp, extended.cardBorder),
             modifier = Modifier
-                .fillMaxWidth(0.93f)
-                .padding(vertical = 20.dp)
+                .fillMaxWidth(0.94f)
+                .widthIn(max = 520.dp)
+                .safeDrawingPadding()
+                .padding(vertical = 12.dp)
                 .testTag("settings_dialog")
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp)
-            ) {
-                // Header
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Pinned Header
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -192,9 +201,16 @@ fun SettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
                 HorizontalDivider(color = extended.cardBorder)
-                Spacer(modifier = Modifier.height(14.dp))
+
+                // Scrollable Settings Body
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
 
                 // Section 0: Theme Selection (Light, Dark, Sepia, Sage, System)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -371,6 +387,181 @@ fun SettingsDialog(
                                 }
                             }
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = extended.cardBorder)
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Section 1.5: Customizable Learning & Review Stages
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Етапи навчання та повторення",
+                        fontFamily = LoraFontFamily,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Recommendation Callout above toggles
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = StreakAmber.copy(alpha = 0.13f),
+                    border = BorderStroke(1.dp, StreakAmber.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("stages_recommendation_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = StreakAmber,
+                            modifier = Modifier.size(18.dp).padding(top = 1.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Рекомендовано залишити всі 6 етапів",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Поєднання карток, слухання, тестів, артиклів, контексту й правопису активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. За бажанням ви можете вимкнути окремі етапи нижче (мінімум 1 має залишитися активним).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 17.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val stageOptions = listOf(
+                    Triple(1, "Етап 1 · Картки (Lernkarten)", "Знайомство зі словом, фото та озвученням"),
+                    Triple(2, "Етап 2 · Слухання (Hören)", "Сприйняття німецької мови на слух"),
+                    Triple(3, "Етап 3 · Тест (Wortwahl)", "Вибір перекладу з 4 варіантів"),
+                    Triple(4, "Етап 4 · Артиклі (der / die / das)", "Тренажер граматичного роду іменників"),
+                    Triple(5, "Етап 5 · Пропуски (Lückentext)", "Підстановка слова в живе речення"),
+                    Triple(6, "Етап 6 · Правопис (Schreiben)", "Написання слова з літер (3 спроби + підказка)")
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    stageOptions.forEach { (stageNum, stageTitle, stageDesc) ->
+                        val isEnabled = stageNum in enabledStages
+                        val isLastActive = isEnabled && enabledStages.size <= 1
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = extended.subtleFill,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else extended.cardBorder
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                                    Text(
+                                        text = stageTitle,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = stageDesc,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = isEnabled,
+                                    enabled = !isLastActive,
+                                    onCheckedChange = { viewModel.toggleStageEnabled(stageNum) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                        checkedTrackColor = MaterialTheme.colorScheme.primary
+                                    ),
+                                    modifier = Modifier.testTag("stage_toggle_$stageNum")
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Daily Review Limit Selector (Anti-overload cap)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Replay,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Денний ліміт повторень",
+                        fontFamily = LoraFontFamily,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Захищає від перевтоми: зайві слова спокійно переносяться на наступні дні без тиску.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LearningViewModel.DAILY_LIMIT_PRESETS.forEach { preset ->
+                        val selected = dailyReviewLimit == preset
+                        FilterChip(
+                            selected = selected,
+                            onClick = { viewModel.setDailyReviewLimit(preset) },
+                            label = {
+                                Text(
+                                    text = if (preset == 60) "$preset · Опт." else "$preset / день",
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("daily_limit_$preset")
+                        )
                     }
                 }
 
@@ -558,7 +749,6 @@ fun SettingsDialog(
                 ) {
                     Button(
                         onClick = {
-                            viewModel.ttsManager.boostSystemVolume()
                             viewModel.speak("Guten Tag, der Apfel schmeckt gut!")
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -752,24 +942,32 @@ fun SettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                }
 
-                // Done Button
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(14.dp),
+                HorizontalDivider(color = extended.cardBorder)
+
+                // Pinned Done Button safely above phone navigation bar
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("done_settings_button")
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
-                    Text(
-                        text = "Зберегти та закрити",
-                        fontFamily = LoraFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("done_settings_button")
+                    ) {
+                        Text(
+                            text = "Зберегти та закрити",
+                            fontFamily = LoraFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
                 }
             }
         }

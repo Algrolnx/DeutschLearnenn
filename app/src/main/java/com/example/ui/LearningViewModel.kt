@@ -13,7 +13,11 @@ import com.example.data.model.WordEntity
 import com.example.data.repository.VocabularyRepository
 import com.example.ui.theme.AppThemeMode
 import com.example.util.ReviewRating
+import com.example.util.SpacedRepetition
 import com.example.util.TtsManager
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,7 +47,86 @@ sealed class Screen {
     data class Stage5FillBlank(val subtopicId: String) : Screen()
     data class Stage6Spelling(val subtopicId: String) : Screen()
 
+    object MixedReview : Screen()
     object Progress : Screen()
+}
+
+enum class MainTab {
+    TOPICS,
+    REVIEW,
+    FAVORITES
+}
+
+data class ReviewDashboardState(
+    val dueCount: Int = 0,
+    val enrolledCount: Int = 0,
+    val mastered16Count: Int = 0,
+    val nextReviewTimestamp: Long? = null,
+    val reviewsDoneToday: Int = 0,
+    val dailyLimit: Int = LearningViewModel.DEFAULT_DAILY_REVIEW_LIMIT,
+    val isLoading: Boolean = false
+) {
+    val remainingDailyQuota: Int get() = (dailyLimit - reviewsDoneToday).coerceAtLeast(0)
+    val availableTodayCount: Int get() = minOf(dueCount, remainingDailyQuota)
+    val deferredToTomorrowCount: Int get() = (dueCount - remainingDailyQuota).coerceAtLeast(0)
+}
+
+sealed class MixedReviewItem {
+    abstract val word: WordEntity
+    abstract val srsStep: Int
+    abstract val stageType: Int
+
+    data class FlashcardReview(
+        override val word: WordEntity,
+        override val srsStep: Int
+    ) : MixedReviewItem() {
+        override val stageType: Int = 1
+    }
+
+    data class ListeningReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val options: List<String>,
+        val correctIndex: Int
+    ) : MixedReviewItem() {
+        override val stageType: Int = 2
+    }
+
+    data class MultipleChoiceReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val options: List<String>,
+        val correctIndex: Int
+    ) : MixedReviewItem() {
+        override val stageType: Int = 3
+    }
+
+    data class ArticleReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val correctArticle: String
+    ) : MixedReviewItem() {
+        override val stageType: Int = 4
+    }
+
+    data class FillBlankReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val sentenceWithBlank: String,
+        val translation: String,
+        val options: List<String>,
+        val correctOption: String
+    ) : MixedReviewItem() {
+        override val stageType: Int = 5
+    }
+
+    data class SpellingReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val letterPool: List<Char>
+    ) : MixedReviewItem() {
+        override val stageType: Int = 6
+    }
 }
 
 data class MultipleChoiceQ(
@@ -76,6 +159,13 @@ data class IoStatusMessage(
     val text: String,
     val isError: Boolean = false
 )
+
+enum class Stage6WordStatus {
+    TYPING,
+    WRONG_TRY,
+    CORRECT,
+    OUT_OF_ATTEMPTS
+}
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class LearningViewModel(application: Application) : AndroidViewModel(application) {
@@ -154,6 +244,163 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             speak(text, slow)
         }
     }
+
+    // === Main Bottom Navigation Tab ===
+    private val _selectedMainTab = MutableStateFlow(MainTab.TOPICS)
+    val selectedMainTab: StateFlow<MainTab> = _selectedMainTab.asStateFlow()
+
+    fun selectMainTab(tab: MainTab) {
+        _selectedMainTab.value = tab
+        if (tab == MainTab.REVIEW) {
+            refreshReviewDashboard()
+        }
+    }
+
+    // === Customizable Enabled Learning & Review Stages ===
+    private fun loadEnabledStages(): Set<Int> {
+        val raw = prefs.getString("enabled_stages_csv", null) ?: return ALL_STAGES
+        val parsed = raw.split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 1..6 }
+            .toSet()
+        return parsed.ifEmpty { ALL_STAGES }
+    }
+
+    private val _enabledStages = MutableStateFlow(loadEnabledStages())
+    val enabledStages: StateFlow<Set<Int>> = _enabledStages.asStateFlow()
+
+    fun toggleStageEnabled(stage: Int) {
+        if (stage !in 1..6) return
+        val current = _enabledStages.value
+        val updated = if (stage in current) {
+            if (current.size <= 1) return // Always keep at least one stage active
+            current - stage
+        } else {
+            current + stage
+        }
+        _enabledStages.value = updated
+        prefs.edit().putString("enabled_stages_csv", updated.sorted().joinToString(",")).apply()
+    }
+
+    fun getFirstEnabledStage(): Int = _enabledStages.value.minOrNull() ?: 1
+
+    fun getNextEnabledStage(afterStage: Int): Int? = nextEnabledStage(_enabledStages.value, afterStage)
+
+    fun startStageByNumber(subtopicId: String, stage: Int) {
+        when (stage) {
+            1 -> startStage1(subtopicId)
+            2 -> startStage2(subtopicId)
+            3 -> startStage3(subtopicId)
+            4 -> startStage4(subtopicId)
+            5 -> startStage5(subtopicId)
+            6 -> startStage6(subtopicId)
+        }
+    }
+
+    fun startNextEnabledStage(subtopicId: String, afterStage: Int) {
+        val next = getNextEnabledStage(afterStage)
+        if (next != null) {
+            startStageByNumber(subtopicId, next)
+        } else {
+            navigateBack()
+        }
+    }
+
+    // === Spaced Repetition Daily Limit & Anti-Overload Quota ===
+    private fun todayDateKey(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    private fun loadDailyReviewLimit(): Int {
+        val saved = prefs.getInt("daily_review_limit", DEFAULT_DAILY_REVIEW_LIMIT)
+        return saved.coerceIn(20, 100)
+    }
+
+    private fun loadReviewsDoneToday(): Int {
+        val savedDate = prefs.getString("daily_review_date", null)
+        return if (savedDate == todayDateKey()) {
+            prefs.getInt("daily_review_count", 0).coerceAtLeast(0)
+        } else {
+            0
+        }
+    }
+
+    private fun incrementReviewsDoneToday() {
+        val today = todayDateKey()
+        val current = loadReviewsDoneToday() + 1
+        prefs.edit()
+            .putString("daily_review_date", today)
+            .putInt("daily_review_count", current)
+            .apply()
+        _reviewsDoneToday.value = current
+        _reviewDashboard.value = _reviewDashboard.value.copy(
+            reviewsDoneToday = current,
+            dailyLimit = _dailyReviewLimit.value
+        )
+    }
+
+    private val _dailyReviewLimit = MutableStateFlow(loadDailyReviewLimit())
+    val dailyReviewLimit: StateFlow<Int> = _dailyReviewLimit.asStateFlow()
+
+    private val _reviewsDoneToday = MutableStateFlow(loadReviewsDoneToday())
+    val reviewsDoneToday: StateFlow<Int> = _reviewsDoneToday.asStateFlow()
+
+    private val _reviewDashboard = MutableStateFlow(
+        ReviewDashboardState(
+            reviewsDoneToday = _reviewsDoneToday.value,
+            dailyLimit = _dailyReviewLimit.value
+        )
+    )
+    val reviewDashboard: StateFlow<ReviewDashboardState> = _reviewDashboard.asStateFlow()
+
+    fun setDailyReviewLimit(limit: Int) {
+        val safe = limit.coerceIn(20, 100)
+        _dailyReviewLimit.value = safe
+        prefs.edit().putInt("daily_review_limit", safe).apply()
+        _reviewDashboard.value = _reviewDashboard.value.copy(dailyLimit = safe)
+    }
+
+    fun refreshReviewDashboard() {
+        viewModelScope.launch {
+            val doneToday = loadReviewsDoneToday()
+            _reviewsDoneToday.value = doneToday
+            val snap = repository.getReviewDashboardSnapshot()
+            _reviewDashboard.value = ReviewDashboardState(
+                dueCount = snap.dueCount,
+                enrolledCount = snap.enrolledCount,
+                mastered16Count = snap.mastered16Count,
+                nextReviewTimestamp = snap.nextReviewTimestamp,
+                reviewsDoneToday = doneToday,
+                dailyLimit = _dailyReviewLimit.value,
+                isLoading = false
+            )
+        }
+    }
+
+    // === Mixed-Stage Spaced Repetition Session State ===
+    private val _mixedReviewItems = MutableStateFlow<List<MixedReviewItem>>(emptyList())
+    val mixedReviewItems: StateFlow<List<MixedReviewItem>> = _mixedReviewItems.asStateFlow()
+    private val _mixedReviewIndex = MutableStateFlow(0)
+    val mixedReviewIndex: StateFlow<Int> = _mixedReviewIndex.asStateFlow()
+    private val _mixedReviewScore = MutableStateFlow(0)
+    val mixedReviewScore: StateFlow<Int> = _mixedReviewScore.asStateFlow()
+    private val _mixedReviewFinished = MutableStateFlow(false)
+    val mixedReviewFinished: StateFlow<Boolean> = _mixedReviewFinished.asStateFlow()
+    private val _mixedReviewIsEarlyPractice = MutableStateFlow(false)
+    val mixedReviewIsEarlyPractice: StateFlow<Boolean> = _mixedReviewIsEarlyPractice.asStateFlow()
+    private val _mixedCardFlipped = MutableStateFlow(false)
+    val mixedCardFlipped: StateFlow<Boolean> = _mixedCardFlipped.asStateFlow()
+    private val _mixedSelectedOptionIndex = MutableStateFlow<Int?>(null)
+    val mixedSelectedOptionIndex: StateFlow<Int?> = _mixedSelectedOptionIndex.asStateFlow()
+    private val _mixedSelectedString = MutableStateFlow<String?>(null)
+    val mixedSelectedString: StateFlow<String?> = _mixedSelectedString.asStateFlow()
+    private val _mixedSpellingInput = MutableStateFlow("")
+    val mixedSpellingInput: StateFlow<String> = _mixedSpellingInput.asStateFlow()
+    private val _mixedSpellingStatus = MutableStateFlow(Stage6WordStatus.TYPING)
+    val mixedSpellingStatus: StateFlow<Stage6WordStatus> = _mixedSpellingStatus.asStateFlow()
+    private val _mixedSpellingAttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
+    val mixedSpellingAttemptsLeft: StateFlow<Int> = _mixedSpellingAttemptsLeft.asStateFlow()
+    private val _mixedLastFeedback = MutableStateFlow<String?>(null)
+    val mixedLastFeedback: StateFlow<String?> = _mixedLastFeedback.asStateFlow()
 
     // === Export / Import Status ===
     private val _ioStatusMessage = MutableStateFlow<IoStatusMessage?>(null)
@@ -302,8 +549,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val stage6LetterPool: StateFlow<List<Char>> = _stage6LetterPool.asStateFlow()
     private val _stage6Input = MutableStateFlow("")
     val stage6Input: StateFlow<String> = _stage6Input.asStateFlow()
-    private val _stage6Status = MutableStateFlow<Boolean?>(null)
-    val stage6Status: StateFlow<Boolean?> = _stage6Status.asStateFlow()
+    private val _stage6Status = MutableStateFlow(Stage6WordStatus.TYPING)
+    val stage6Status: StateFlow<Stage6WordStatus> = _stage6Status.asStateFlow()
+    private val _stage6AttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
+    val stage6AttemptsLeft: StateFlow<Int> = _stage6AttemptsLeft.asStateFlow()
+    private val _stage6HintsUsed = MutableStateFlow(0)
+    val stage6HintsUsed: StateFlow<Int> = _stage6HintsUsed.asStateFlow()
     private val _stage6Score = MutableStateFlow(0)
     val stage6Score: StateFlow<Int> = _stage6Score.asStateFlow()
     private val _stage6Finished = MutableStateFlow(false)
@@ -315,6 +566,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
         viewModelScope.launch {
             repository.initializePrepopulatedDataIfNeeded()
+            refreshReviewDashboard()
+        }
+
+        viewModelScope.launch {
+            repository.observeEnrolledWordCount().collect {
+                refreshReviewDashboard()
+            }
         }
 
         totalWordCount = repository.observeWordCount().stateIn(
@@ -372,9 +630,32 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _screenStack.value = _screenStack.value + screen
     }
 
+    private fun Screen.isStageScreen(): Boolean = when (this) {
+        is Screen.Stage1Flashcards,
+        is Screen.Stage2Listening,
+        is Screen.Stage3MultipleChoice,
+        is Screen.Stage4ArticleTrainer,
+        is Screen.Stage5FillBlank,
+        is Screen.Stage6Spelling,
+        is Screen.MixedReview -> true
+        else -> false
+    }
+
+    /**
+     * Replaces any currently open stage screen so advancing Stage 1 -> 2 -> ... -> 6
+     * never leaves finished stages stacked behind the active screen.
+     */
+    private fun navigateToStage(screen: Screen) {
+        val baseStack = _screenStack.value.dropLastWhile { it.isStageScreen() }
+        _screenStack.value = baseStack + screen
+    }
+
     fun navigateBack(): Boolean {
         if (_screenStack.value.size > 1) {
             _screenStack.value = _screenStack.value.dropLast(1)
+            if (_screenStack.value.lastOrNull() == Screen.MainTopics) {
+                refreshReviewDashboard()
+            }
             return true
         }
         return false
@@ -420,7 +701,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage1Index.value = 0
             _stage1Flipped.value = false
             _stage1Finished.value = false
-            navigateTo(Screen.Stage1Flashcards(subtopicId))
+            navigateToStage(Screen.Stage1Flashcards(subtopicId))
         }
     }
 
@@ -443,7 +724,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 _stage1Finished.value = true
                 _stage1AllowPhotoChange.value = false
                 viewModelScope.launch {
-                    repository.completeStage(subtopicId, stage = 1, score = words.size)
+                    repository.completeStage(
+                        subtopicId = subtopicId,
+                        stage = 1,
+                        score = words.size,
+                        enabledStages = _enabledStages.value,
+                        level = _selectedLevel.value
+                    )
+                    refreshReviewDashboard()
                 }
             }
         }
@@ -482,7 +770,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage2SelectedAnswer.value = null
             _stage2Score.value = 0
             _stage2Finished.value = false
-            navigateTo(Screen.Stage2Listening(subtopicId))
+            navigateToStage(Screen.Stage2Listening(subtopicId))
             if (questions.isNotEmpty()) {
                 speak(questions.first().word.displayWithArticle)
             }
@@ -510,7 +798,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage2Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(subtopicId, stage = 2, score = _stage2Score.value)
+                repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 2,
+                    score = _stage2Score.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value
+                )
+                refreshReviewDashboard()
             }
         }
     }
@@ -539,7 +834,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage3SelectedAnswer.value = null
             _stage3Score.value = 0
             _stage3Finished.value = false
-            navigateTo(Screen.Stage3MultipleChoice(subtopicId))
+            navigateToStage(Screen.Stage3MultipleChoice(subtopicId))
             if (questions.isNotEmpty()) {
                 speak(questions.first().word.displayWithArticle)
             }
@@ -567,7 +862,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage3Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(subtopicId, stage = 3, score = _stage3Score.value)
+                repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 3,
+                    score = _stage3Score.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value
+                )
+                refreshReviewDashboard()
             }
         }
     }
@@ -588,7 +890,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage4SelectedArticle.value = null
             _stage4Score.value = 0
             _stage4Finished.value = false
-            navigateTo(Screen.Stage4ArticleTrainer(subtopicId))
+            navigateToStage(Screen.Stage4ArticleTrainer(subtopicId))
             if (questions.isNotEmpty()) {
                 speak(questions.first().word.german)
             }
@@ -618,7 +920,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage4Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(subtopicId, stage = 4, score = _stage4Score.value)
+                repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 4,
+                    score = _stage4Score.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value
+                )
+                refreshReviewDashboard()
             }
         }
     }
@@ -651,7 +960,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage5SelectedOption.value = null
             _stage5Score.value = 0
             _stage5Finished.value = false
-            navigateTo(Screen.Stage5FillBlank(subtopicId))
+            navigateToStage(Screen.Stage5FillBlank(subtopicId))
         }
     }
 
@@ -677,7 +986,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage5Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(subtopicId, stage = 5, score = _stage5Score.value)
+                repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 5,
+                    score = _stage5Score.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value
+                )
+                refreshReviewDashboard()
             }
         }
     }
@@ -693,51 +1009,96 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage6Score.value = 0
             _stage6Finished.value = false
             prepareStage6Word(0)
-            navigateTo(Screen.Stage6Spelling(subtopicId))
+            navigateToStage(Screen.Stage6Spelling(subtopicId))
         }
     }
 
     private fun prepareStage6Word(index: Int) {
         val target = _stage6Words.value.getOrNull(index) ?: return
         _stage6Input.value = ""
-        _stage6Status.value = null
+        _stage6Status.value = Stage6WordStatus.TYPING
+        _stage6AttemptsLeft.value = MAX_STAGE6_ATTEMPTS
+        _stage6HintsUsed.value = 0
 
-        val targetLetters = target.german.trim().toList()
-        val extraLetters = listOf('e', 'a', 'i', 'r', 's', 't', 'ä', 'ö', 'ü').shuffled().take(3)
+        val targetLetters = target.german.trim().filter { it != ' ' && it != '-' }.toList()
+        val extraLetters = listOf('e', 'a', 'i', 'r', 's', 't', 'n', 'l', 'ä', 'ö', 'ü').shuffled().take(3)
         _stage6LetterPool.value = (targetLetters + extraLetters).shuffled()
         speak(target.displayWithArticle)
     }
 
     fun addStage6Letter(char: Char) {
-        if (_stage6Status.value == true) return
-        val newText = _stage6Input.value + char
+        val currentStatus = _stage6Status.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
+        val target = word.german.trim()
+
+        val baseInput = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _stage6Input.value
+        if (baseInput.length >= target.length) return
+
+        val withLeadingSep = autoAdvanceSeparators(baseInput, target)
+        val raw = if (withLeadingSep.length < target.length) withLeadingSep + char else withLeadingSep
+        val newText = autoAdvanceSeparators(raw, target)
         _stage6Input.value = newText
-        val target = _stage6Words.value.getOrNull(_stage6Index.value)?.german?.trim() ?: return
 
         if (newText.equals(target, ignoreCase = true)) {
-            _stage6Status.value = true
+            _stage6Status.value = Stage6WordStatus.CORRECT
             _stage6Score.value += 1
-            speak(target)
-            _stage6Words.value.getOrNull(_stage6Index.value)?.let {
-                viewModelScope.launch { repository.recordReview(it.id, ReviewRating.GOOD) }
-            }
+            speak(word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
         } else if (newText.length >= target.length) {
-            _stage6Status.value = false
+            val remaining = (_stage6AttemptsLeft.value - 1).coerceAtLeast(0)
+            _stage6AttemptsLeft.value = remaining
+            if (remaining > 0) {
+                _stage6Status.value = Stage6WordStatus.WRONG_TRY
+            } else {
+                _stage6Status.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+                speak(word.displayWithArticle)
+                viewModelScope.launch { repository.recordReview(word.id, ReviewRating.AGAIN) }
+            }
         } else {
-            _stage6Status.value = null
+            _stage6Status.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    /**
+     * Reveals exactly one next correct letter in the input field (fixing any mismatched suffix
+     * and automatically inserting spaces/hyphens where needed).
+     */
+    fun useStage6Hint() {
+        val currentStatus = _stage6Status.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
+        val target = word.german.trim()
+        val current = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _stage6Input.value
+
+        val nextInput = computeNextHintInput(current, target)
+        _stage6HintsUsed.value += 1
+        _stage6Input.value = nextInput
+
+        if (nextInput.equals(target, ignoreCase = true)) {
+            _stage6Status.value = Stage6WordStatus.CORRECT
+            _stage6Score.value += 1
+            speak(word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+        } else {
+            _stage6Status.value = Stage6WordStatus.TYPING
         }
     }
 
     fun removeStage6Letter() {
+        val currentStatus = _stage6Status.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
         if (_stage6Input.value.isNotEmpty()) {
-            _stage6Input.value = _stage6Input.value.dropLast(1)
-            _stage6Status.value = null
+            _stage6Input.value = backspaceOverSeparators(_stage6Input.value)
+            _stage6Status.value = Stage6WordStatus.TYPING
         }
     }
 
     fun clearStage6() {
+        val currentStatus = _stage6Status.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
         _stage6Input.value = ""
-        _stage6Status.value = null
+        _stage6Status.value = Stage6WordStatus.TYPING
     }
 
     fun nextStage6(subtopicId: String) {
@@ -748,13 +1109,385 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage6Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(subtopicId, stage = 6, score = _stage6Score.value)
+                repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 6,
+                    score = _stage6Score.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value
+                )
+                refreshReviewDashboard()
             }
+        }
+    }
+
+    // ==========================================
+    // === MIXED-STAGE SPACED REPETITION REVIEW ===
+    // ==========================================
+    fun startMixedReviewSession(earlyPractice: Boolean = false) {
+        viewModelScope.launch {
+            val doneToday = loadReviewsDoneToday()
+            _reviewsDoneToday.value = doneToday
+            val remainingToday = (_dailyReviewLimit.value - doneToday).coerceAtLeast(0)
+            if (remainingToday <= 0) {
+                refreshReviewDashboard()
+                return@launch
+            }
+
+            val roundCap = if (earlyPractice) minOf(10, remainingToday) else minOf(MIXED_ROUND_SIZE, remainingToday)
+            val rawWords = if (earlyPractice) {
+                repository.getEarlyWordsForMixedReview(roundCap)
+            } else {
+                repository.getDueWordsForMixedReview(limit = roundCap)
+            }
+            if (rawWords.isEmpty()) {
+                refreshReviewDashboard()
+                return@launch
+            }
+
+            val enabled = _enabledStages.value.ifEmpty { ALL_STAGES }
+            val shuffledWords = rawWords.shuffled()
+            val builtItems = mutableListOf<MixedReviewItem>()
+            var lastStageType: Int? = null
+
+            for (word in shuffledWords) {
+                val chosenStage = pickMixedStageForWord(word, enabled, lastStageType)
+                lastStageType = chosenStage
+                val step = repository.getWordSrsStep(word)
+                val item = buildMixedReviewItem(word, step, chosenStage)
+                builtItems.add(item)
+            }
+
+            _mixedReviewItems.value = builtItems
+            _mixedReviewIndex.value = 0
+            _mixedReviewScore.value = 0
+            _mixedReviewFinished.value = false
+            _mixedReviewIsEarlyPractice.value = earlyPractice
+            resetMixedItemState()
+            navigateToStage(Screen.MixedReview)
+            builtItems.firstOrNull()?.let { speakForMixedItem(it) }
+        }
+    }
+
+    private suspend fun buildMixedReviewItem(
+        word: WordEntity,
+        srsStep: Int,
+        stageType: Int
+    ): MixedReviewItem {
+        return when (stageType) {
+            1 -> MixedReviewItem.FlashcardReview(word = word, srsStep = srsStep)
+            2 -> {
+                val distractors = repository.getDistractorsForWord(word, count = 3)
+                val targetLabel = "${word.displayWithArticle} (${word.translationUk})"
+                val options = (distractors.map { "${it.displayWithArticle} (${it.translationUk})" } + targetLabel)
+                    .distinct()
+                    .shuffled()
+                MixedReviewItem.ListeningReview(
+                    word = word,
+                    srsStep = srsStep,
+                    options = options,
+                    correctIndex = options.indexOf(targetLabel).coerceAtLeast(0)
+                )
+            }
+            3 -> {
+                val distractors = repository.getDistractorsForWord(word, count = 3)
+                val targetLabel = "${word.translationUk} · ${word.translationEn}"
+                val options = (distractors.map { "${it.translationUk} · ${it.translationEn}" } + targetLabel)
+                    .distinct()
+                    .shuffled()
+                MixedReviewItem.MultipleChoiceReview(
+                    word = word,
+                    srsStep = srsStep,
+                    options = options,
+                    correctIndex = options.indexOf(targetLabel).coerceAtLeast(0)
+                )
+            }
+            4 -> MixedReviewItem.ArticleReview(
+                word = word,
+                srsStep = srsStep,
+                correctArticle = word.article.lowercase().trim()
+            )
+            5 -> {
+                val blankSentence = word.exampleDe.replace(
+                    Regex(Regex.escape(word.german), RegexOption.IGNORE_CASE),
+                    "_________"
+                )
+                val distractors = repository.getDistractorsForWord(word, count = 3).map { it.german }
+                val options = (distractors + word.german).distinct().shuffled()
+                MixedReviewItem.FillBlankReview(
+                    word = word,
+                    srsStep = srsStep,
+                    sentenceWithBlank = blankSentence,
+                    translation = word.exampleUk,
+                    options = options,
+                    correctOption = word.german
+                )
+            }
+            else -> {
+                val targetLetters = word.german.trim().filter { it != ' ' && it != '-' }.toList()
+                val extraLetters = listOf('e', 'a', 'i', 'r', 's', 't', 'n', 'l', 'ä', 'ö', 'ü').shuffled().take(3)
+                MixedReviewItem.SpellingReview(
+                    word = word,
+                    srsStep = srsStep,
+                    letterPool = (targetLetters + extraLetters).shuffled()
+                )
+            }
+        }
+    }
+
+    private fun resetMixedItemState() {
+        _mixedCardFlipped.value = false
+        _mixedSelectedOptionIndex.value = null
+        _mixedSelectedString.value = null
+        _mixedSpellingInput.value = ""
+        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        _mixedSpellingAttemptsLeft.value = MAX_STAGE6_ATTEMPTS
+        _mixedLastFeedback.value = null
+    }
+
+    private fun speakForMixedItem(item: MixedReviewItem) {
+        when (item) {
+            is MixedReviewItem.FlashcardReview -> speakIfAuto(item.word.displayWithArticle)
+            is MixedReviewItem.ListeningReview -> speak(item.word.displayWithArticle)
+            is MixedReviewItem.MultipleChoiceReview -> speak(item.word.displayWithArticle)
+            is MixedReviewItem.ArticleReview -> speak(item.word.german)
+            is MixedReviewItem.FillBlankReview -> Unit
+            is MixedReviewItem.SpellingReview -> speak(item.word.displayWithArticle)
+        }
+    }
+
+    private fun recordMixedOutcome(word: WordEntity, isCorrect: Boolean) {
+        if (isCorrect) {
+            _mixedReviewScore.value += 1
+        }
+        incrementReviewsDoneToday()
+        viewModelScope.launch {
+            val res = repository.recordSpacedReview(word.id, isCorrect)
+            if (res != null) {
+                val intervalText = SpacedRepetition.formatIntervalUk(res.intervalHours)
+                _mixedLastFeedback.value = when {
+                    res.isMastered -> "Слово закріплено (${res.newStep}/${SpacedRepetition.TARGET_REPETITIONS}) · перевірка $intervalText"
+                    isCorrect -> "Повтор ${res.newStep} з ${SpacedRepetition.TARGET_REPETITIONS} · наступний раз $intervalText"
+                    else -> "Повернемося до слова $intervalText (крок ${res.newStep}/${SpacedRepetition.TARGET_REPETITIONS})"
+                }
+            }
+        }
+    }
+
+    fun flipMixedFlashcard() {
+        _mixedCardFlipped.value = !_mixedCardFlipped.value
+    }
+
+    fun answerMixedFlashcard(remembered: Boolean) {
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.FlashcardReview
+            ?: return
+        recordMixedOutcome(item.word, remembered)
+        nextMixedReviewItem()
+    }
+
+    fun answerMixedOptionIndex(optionIndex: Int) {
+        if (_mixedSelectedOptionIndex.value != null) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) ?: return
+        val isCorrect = when (item) {
+            is MixedReviewItem.ListeningReview -> optionIndex == item.correctIndex
+            is MixedReviewItem.MultipleChoiceReview -> optionIndex == item.correctIndex
+            else -> return
+        }
+        _mixedSelectedOptionIndex.value = optionIndex
+        recordMixedOutcome(item.word, isCorrect)
+    }
+
+    fun answerMixedArticle(article: String) {
+        if (_mixedSelectedString.value != null) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.ArticleReview
+            ?: return
+        _mixedSelectedString.value = article
+        val isCorrect = article.equals(item.correctArticle, ignoreCase = true)
+        speak("${item.correctArticle} ${item.word.german}")
+        recordMixedOutcome(item.word, isCorrect)
+    }
+
+    fun answerMixedFillBlank(option: String) {
+        if (_mixedSelectedString.value != null) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.FillBlankReview
+            ?: return
+        _mixedSelectedString.value = option
+        val isCorrect = option.equals(item.correctOption, ignoreCase = true)
+        speak(item.word.exampleDe)
+        recordMixedOutcome(item.word, isCorrect)
+    }
+
+    fun addMixedSpellingLetter(char: Char) {
+        val currentStatus = _mixedSpellingStatus.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
+            ?: return
+        val target = item.word.german.trim()
+
+        val baseInput = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _mixedSpellingInput.value
+        if (baseInput.length >= target.length) return
+
+        val withLeadingSep = autoAdvanceSeparators(baseInput, target)
+        val raw = if (withLeadingSep.length < target.length) withLeadingSep + char else withLeadingSep
+        val newText = autoAdvanceSeparators(raw, target)
+        _mixedSpellingInput.value = newText
+
+        if (newText.equals(target, ignoreCase = true)) {
+            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item.word, isCorrect = true)
+        } else if (newText.length >= target.length) {
+            val remaining = (_mixedSpellingAttemptsLeft.value - 1).coerceAtLeast(0)
+            _mixedSpellingAttemptsLeft.value = remaining
+            if (remaining > 0) {
+                _mixedSpellingStatus.value = Stage6WordStatus.WRONG_TRY
+            } else {
+                _mixedSpellingStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item.word, isCorrect = false)
+            }
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun useMixedSpellingHint() {
+        val currentStatus = _mixedSpellingStatus.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
+            ?: return
+        val target = item.word.german.trim()
+        val current = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _mixedSpellingInput.value
+
+        val nextInput = computeNextHintInput(current, target)
+        _mixedSpellingInput.value = nextInput
+        if (nextInput.equals(target, ignoreCase = true)) {
+            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item.word, isCorrect = true)
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun removeMixedSpellingLetter() {
+        val currentStatus = _mixedSpellingStatus.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_mixedSpellingInput.value.isNotEmpty()) {
+            _mixedSpellingInput.value = backspaceOverSeparators(_mixedSpellingInput.value)
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun clearMixedSpelling() {
+        val currentStatus = _mixedSpellingStatus.value
+        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        _mixedSpellingInput.value = ""
+        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun nextMixedReviewItem() {
+        val nextIdx = _mixedReviewIndex.value + 1
+        if (nextIdx < _mixedReviewItems.value.size) {
+            _mixedReviewIndex.value = nextIdx
+            resetMixedItemState()
+            _mixedReviewItems.value.getOrNull(nextIdx)?.let { speakForMixedItem(it) }
+        } else {
+            _mixedReviewFinished.value = true
+            refreshReviewDashboard()
         }
     }
 
     override fun onCleared() {
         super.onCleared()
         ttsManager.shutdown()
+    }
+
+    companion object {
+        const val MAX_STAGE6_ATTEMPTS = 3
+        const val DEFAULT_DAILY_REVIEW_LIMIT = 60
+        const val MIXED_ROUND_SIZE = 15
+        val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6)
+        val DAILY_LIMIT_PRESETS: List<Int> = listOf(40, 60, 80)
+
+        internal fun nextEnabledStage(enabledStages: Set<Int>, afterStage: Int): Int? {
+            return enabledStages.filter { it in 1..6 && it > afterStage }.minOrNull()
+        }
+
+        internal fun pickMixedStageForWord(
+            word: WordEntity,
+            enabledStages: Set<Int>,
+            previousStageType: Int?
+        ): Int {
+            val eligible = mutableListOf<Int>()
+            if (1 in enabledStages) eligible.add(1)
+            if (2 in enabledStages) eligible.add(2)
+            if (3 in enabledStages) eligible.add(3)
+            if (4 in enabledStages && word.article.lowercase().trim() in listOf("der", "die", "das")) {
+                eligible.add(4)
+            }
+            if (5 in enabledStages &&
+                word.exampleDe.isNotBlank() &&
+                word.exampleDe.contains(word.german, ignoreCase = true)
+            ) {
+                eligible.add(5)
+            }
+            if (6 in enabledStages && word.german.trim().length in 2..24) {
+                eligible.add(6)
+            }
+            if (eligible.isEmpty()) return enabledStages.minOrNull() ?: 3
+
+            val activeStages = eligible.filter { it != 1 }
+            val preferredPool = if (activeStages.isNotEmpty() && eligible.size > 1) {
+                activeStages
+            } else {
+                eligible
+            }
+            val varied = preferredPool.filter { it != previousStageType }
+            return (if (varied.isNotEmpty()) varied else preferredPool).random()
+        }
+
+        internal fun autoAdvanceSeparators(input: String, target: String): String {
+            var result = input
+            while (result.length < target.length && (target[result.length] == ' ' || target[result.length] == '-')) {
+                result += target[result.length]
+            }
+            return result
+        }
+
+        internal fun backspaceOverSeparators(input: String): String {
+            var trimmed = input
+            while (trimmed.isNotEmpty() && (trimmed.last() == ' ' || trimmed.last() == '-')) {
+                trimmed = trimmed.dropLast(1)
+            }
+            if (trimmed.isNotEmpty()) {
+                trimmed = trimmed.dropLast(1)
+            }
+            while (trimmed.isNotEmpty() && (trimmed.last() == ' ' || trimmed.last() == '-')) {
+                trimmed = trimmed.dropLast(1)
+            }
+            return trimmed
+        }
+
+        internal fun computeNextHintInput(current: String, target: String): String {
+            if (target.isEmpty()) return ""
+            var prefixLen = 0
+            while (prefixLen < current.length &&
+                prefixLen < target.length &&
+                current[prefixLen].equals(target[prefixLen], ignoreCase = true)
+            ) {
+                prefixLen++
+            }
+            var nextPos = prefixLen
+            while (nextPos < target.length && (target[nextPos] == ' ' || target[nextPos] == '-')) {
+                nextPos++
+            }
+            val revealed = if (nextPos < target.length) {
+                target.substring(0, nextPos + 1)
+            } else {
+                target
+            }
+            return autoAdvanceSeparators(revealed, target)
+        }
     }
 }

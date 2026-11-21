@@ -56,6 +56,24 @@ interface WordDao {
     @Query("SELECT * FROM words WHERE nextReviewTimestamp <= :currentTimestamp OR nextReviewTimestamp = 0 ORDER BY nextReviewTimestamp ASC, box ASC LIMIT 60")
     fun getWordsDueForReview(currentTimestamp: Long): Flow<List<WordEntity>>
 
+    @Query("SELECT * FROM words WHERE nextReviewTimestamp > 0 AND nextReviewTimestamp <= :now ORDER BY nextReviewTimestamp ASC, box ASC LIMIT :limit")
+    suspend fun getDueEnrolledWordsOnce(now: Long, limit: Int): List<WordEntity>
+
+    @Query("SELECT * FROM words WHERE nextReviewTimestamp > 0 ORDER BY nextReviewTimestamp ASC, box ASC LIMIT :limit")
+    suspend fun getEarlyReviewEnrolledWordsOnce(limit: Int): List<WordEntity>
+
+    @Query("SELECT COUNT(*) FROM words WHERE nextReviewTimestamp > 0 AND nextReviewTimestamp <= :now")
+    suspend fun countDueEnrolledWords(now: Long): Int
+
+    @Query("SELECT COUNT(*) FROM words WHERE nextReviewTimestamp > 0")
+    suspend fun countEnrolledWords(): Int
+
+    @Query("SELECT COUNT(*) FROM words WHERE nextReviewTimestamp > 0")
+    fun observeEnrolledWordCount(): Flow<Int>
+
+    @Query("SELECT MIN(nextReviewTimestamp) FROM words WHERE nextReviewTimestamp > :now")
+    suspend fun getNextUpcomingReviewTimestamp(now: Long): Long?
+
     @Query("SELECT * FROM words WHERE isFavorite = 1 ORDER BY id ASC")
     fun getFavoriteWords(): Flow<List<WordEntity>>
 
@@ -112,6 +130,12 @@ interface WordDao {
 
     @Query("UPDATE words SET box = :newBox, nextReviewTimestamp = :nextReview, reviewCount = reviewCount + 1, correctCount = correctCount + :isCorrectDelta WHERE id = :id")
     suspend fun updateReviewResult(id: Int, newBox: Int, nextReview: Long, isCorrectDelta: Int)
+
+    @Query("UPDATE words SET nextReviewTimestamp = :nextReview WHERE id = :id AND nextReviewTimestamp = 0")
+    suspend fun enrollWordForSrs(id: Int, nextReview: Long)
+
+    @Query("UPDATE words SET reviewCount = reviewCount + 1, correctCount = correctCount + :isCorrectDelta WHERE id = :id")
+    suspend fun incrementWordCountsOnly(id: Int, isCorrectDelta: Int)
 
     @Query("UPDATE words SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateFavorite(id: Int, isFavorite: Boolean)

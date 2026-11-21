@@ -109,7 +109,6 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
     val selectedVoiceName: StateFlow<String?> = _selectedVoiceName.asStateFlow()
 
     private var germanVoicesRaw: List<Voice> = emptyList()
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
@@ -141,7 +140,6 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
 
             discoverAndSelectBestGermanVoice()
             isInitialized = true
-            boostSystemVolume()
 
             pendingSpeech?.let { (text, slow) ->
                 pendingSpeech = null
@@ -226,21 +224,6 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
     fun setHdVoiceEnabled(enabled: Boolean) {
         _useHdVoice.value = enabled
         prefs.edit().putBoolean("tts_use_hd_voice", enabled).apply()
-    }
-
-    fun boostSystemVolume() {
-        try {
-            audioManager?.let { am ->
-                val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                val target = (max * 0.88f).toInt().coerceAtLeast(1)
-                if (current < target) {
-                    am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
-                }
-            }
-        } catch (e: Exception) {
-            Log.w("TtsManager", "Could not adjust system volume: ${e.message}")
-        }
     }
 
     fun toggleSlowMode() {

@@ -176,11 +176,17 @@ fun StageMultipleChoiceScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (isFinished || currentQ == null) {
+                    val nextEnabled = viewModel.getNextEnabledStage(3)
                     StageCompletedSuccessCard(
                         stageNumber = 3,
+                        nextStageNumber = nextEnabled,
                         title = "Етап 3 пройдено!",
-                        subtitle = "Ви набрали $score з ${questions.size} балів! Розблоковано Етап 4: Тренажер родів.",
-                        onNextStage = { viewModel.startStage4(subtopicId) },
+                        subtitle = if (nextEnabled != null) {
+                            "Ви набрали $score з ${questions.size} балів! Далі відкрито Етап $nextEnabled."
+                        } else {
+                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 3) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {

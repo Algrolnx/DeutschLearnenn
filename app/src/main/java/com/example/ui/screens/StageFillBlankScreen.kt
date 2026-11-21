@@ -172,11 +172,17 @@ fun StageFillBlankScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (isFinished || currentQ == null) {
+                    val nextEnabled = viewModel.getNextEnabledStage(5)
                     StageCompletedSuccessCard(
                         stageNumber = 5,
+                        nextStageNumber = nextEnabled,
                         title = "Етап 5 пройдено!",
-                        subtitle = "Ви чудово розумієте контекст вживання слів! Розблоковано фінальний Етап 6: Правопис.",
-                        onNextStage = { viewModel.startStage6(subtopicId) },
+                        subtitle = if (nextEnabled != null) {
+                            "Ви чудово розумієте контекст вживання слів! Далі відкрито Етап $nextEnabled."
+                        } else {
+                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 5) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {

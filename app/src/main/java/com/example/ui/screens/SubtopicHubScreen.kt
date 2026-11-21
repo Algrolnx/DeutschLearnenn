@@ -99,6 +99,7 @@ fun SubtopicHubScreen(
     val allProgress by viewModel.allProgress.collectAsStateWithLifecycle()
     val selectedLevel by viewModel.selectedLevel.collectAsStateWithLifecycle()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsStateWithLifecycle()
+    val enabledStages by viewModel.enabledStages.collectAsStateWithLifecycle()
 
     LaunchedEffect(subtopicId, selectedLevel) {
         viewModel.loadHubWords(subtopicId, selectedLevel)
@@ -108,8 +109,19 @@ fun SubtopicHubScreen(
         viewModel.getProgressForSubtopic(subtopicId)
     }
 
-    val nextStage = progress.unlockedStage.coerceIn(1, 6)
-    val stageFraction = (progress.completedStages / 6f).coerceIn(0f, 1f)
+    val visibleStages = remember(enabledStages) { enabledStages.sorted() }
+    val firstEnabledStage = visibleStages.firstOrNull() ?: 1
+    val effectiveUnlockedStage = maxOf(progress.unlockedStage, firstEnabledStage)
+    val nextStage = visibleStages.firstOrNull { it >= effectiveUnlockedStage }
+        ?: visibleStages.lastOrNull()
+        ?: 1
+    val completedVisibleCount = visibleStages.count { progress.completedStages >= it }
+    val allVisibleCompleted = visibleStages.isNotEmpty() && completedVisibleCount == visibleStages.size
+    val stageFraction = if (visibleStages.isNotEmpty()) {
+        (completedVisibleCount.toFloat() / visibleStages.size).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     Scaffold(
         topBar = {
@@ -184,16 +196,7 @@ fun SubtopicHubScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = {
-                            when (nextStage) {
-                                1 -> viewModel.startStage1(subtopicId)
-                                2 -> viewModel.startStage2(subtopicId)
-                                3 -> viewModel.startStage3(subtopicId)
-                                4 -> viewModel.startStage4(subtopicId)
-                                5 -> viewModel.startStage5(subtopicId)
-                                6 -> viewModel.startStage6(subtopicId)
-                            }
-                        },
+                        onClick = { viewModel.startStageByNumber(subtopicId, nextStage) },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .widthIn(max = 560.dp)
@@ -302,7 +305,7 @@ fun SubtopicHubScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Пройдено етапів: ${progress.completedStages} з 6",
+                                text = "Пройдено етапів: $completedVisibleCount з ${visibleStages.size}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -312,7 +315,7 @@ fun SubtopicHubScreen(
                                 fontFamily = MonoFontFamily,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (progress.completedStages == 6) SuccessGreen else topicColor
+                                color = if (allVisibleCompleted) SuccessGreen else topicColor
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
@@ -322,7 +325,7 @@ fun SubtopicHubScreen(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp)),
-                            color = if (progress.completedStages == 6) SuccessGreen else topicColor,
+                            color = if (allVisibleCompleted) SuccessGreen else topicColor,
                             trackColor = topicColor.copy(alpha = 0.14f)
                         )
                     }
@@ -336,83 +339,51 @@ fun SubtopicHubScreen(
                         .fillMaxWidth()
                 ) {
                     Text(
-                        text = "Lernreise · 6 Етапів закріплення",
+                        text = if (visibleStages.size == 6) {
+                            "Lernreise · 6 Етапів закріплення"
+                        } else {
+                            "Lernreise · Активні етапи (${visibleStages.size} з 6)"
+                        },
                         fontFamily = LoraFontFamily,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Усі слова та картки знаходяться у Етапі 1",
+                        text = if (visibleStages.size == 6) {
+                            "Усі слова та картки знаходяться у Етапі 1"
+                        } else {
+                            "Частину етапів вимкнено в налаштуваннях · рекомендуємо всі 6"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    StageRoadmapNode(
-                        stageNumber = 1,
-                        titleDe = "Lernkarten",
-                        titleUk = "Знайомство з картками (${words.size} слів)",
-                        icon = Icons.Default.ViewCarousel,
-                        isUnlocked = progress.unlockedStage >= 1,
-                        isCompleted = progress.completedStages >= 1,
-                        onClick = { viewModel.startStage1(subtopicId) }
-                    )
-                    RoadmapConnector(isCompleted = progress.completedStages >= 1)
-
-                    StageRoadmapNode(
-                        stageNumber = 2,
-                        titleDe = "Hören & Verstehen",
-                        titleUk = "Слухання та сприйняття на слух",
-                        icon = Icons.Default.Headphones,
-                        isUnlocked = progress.unlockedStage >= 2,
-                        isCompleted = progress.completedStages >= 2,
-                        onClick = { if (progress.unlockedStage >= 2) viewModel.startStage2(subtopicId) }
-                    )
-                    RoadmapConnector(isCompleted = progress.completedStages >= 2)
-
-                    StageRoadmapNode(
-                        stageNumber = 3,
-                        titleDe = "Wortwahl (Quiz)",
-                        titleUk = "Вибір перекладу (4 варіанти)",
-                        icon = Icons.Default.Quiz,
-                        isUnlocked = progress.unlockedStage >= 3,
-                        isCompleted = progress.completedStages >= 3,
-                        onClick = { if (progress.unlockedStage >= 3) viewModel.startStage3(subtopicId) }
-                    )
-                    RoadmapConnector(isCompleted = progress.completedStages >= 3)
-
-                    StageRoadmapNode(
-                        stageNumber = 4,
-                        titleDe = "Artikel-Trainer",
-                        titleUk = "Рід іменників (der / die / das)",
-                        icon = Icons.Default.Shield,
-                        isUnlocked = progress.unlockedStage >= 4,
-                        isCompleted = progress.completedStages >= 4,
-                        onClick = { if (progress.unlockedStage >= 4) viewModel.startStage4(subtopicId) }
-                    )
-                    RoadmapConnector(isCompleted = progress.completedStages >= 4)
-
-                    StageRoadmapNode(
-                        stageNumber = 5,
-                        titleDe = "Lückentext",
-                        titleUk = "Доповнення пропусків у реченнях",
-                        icon = Icons.Default.Extension,
-                        isUnlocked = progress.unlockedStage >= 5,
-                        isCompleted = progress.completedStages >= 5,
-                        onClick = { if (progress.unlockedStage >= 5) viewModel.startStage5(subtopicId) }
-                    )
-                    RoadmapConnector(isCompleted = progress.completedStages >= 5)
-
-                    StageRoadmapNode(
-                        stageNumber = 6,
-                        titleDe = "Buchstabieren & Schreiben",
-                        titleUk = "Правопис та написання з літер",
-                        icon = Icons.Default.Edit,
-                        isUnlocked = progress.unlockedStage >= 6,
-                        isCompleted = progress.completedStages >= 6,
-                        onClick = { if (progress.unlockedStage >= 6) viewModel.startStage6(subtopicId) }
-                    )
+                    visibleStages.forEachIndexed { idx, stageNum ->
+                        val isUnlocked = effectiveUnlockedStage >= stageNum
+                        val isCompleted = progress.completedStages >= stageNum
+                        val (titleDe, titleUk, icon) = when (stageNum) {
+                            1 -> Triple("Lernkarten", "Знайомство з картками (${words.size} слів)", Icons.Default.ViewCarousel)
+                            2 -> Triple("Hören & Verstehen", "Слухання та сприйняття на слух", Icons.Default.Headphones)
+                            3 -> Triple("Wortwahl (Quiz)", "Вибір перекладу (4 варіанти)", Icons.Default.Quiz)
+                            4 -> Triple("Artikel-Trainer", "Рід іменників (der / die / das)", Icons.Default.Shield)
+                            5 -> Triple("Lückentext", "Доповнення пропусків у реченнях", Icons.Default.Extension)
+                            else -> Triple("Buchstabieren & Schreiben", "Правопис та написання з літер", Icons.Default.Edit)
+                        }
+                        StageRoadmapNode(
+                            stageNumber = stageNum,
+                            titleDe = titleDe,
+                            titleUk = titleUk,
+                            icon = icon,
+                            isUnlocked = isUnlocked,
+                            isCompleted = isCompleted,
+                            onClick = { if (isUnlocked) viewModel.startStageByNumber(subtopicId, stageNum) }
+                        )
+                        if (idx < visibleStages.lastIndex) {
+                            RoadmapConnector(isCompleted = isCompleted)
+                        }
+                    }
                 }
             }
         }
