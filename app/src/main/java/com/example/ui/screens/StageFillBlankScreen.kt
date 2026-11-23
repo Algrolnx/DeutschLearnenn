@@ -72,6 +72,7 @@ fun StageFillBlankScreen(
     val selectedOption by viewModel.stage5SelectedOption.collectAsStateWithLifecycle()
     val score by viewModel.stage5Score.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage5Finished.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val currentQ = questions.getOrNull(currentIndex)
@@ -106,7 +107,7 @@ fun StageFillBlankScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Етап 5: Lückentext · Пропуски",
+                            text = "Етап 6: Lückentext · Пропуски",
                             fontFamily = LoraFontFamily,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleMedium
@@ -172,17 +173,17 @@ fun StageFillBlankScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (isFinished || currentQ == null) {
-                    val nextEnabled = viewModel.getNextEnabledStage(5)
+                    val nextEnabled = viewModel.getNextEnabledStage(6)
                     StageCompletedSuccessCard(
-                        stageNumber = 5,
+                        stageNumber = 6,
                         nextStageNumber = nextEnabled,
-                        title = "Етап 5 пройдено!",
-                        subtitle = if (nextEnabled != null) {
-                            "Ви чудово розумієте контекст вживання слів! Далі відкрито Етап $nextEnabled."
-                        } else {
-                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        title = "Етап 6 пройдено!",
+                        subtitle = when {
+                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            nextEnabled != null -> "Усі речення доповнено на 100%! Далі відкрито Етап $nextEnabled."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
                         },
-                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 5) },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 6) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {
@@ -199,6 +200,10 @@ fun StageFillBlankScreen(
                                 .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            if (currentQ.isRetry) {
+                                RetryMistakeBadge()
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -306,6 +311,16 @@ fun StageFillBlankScreen(
                     }
 
                     if (selectedOption != null) {
+                        if (!selectedOption.equals(currentQ.correctOption, ignoreCase = true)) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Помилка · слово повернеться в кінці етапу для повторення",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ErrorRed,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = { viewModel.nextStage5(subtopicId) },

@@ -75,7 +75,9 @@ data class AppExtendedColors(
     val genderDie: Color,
     val genderDieBg: Color,
     val genderDas: Color,
-    val genderDasBg: Color
+    val genderDasBg: Color,
+    val warningYellow: Color,
+    val warningYellowBg: Color
 )
 
 private val LightExtendedColors = AppExtendedColors(
@@ -92,7 +94,9 @@ private val LightExtendedColors = AppExtendedColors(
     genderDie = GenderDieFeminine,
     genderDieBg = GenderDieContainer,
     genderDas = GenderDasNeuter,
-    genderDasBg = GenderDasContainer
+    genderDasBg = GenderDasContainer,
+    warningYellow = WarningYellow,
+    warningYellowBg = WarningYellowContainer
 )
 
 private val DarkExtendedColors = AppExtendedColors(
@@ -109,7 +113,9 @@ private val DarkExtendedColors = AppExtendedColors(
     genderDie = GenderDieOnDark,
     genderDieBg = Color(0xFF3F2229),
     genderDas = GenderDasOnDark,
-    genderDasBg = Color(0xFF1A362D)
+    genderDasBg = Color(0xFF1A362D),
+    warningYellow = WarningYellowOnDark,
+    warningYellowBg = WarningYellowDarkContainer
 )
 
 private val SepiaExtendedColors = AppExtendedColors(
@@ -126,7 +132,9 @@ private val SepiaExtendedColors = AppExtendedColors(
     genderDie = Color(0xFF9F2C40),
     genderDieBg = Color(0xFFF3DDD9),
     genderDas = Color(0xFF245F47),
-    genderDasBg = Color(0xFFDDEADE)
+    genderDasBg = Color(0xFFDDEADE),
+    warningYellow = Color(0xFFA67200),
+    warningYellowBg = Color(0xFFFDF0C2)
 )
 
 private val SageExtendedColors = AppExtendedColors(
@@ -143,7 +151,9 @@ private val SageExtendedColors = AppExtendedColors(
     genderDie = GenderDieFeminine,
     genderDieBg = Color(0xFFF5E3E5),
     genderDas = ForestPinePrimary,
-    genderDasBg = Color(0xFFD8EBE0)
+    genderDasBg = Color(0xFFD8EBE0),
+    warningYellow = WarningYellow,
+    warningYellowBg = WarningYellowContainer
 )
 
 val LocalAppExtendedColors = staticCompositionLocalOf { LightExtendedColors }

@@ -10,6 +10,7 @@ import com.example.data.db.LevelStats
 import com.example.data.db.SubtopicLevelCount
 import com.example.data.model.SubtopicProgressEntity
 import com.example.data.model.WordEntity
+import com.example.data.repository.StockPhotoRepository
 import com.example.data.repository.VocabularyRepository
 import com.example.ui.theme.AppThemeMode
 import com.example.util.ReviewRating
@@ -18,8 +19,12 @@ import com.example.util.TtsManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +33,9 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -39,13 +46,15 @@ sealed class Screen {
     data class SubtopicsList(val mainTopicId: String) : Screen()
     data class SubtopicHub(val subtopicId: String) : Screen()
 
-    // 6-Stage Learning Progression
+    // 8-Stage Learning Progression
     data class Stage1Flashcards(val subtopicId: String) : Screen()
     data class Stage2Listening(val subtopicId: String) : Screen()
     data class Stage3MultipleChoice(val subtopicId: String) : Screen()
     data class Stage4ArticleTrainer(val subtopicId: String) : Screen()
-    data class Stage5FillBlank(val subtopicId: String) : Screen()
-    data class Stage6Spelling(val subtopicId: String) : Screen()
+    data class Stage5PluralTrainer(val subtopicId: String) : Screen()
+    data class Stage6FillBlank(val subtopicId: String) : Screen()
+    data class Stage7Spelling(val subtopicId: String) : Screen()
+    data class Stage8MissingLetters(val subtopicId: String) : Screen()
 
     object MixedReview : Screen()
     object Progress : Screen()
@@ -75,10 +84,12 @@ sealed class MixedReviewItem {
     abstract val word: WordEntity
     abstract val srsStep: Int
     abstract val stageType: Int
+    abstract val isRetry: Boolean
 
     data class FlashcardReview(
         override val word: WordEntity,
-        override val srsStep: Int
+        override val srsStep: Int,
+        override val isRetry: Boolean = false
     ) : MixedReviewItem() {
         override val stageType: Int = 1
     }
@@ -87,7 +98,8 @@ sealed class MixedReviewItem {
         override val word: WordEntity,
         override val srsStep: Int,
         val options: List<String>,
-        val correctIndex: Int
+        val correctIndex: Int,
+        override val isRetry: Boolean = false
     ) : MixedReviewItem() {
         override val stageType: Int = 2
     }
@@ -96,7 +108,8 @@ sealed class MixedReviewItem {
         override val word: WordEntity,
         override val srsStep: Int,
         val options: List<String>,
-        val correctIndex: Int
+        val correctIndex: Int,
+        override val isRetry: Boolean = false
     ) : MixedReviewItem() {
         override val stageType: Int = 3
     }
@@ -104,9 +117,20 @@ sealed class MixedReviewItem {
     data class ArticleReview(
         override val word: WordEntity,
         override val srsStep: Int,
-        val correctArticle: String
+        val correctArticle: String,
+        override val isRetry: Boolean = false
     ) : MixedReviewItem() {
         override val stageType: Int = 4
+    }
+
+    data class PluralReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val options: List<String>,
+        val correctPlural: String,
+        override val isRetry: Boolean = false
+    ) : MixedReviewItem() {
+        override val stageType: Int = 5
     }
 
     data class FillBlankReview(
@@ -115,17 +139,29 @@ sealed class MixedReviewItem {
         val sentenceWithBlank: String,
         val translation: String,
         val options: List<String>,
-        val correctOption: String
+        val correctOption: String,
+        override val isRetry: Boolean = false
     ) : MixedReviewItem() {
-        override val stageType: Int = 5
+        override val stageType: Int = 6
     }
 
     data class SpellingReview(
         override val word: WordEntity,
         override val srsStep: Int,
-        val letterPool: List<Char>
+        val letterPool: List<Char>,
+        override val isRetry: Boolean = false
     ) : MixedReviewItem() {
-        override val stageType: Int = 6
+        override val stageType: Int = 7
+    }
+
+    data class MissingLettersReview(
+        override val word: WordEntity,
+        override val srsStep: Int,
+        val blankIndices: List<Int>,
+        val letterPool: List<Char>,
+        override val isRetry: Boolean = false
+    ) : MixedReviewItem() {
+        override val stageType: Int = 8
     }
 }
 
@@ -133,18 +169,28 @@ data class MultipleChoiceQ(
     val word: WordEntity,
     val prompt: String,
     val options: List<String>,
-    val correctIndex: Int
+    val correctIndex: Int,
+    val isRetry: Boolean = false
 )
 
 data class ListeningQ(
     val word: WordEntity,
     val options: List<String>,
-    val correctIndex: Int
+    val correctIndex: Int,
+    val isRetry: Boolean = false
 )
 
 data class ArticleQ(
     val word: WordEntity,
-    val correctArticle: String
+    val correctArticle: String,
+    val isRetry: Boolean = false
+)
+
+data class PluralQ(
+    val word: WordEntity,
+    val options: List<String>,
+    val correctPlural: String,
+    val isRetry: Boolean = false
 )
 
 data class FillBlankQ(
@@ -152,7 +198,15 @@ data class FillBlankQ(
     val sentenceWithBlank: String,
     val translation: String,
     val options: List<String>,
-    val correctOption: String
+    val correctOption: String,
+    val isRetry: Boolean = false
+)
+
+data class MissingLettersQ(
+    val word: WordEntity,
+    val blankIndices: List<Int>,
+    val letterPool: List<Char>,
+    val isRetry: Boolean = false
 )
 
 data class IoStatusMessage(
@@ -164,14 +218,44 @@ enum class Stage6WordStatus {
     TYPING,
     WRONG_TRY,
     CORRECT,
-    OUT_OF_ATTEMPTS
+    CORRECT_UMLAUT_WARNING,
+    OUT_OF_ATTEMPTS;
+
+    val isResolved: Boolean
+        get() = this == CORRECT || this == CORRECT_UMLAUT_WARNING || this == OUT_OF_ATTEMPTS
 }
+
+enum class Stage6InputMode {
+    LETTER_TILES,
+    KEYBOARD
+}
+
+data class LevelOfflineStatus(
+    val level: String,
+    val cachedWords: Int,
+    val totalWords: Int
+) {
+    val isComplete: Boolean get() = totalWords > 0 && cachedWords >= totalWords
+}
+
+data class OfflineDownloadState(
+    val activeLevel: String? = null,
+    val processedWords: Int = 0,
+    val totalWords: Int = 0,
+    val photosReady: Int = 0,
+    val audioReady: Int = 0,
+    val isPausedForRateLimit: Boolean = false,
+    val statusMessage: String? = null,
+    val isRunning: Boolean = false,
+    val levelSummaries: List<LevelOfflineStatus> = emptyList()
+)
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class LearningViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("deutschlern_prefs", Context.MODE_PRIVATE)
     private val repository: VocabularyRepository
+    private val stockPhotoRepository: StockPhotoRepository = StockPhotoRepository.getInstance(application)
     val ttsManager: TtsManager = TtsManager(application)
 
     private val _screenStack = MutableStateFlow<List<Screen>>(listOf(Screen.MainTopics))
@@ -224,11 +308,178 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun openSettings() {
         _isSettingsOpen.value = true
+        refreshOfflineLevelSummaries()
     }
 
     fun closeSettings() {
         _isSettingsOpen.value = false
         _ioStatusMessage.value = null
+    }
+
+    // === Stage 6 Input Mode (Letter Tiles vs Keyboard) ===
+    private val initialStage6Mode = Stage6InputMode.entries.firstOrNull {
+        it.name == prefs.getString("stage6_input_mode", Stage6InputMode.LETTER_TILES.name)
+    } ?: Stage6InputMode.LETTER_TILES
+
+    private val _stage6InputMode = MutableStateFlow(initialStage6Mode)
+    val stage6InputMode: StateFlow<Stage6InputMode> = _stage6InputMode.asStateFlow()
+
+    fun setStage6InputMode(mode: Stage6InputMode) {
+        _stage6InputMode.value = mode
+        prefs.edit().putString("stage6_input_mode", mode.name).apply()
+    }
+
+    // === Offline Level Preload (Photos + HD Pronunciation) ===
+    private var offlineDownloadJob: Job? = null
+    private val _offlineDownloadState = MutableStateFlow(OfflineDownloadState())
+    val offlineDownloadState: StateFlow<OfflineDownloadState> = _offlineDownloadState.asStateFlow()
+
+    fun refreshOfflineLevelSummaries() {
+        viewModelScope.launch {
+            val summaries = computeOfflineLevelSummaries()
+            _offlineDownloadState.value = _offlineDownloadState.value.copy(levelSummaries = summaries)
+        }
+    }
+
+    private suspend fun computeOfflineLevelSummaries(): List<LevelOfflineStatus> = withContext(Dispatchers.IO) {
+        val levels = listOf("A1", "A2", "B1", "B2")
+        val checkPhotos = stockPhotoRepository.hasConfiguredApiKey()
+        levels.map { lvl ->
+            val words = repository.getWordsByLevelOnce(lvl)
+            val cached = words.count { w ->
+                val audioOk = ttsManager.isHdAudioCached(w.displayWithArticle)
+                val photoOk = !checkPhotos || stockPhotoRepository.isPhotoDiskCached(w)
+                audioOk && photoOk
+            }
+            LevelOfflineStatus(level = lvl, cachedWords = cached, totalWords = words.size)
+        }
+    }
+
+    fun startOfflineLevelDownload(level: String) {
+        val normLevel = level.uppercase()
+        if (_offlineDownloadState.value.isRunning) {
+            offlineDownloadJob?.cancel()
+        }
+        offlineDownloadJob = viewModelScope.launch {
+            val allLevelWords = repository.getWordsByLevelOnce(normLevel)
+            if (allLevelWords.isEmpty()) {
+                _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                    isRunning = false,
+                    activeLevel = null,
+                    statusMessage = "Немає слів для рівня $normLevel"
+                )
+                return@launch
+            }
+
+            // Order subtopic-first (up to 15 words per subtopic first) so active lessons cache earliest
+            val grouped = allLevelWords.groupBy { it.subtopicId }
+            val priorityBatch = grouped.values.flatMap { it.take(15) }
+            val priorityIds = priorityBatch.mapTo(HashSet()) { it.id }
+            val orderedWords = priorityBatch + allLevelWords.filter { it.id !in priorityIds }
+
+            val hasPhotoApi = stockPhotoRepository.hasConfiguredApiKey()
+            var photosReady = 0
+            var audioReady = 0
+
+            _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                activeLevel = normLevel,
+                processedWords = 0,
+                totalWords = orderedWords.size,
+                photosReady = 0,
+                audioReady = 0,
+                isPausedForRateLimit = false,
+                isRunning = true,
+                statusMessage = "Підготовка рівня $normLevel..."
+            )
+
+            try {
+                for ((index, word) in orderedWords.withIndex()) {
+                    if (!isActive) break
+
+                    // 1. Preload HD German audio (with article, bare noun for Stage 4, and plural for Stage 5)
+                    val audioWithArt = ttsManager.prefetchHdAudio(word.displayWithArticle)
+                    if (word.article.isNotBlank() && !word.german.equals(word.displayWithArticle, ignoreCase = true)) {
+                        ttsManager.prefetchHdAudio(word.german)
+                    }
+                    if (isPluralizableNoun(word)) {
+                        ttsManager.prefetchHdAudio(word.plural.trim())
+                    }
+                    if (audioWithArt) audioReady++
+
+                    // 2. Preload photo URL + Coil JPEG bytes into disk cache with Pixabay 429 pacing
+                    if (hasPhotoApi) {
+                        val alreadyDiskCached = stockPhotoRepository.isPhotoDiskCached(word)
+                        if (alreadyDiskCached) {
+                            photosReady++
+                        } else {
+                            val hadUrl = stockPhotoRepository.getCachedSync(word) != null
+                            if (!hadUrl) {
+                                val waitMs = stockPhotoRepository.remainingCooldownMs()
+                                if (waitMs > 0L) {
+                                    val waitSec = ((waitMs + 999L) / 1000L).coerceAtLeast(1L)
+                                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                                        isPausedForRateLimit = true,
+                                        statusMessage = "Пауза через ліміт Pixabay (~$waitSec с)..."
+                                    )
+                                    delay(waitMs + 500L)
+                                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                                        isPausedForRateLimit = false,
+                                        statusMessage = "Завантаження рівня $normLevel..."
+                                    )
+                                }
+                            }
+                            val ok = stockPhotoRepository.preloadWordForOffline(word)
+                            if (ok) photosReady++
+                            // Gentle pacing only when we had to hit the Pixabay API
+                            if (!hadUrl && stockPhotoRepository.remainingCooldownMs() == 0L) {
+                                delay(650L)
+                            }
+                        }
+                    }
+
+                    val done = index + 1
+                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                        processedWords = done,
+                        photosReady = photosReady,
+                        audioReady = audioReady,
+                        isPausedForRateLimit = false,
+                        statusMessage = "Рівень $normLevel: $done / ${orderedWords.size} слів"
+                    )
+                }
+
+                val refreshed = computeOfflineLevelSummaries()
+                _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                    isRunning = false,
+                    isPausedForRateLimit = false,
+                    activeLevel = null,
+                    levelSummaries = refreshed,
+                    statusMessage = "Рівень $normLevel збережено для офлайн-занять (фото: $photosReady, аудіо: $audioReady)"
+                )
+            } catch (_: CancellationException) {
+                val refreshed = computeOfflineLevelSummaries()
+                _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                    isRunning = false,
+                    isPausedForRateLimit = false,
+                    activeLevel = null,
+                    levelSummaries = refreshed,
+                    statusMessage = "Завантаження $normLevel зупинено · вже збережене лишилось у кеші"
+                )
+            } catch (e: Exception) {
+                val refreshed = computeOfflineLevelSummaries()
+                _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                    isRunning = false,
+                    isPausedForRateLimit = false,
+                    activeLevel = null,
+                    levelSummaries = refreshed,
+                    statusMessage = "Помилка завантаження: ${e.message ?: "перевірте інтернет"}"
+                )
+            }
+        }
+    }
+
+    fun cancelOfflineLevelDownload() {
+        offlineDownloadJob?.cancel()
+        offlineDownloadJob = null
     }
 
     private val _autoPronounce = MutableStateFlow(prefs.getBoolean("tts_auto_pronounce", true))
@@ -256,13 +507,22 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // === Customizable Enabled Learning & Review Stages ===
+    // === Customizable Enabled Learning & Review Stages (1..8) ===
     private fun loadEnabledStages(): Set<Int> {
         val raw = prefs.getString("enabled_stages_csv", null) ?: return ALL_STAGES
         val parsed = raw.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
-            .filter { it in 1..6 }
-            .toSet()
+            .filter { it in 1..8 }
+            .toMutableSet()
+        // One-time upgrade so returning 6-stage users automatically receive the new stages 7 & 8 enabled
+        if (!prefs.getBoolean("stages_migrated_to_8", false)) {
+            parsed.add(7)
+            parsed.add(8)
+            prefs.edit()
+                .putString("enabled_stages_csv", parsed.sorted().joinToString(","))
+                .putBoolean("stages_migrated_to_8", true)
+                .apply()
+        }
         return parsed.ifEmpty { ALL_STAGES }
     }
 
@@ -270,7 +530,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val enabledStages: StateFlow<Set<Int>> = _enabledStages.asStateFlow()
 
     fun toggleStageEnabled(stage: Int) {
-        if (stage !in 1..6) return
+        if (stage !in 1..8) return
         val current = _enabledStages.value
         val updated = if (stage in current) {
             if (current.size <= 1) return // Always keep at least one stage active
@@ -279,7 +539,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             current + stage
         }
         _enabledStages.value = updated
-        prefs.edit().putString("enabled_stages_csv", updated.sorted().joinToString(",")).apply()
+        prefs.edit()
+            .putString("enabled_stages_csv", updated.sorted().joinToString(","))
+            .putBoolean("stages_migrated_to_8", true)
+            .apply()
     }
 
     fun getFirstEnabledStage(): Int = _enabledStages.value.minOrNull() ?: 1
@@ -292,8 +555,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             2 -> startStage2(subtopicId)
             3 -> startStage3(subtopicId)
             4 -> startStage4(subtopicId)
-            5 -> startStage5(subtopicId)
-            6 -> startStage6(subtopicId)
+            5 -> startStage5Plural(subtopicId)
+            6 -> startStage5(subtopicId)
+            7 -> startStage6(subtopicId)
+            8 -> startStage8MissingLetters(subtopicId)
         }
     }
 
@@ -528,7 +793,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val _stage4Finished = MutableStateFlow(false)
     val stage4Finished: StateFlow<Boolean> = _stage4Finished.asStateFlow()
 
-    // === Stage 5: Fill in the Blank State ===
+    // === Stage 5: Plural Trainer (der/die/das -> die ...) State ===
+    private val _stage5PluralQuestions = MutableStateFlow<List<PluralQ>>(emptyList())
+    val stage5PluralQuestions: StateFlow<List<PluralQ>> = _stage5PluralQuestions.asStateFlow()
+    private val _stage5PluralIndex = MutableStateFlow(0)
+    val stage5PluralIndex: StateFlow<Int> = _stage5PluralIndex.asStateFlow()
+    private val _stage5PluralSelected = MutableStateFlow<String?>(null)
+    val stage5PluralSelected: StateFlow<String?> = _stage5PluralSelected.asStateFlow()
+    private val _stage5PluralScore = MutableStateFlow(0)
+    val stage5PluralScore: StateFlow<Int> = _stage5PluralScore.asStateFlow()
+    private val _stage5PluralFinished = MutableStateFlow(false)
+    val stage5PluralFinished: StateFlow<Boolean> = _stage5PluralFinished.asStateFlow()
+    private val _stage5PluralAutoSkipped = MutableStateFlow(false)
+    val stage5PluralAutoSkipped: StateFlow<Boolean> = _stage5PluralAutoSkipped.asStateFlow()
+
+    // === Stage 6: Fill in the Blank State ===
     private val _stage5Questions = MutableStateFlow<List<FillBlankQ>>(emptyList())
     val stage5Questions: StateFlow<List<FillBlankQ>> = _stage5Questions.asStateFlow()
     private val _stage5Index = MutableStateFlow(0)
@@ -540,7 +819,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val _stage5Finished = MutableStateFlow(false)
     val stage5Finished: StateFlow<Boolean> = _stage5Finished.asStateFlow()
 
-    // === Stage 6: Spelling & Writing State ===
+    // === Stage 7: Spelling & Writing State ===
     private val _stage6Words = MutableStateFlow<List<WordEntity>>(emptyList())
     val stage6Words: StateFlow<List<WordEntity>> = _stage6Words.asStateFlow()
     private val _stage6Index = MutableStateFlow(0)
@@ -559,6 +838,28 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val stage6Score: StateFlow<Int> = _stage6Score.asStateFlow()
     private val _stage6Finished = MutableStateFlow(false)
     val stage6Finished: StateFlow<Boolean> = _stage6Finished.asStateFlow()
+    private val _stage6RetryIndices = MutableStateFlow<Set<Int>>(emptySet())
+    val stage6RetryIndices: StateFlow<Set<Int>> = _stage6RetryIndices.asStateFlow()
+
+    // === Stage 8: Missing Letters in Word (Lückenwort) State ===
+    private val _stage8Questions = MutableStateFlow<List<MissingLettersQ>>(emptyList())
+    val stage8Questions: StateFlow<List<MissingLettersQ>> = _stage8Questions.asStateFlow()
+    private val _stage8Index = MutableStateFlow(0)
+    val stage8Index: StateFlow<Int> = _stage8Index.asStateFlow()
+    private val _stage8Input = MutableStateFlow("")
+    val stage8Input: StateFlow<String> = _stage8Input.asStateFlow()
+    private val _stage8Status = MutableStateFlow(Stage6WordStatus.TYPING)
+    val stage8Status: StateFlow<Stage6WordStatus> = _stage8Status.asStateFlow()
+    private val _stage8AttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
+    val stage8AttemptsLeft: StateFlow<Int> = _stage8AttemptsLeft.asStateFlow()
+    private val _stage8Score = MutableStateFlow(0)
+    val stage8Score: StateFlow<Int> = _stage8Score.asStateFlow()
+    private val _stage8Finished = MutableStateFlow(false)
+    val stage8Finished: StateFlow<Boolean> = _stage8Finished.asStateFlow()
+
+    // True when the most recently completed stage brought the subtopic to 8/8 stages at 100% (unlocking SRS)
+    private val _lastCompletedUnlockedSrs = MutableStateFlow(false)
+    val lastCompletedUnlockedSrs: StateFlow<Boolean> = _lastCompletedUnlockedSrs.asStateFlow()
 
     init {
         val db = AppDatabase.getDatabase(application)
@@ -635,8 +936,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         is Screen.Stage2Listening,
         is Screen.Stage3MultipleChoice,
         is Screen.Stage4ArticleTrainer,
-        is Screen.Stage5FillBlank,
-        is Screen.Stage6Spelling,
+        is Screen.Stage5PluralTrainer,
+        is Screen.Stage6FillBlank,
+        is Screen.Stage7Spelling,
+        is Screen.Stage8MissingLetters,
         is Screen.MixedReview -> true
         else -> false
     }
@@ -683,6 +986,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             ?: SubtopicProgressEntity(subtopicId = subtopicId, unlockedStage = 1)
     }
 
+    fun getCompletedStageSetForSubtopic(subtopicId: String): Set<Int> {
+        return repository.getCompletedStageSet(
+            subtopicId = subtopicId,
+            level = _selectedLevel.value,
+            fallbackProgress = getProgressForSubtopic(subtopicId)
+        )
+    }
+
     fun setHubCardIndex(index: Int) {
         _activeCardIndexInHub.value = index
     }
@@ -692,7 +1003,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // ==========================================
     fun startStage1(subtopicId: String) {
         viewModelScope.launch {
-            val isFirstPass = getProgressForSubtopic(subtopicId).completedStages < 1
+            val isFirstPass = 1 !in getCompletedStageSetForSubtopic(subtopicId)
             val rawWords = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15)
             // Keep curated order on the initial Stage 1 pass; randomize on all subsequent repetitions
             val orderedWords = if (isFirstPass) rawWords else rawWords.shuffled()
@@ -701,6 +1012,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage1Index.value = 0
             _stage1Flipped.value = false
             _stage1Finished.value = false
+            _lastCompletedUnlockedSrs.value = false
+            stockPhotoRepository.prefetchWordsAsync(orderedWords.take(4))
             navigateToStage(Screen.Stage1Flashcards(subtopicId))
         }
     }
@@ -724,13 +1037,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 _stage1Finished.value = true
                 _stage1AllowPhotoChange.value = false
                 viewModelScope.launch {
-                    repository.completeStage(
+                    val unlocked = repository.completeStage(
                         subtopicId = subtopicId,
                         stage = 1,
                         score = words.size,
                         enabledStages = _enabledStages.value,
-                        level = _selectedLevel.value
+                        level = _selectedLevel.value,
+                        achieved100Percent = true
                     )
+                    _lastCompletedUnlockedSrs.value = unlocked
                     refreshReviewDashboard()
                 }
             }
@@ -770,6 +1085,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage2SelectedAnswer.value = null
             _stage2Score.value = 0
             _stage2Finished.value = false
+            _lastCompletedUnlockedSrs.value = false
             navigateToStage(Screen.Stage2Listening(subtopicId))
             if (questions.isNotEmpty()) {
                 speak(questions.first().word.displayWithArticle)
@@ -785,6 +1101,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage2Score.value += 1
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
         } else {
+            // Cyclic mistake repeat: re-queue the missed word at the end with freshly shuffled options
+            val targetLabel = currentQ.options.getOrNull(currentQ.correctIndex)
+            val reshuffled = currentQ.options.shuffled()
+            val newCorrectIdx = targetLabel?.let { reshuffled.indexOf(it) }?.takeIf { it >= 0 } ?: 0
+            _stage2Questions.value = _stage2Questions.value + currentQ.copy(
+                options = reshuffled,
+                correctIndex = newCorrectIdx,
+                isRetry = true
+            )
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
         }
     }
@@ -798,13 +1123,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage2Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(
+                val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
                     stage = 2,
                     score = _stage2Score.value,
                     enabledStages = _enabledStages.value,
-                    level = _selectedLevel.value
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
                 )
+                _lastCompletedUnlockedSrs.value = unlocked
                 refreshReviewDashboard()
             }
         }
@@ -834,6 +1161,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage3SelectedAnswer.value = null
             _stage3Score.value = 0
             _stage3Finished.value = false
+            _lastCompletedUnlockedSrs.value = false
+            stockPhotoRepository.prefetchWordsAsync(questions.take(4).map { it.word })
             navigateToStage(Screen.Stage3MultipleChoice(subtopicId))
             if (questions.isNotEmpty()) {
                 speak(questions.first().word.displayWithArticle)
@@ -849,6 +1178,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage3Score.value += 1
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
         } else {
+            val targetLabel = currentQ.options.getOrNull(currentQ.correctIndex)
+            val reshuffled = currentQ.options.shuffled()
+            val newCorrectIdx = targetLabel?.let { reshuffled.indexOf(it) }?.takeIf { it >= 0 } ?: 0
+            _stage3Questions.value = _stage3Questions.value + currentQ.copy(
+                options = reshuffled,
+                correctIndex = newCorrectIdx,
+                isRetry = true
+            )
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
         }
     }
@@ -859,16 +1196,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage3Index.value = nextIdx
             _stage3SelectedAnswer.value = null
             speak(_stage3Questions.value[nextIdx].word.displayWithArticle)
+            stockPhotoRepository.prefetchWordsAsync(
+                _stage3Questions.value.drop(nextIdx + 1).take(3).map { it.word }
+            )
         } else {
             _stage3Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(
+                val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
                     stage = 3,
                     score = _stage3Score.value,
                     enabledStages = _enabledStages.value,
-                    level = _selectedLevel.value
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
                 )
+                _lastCompletedUnlockedSrs.value = unlocked
                 refreshReviewDashboard()
             }
         }
@@ -889,10 +1231,23 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage4Index.value = 0
             _stage4SelectedArticle.value = null
             _stage4Score.value = 0
-            _stage4Finished.value = false
+            _stage4Finished.value = questions.isEmpty()
+            _lastCompletedUnlockedSrs.value = false
+            stockPhotoRepository.prefetchWordsAsync(questions.take(4).map { it.word })
             navigateToStage(Screen.Stage4ArticleTrainer(subtopicId))
             if (questions.isNotEmpty()) {
                 speak(questions.first().word.german)
+            } else {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 4,
+                    score = 0,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
             }
         }
     }
@@ -906,6 +1261,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             speak("${currentQ.correctArticle} ${currentQ.word.german}")
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
         } else {
+            _stage4Questions.value = _stage4Questions.value + currentQ.copy(isRetry = true)
             speak("${currentQ.correctArticle} ${currentQ.word.german}")
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
         }
@@ -917,23 +1273,114 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage4Index.value = nextIdx
             _stage4SelectedArticle.value = null
             speak(_stage4Questions.value[nextIdx].word.german)
+            stockPhotoRepository.prefetchWordsAsync(
+                _stage4Questions.value.drop(nextIdx + 1).take(3).map { it.word }
+            )
         } else {
             _stage4Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(
+                val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
                     stage = 4,
                     score = _stage4Score.value,
                     enabledStages = _enabledStages.value,
-                    level = _selectedLevel.value
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
                 )
+                _lastCompletedUnlockedSrs.value = unlocked
                 refreshReviewDashboard()
             }
         }
     }
 
     // ==========================================
-    // === STAGE 5: FILL IN THE BLANK ===
+    // === STAGE 5: PLURAL TRAINER (МНОЖИНА) ===
+    // ==========================================
+    fun startStage5Plural(subtopicId: String) {
+        viewModelScope.launch {
+            val allSub = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15)
+            val pluralNouns = allSub.filter { isPluralizableNoun(it) }.shuffled()
+            val questions = pluralNouns.map { word ->
+                val correct = word.plural.trim()
+                val options = generatePluralOptions(word)
+                PluralQ(
+                    word = word,
+                    options = options,
+                    correctPlural = correct
+                )
+            }
+            _stage5PluralQuestions.value = questions
+            _stage5PluralIndex.value = 0
+            _stage5PluralSelected.value = null
+            _stage5PluralScore.value = 0
+            _stage5PluralAutoSkipped.value = questions.isEmpty()
+            _stage5PluralFinished.value = questions.isEmpty()
+            _lastCompletedUnlockedSrs.value = false
+            stockPhotoRepository.prefetchWordsAsync(questions.take(4).map { it.word })
+            navigateToStage(Screen.Stage5PluralTrainer(subtopicId))
+            if (questions.isNotEmpty()) {
+                speak(questions.first().word.displayWithArticle)
+            } else {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 5,
+                    score = 0,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
+            }
+        }
+    }
+
+    fun answerStage5Plural(subtopicId: String, selectedPlural: String) {
+        if (_stage5PluralSelected.value != null) return
+        _stage5PluralSelected.value = selectedPlural
+        val currentQ = _stage5PluralQuestions.value.getOrNull(_stage5PluralIndex.value) ?: return
+        val isCorrect = selectedPlural.equals(currentQ.correctPlural, ignoreCase = true)
+        speak(currentQ.correctPlural)
+        if (isCorrect) {
+            _stage5PluralScore.value += 1
+            viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
+        } else {
+            _stage5PluralQuestions.value = _stage5PluralQuestions.value + currentQ.copy(
+                options = currentQ.options.shuffled(),
+                isRetry = true
+            )
+            viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
+        }
+    }
+
+    fun nextStage5Plural(subtopicId: String) {
+        val nextIdx = _stage5PluralIndex.value + 1
+        if (nextIdx < _stage5PluralQuestions.value.size) {
+            _stage5PluralIndex.value = nextIdx
+            _stage5PluralSelected.value = null
+            speak(_stage5PluralQuestions.value[nextIdx].word.displayWithArticle)
+            stockPhotoRepository.prefetchWordsAsync(
+                _stage5PluralQuestions.value.drop(nextIdx + 1).take(3).map { it.word }
+            )
+        } else {
+            _stage5PluralFinished.value = true
+            viewModelScope.launch {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 5,
+                    score = _stage5PluralScore.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
+            }
+        }
+    }
+
+    // ==========================================
+    // === STAGE 6: FILL IN THE BLANK ===
     // ==========================================
     fun startStage5(subtopicId: String) {
         viewModelScope.launch {
@@ -959,8 +1406,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage5Index.value = 0
             _stage5SelectedOption.value = null
             _stage5Score.value = 0
-            _stage5Finished.value = false
-            navigateToStage(Screen.Stage5FillBlank(subtopicId))
+            _stage5Finished.value = questions.isEmpty()
+            _lastCompletedUnlockedSrs.value = false
+            navigateToStage(Screen.Stage6FillBlank(subtopicId))
+            if (questions.isEmpty()) {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 6,
+                    score = 0,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
+            }
         }
     }
 
@@ -973,6 +1433,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             speak(currentQ.word.exampleDe)
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
         } else {
+            _stage5Questions.value = _stage5Questions.value + currentQ.copy(
+                options = currentQ.options.shuffled(),
+                isRetry = true
+            )
             speak(currentQ.word.exampleDe)
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
         }
@@ -986,20 +1450,22 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage5Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(
+                val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
-                    stage = 5,
+                    stage = 6,
                     score = _stage5Score.value,
                     enabledStages = _enabledStages.value,
-                    level = _selectedLevel.value
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
                 )
+                _lastCompletedUnlockedSrs.value = unlocked
                 refreshReviewDashboard()
             }
         }
     }
 
     // ==========================================
-    // === STAGE 6: SPELLING & WRITING ===
+    // === STAGE 7: SPELLING & WRITING ===
     // ==========================================
     fun startStage6(subtopicId: String) {
         viewModelScope.launch {
@@ -1008,8 +1474,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage6Index.value = 0
             _stage6Score.value = 0
             _stage6Finished.value = false
+            _stage6RetryIndices.value = emptySet()
+            _lastCompletedUnlockedSrs.value = false
             prepareStage6Word(0)
-            navigateToStage(Screen.Stage6Spelling(subtopicId))
+            navigateToStage(Screen.Stage7Spelling(subtopicId))
         }
     }
 
@@ -1026,13 +1494,34 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         speak(target.displayWithArticle)
     }
 
+    private fun handleStage6WrongAttempt(
+        word: WordEntity,
+        submitted: String,
+        target: String,
+        allowLenientUmlauts: Boolean = false
+    ) {
+        val remaining = (_stage6AttemptsLeft.value - 1).coerceAtLeast(0)
+        _stage6AttemptsLeft.value = remaining
+        if (remaining > 0) {
+            // Keep the matching prefix from the start; erase only the wrong tail (or everything if char 0 is wrong)
+            _stage6Input.value = keepCorrectPrefix(submitted, target, allowLenientUmlauts)
+            _stage6Status.value = Stage6WordStatus.WRONG_TRY
+        } else {
+            _stage6Status.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+            val newIdx = _stage6Words.value.size
+            _stage6Words.value = _stage6Words.value + word
+            _stage6RetryIndices.value = _stage6RetryIndices.value + newIdx
+            speak(word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.AGAIN) }
+        }
+    }
+
     fun addStage6Letter(char: Char) {
-        val currentStatus = _stage6Status.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_stage6Status.value.isResolved) return
         val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
         val target = word.german.trim()
 
-        val baseInput = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _stage6Input.value
+        val baseInput = _stage6Input.value
         if (baseInput.length >= target.length) return
 
         val withLeadingSep = autoAdvanceSeparators(baseInput, target)
@@ -1046,17 +1535,62 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             speak(word.displayWithArticle)
             viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
         } else if (newText.length >= target.length) {
-            val remaining = (_stage6AttemptsLeft.value - 1).coerceAtLeast(0)
-            _stage6AttemptsLeft.value = remaining
-            if (remaining > 0) {
-                _stage6Status.value = Stage6WordStatus.WRONG_TRY
-            } else {
-                _stage6Status.value = Stage6WordStatus.OUT_OF_ATTEMPTS
-                speak(word.displayWithArticle)
-                viewModelScope.launch { repository.recordReview(word.id, ReviewRating.AGAIN) }
-            }
+            handleStage6WrongAttempt(word, newText, target)
         } else {
             _stage6Status.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun insertStage6Umlaut(char: Char) {
+        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
+            if (_stage6Status.value.isResolved) return
+            val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
+            val target = word.german.trim()
+            val updated = _stage6Input.value + char
+            _stage6Input.value = updated
+            if (updated.trim().equals(target, ignoreCase = true)) {
+                _stage6Input.value = target
+                _stage6Status.value = Stage6WordStatus.CORRECT
+                _stage6Score.value += 1
+                speak(word.displayWithArticle)
+                viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+            } else {
+                _stage6Status.value = Stage6WordStatus.TYPING
+            }
+        } else {
+            addStage6Letter(char)
+        }
+    }
+
+    fun updateStage6TypedText(raw: String) {
+        if (_stage6Status.value.isResolved) return
+        val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
+        val cleaned = stripOptionalArticlePrefix(raw, word.article)
+        _stage6Input.value = cleaned
+        _stage6Status.value = Stage6WordStatus.TYPING
+    }
+
+    fun submitStage6TypedAnswer() {
+        if (_stage6Status.value.isResolved) return
+        val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
+        val target = word.german.trim()
+        val cleaned = stripOptionalArticlePrefix(_stage6Input.value, word.article).trim()
+        if (cleaned.isEmpty()) return
+
+        if (cleaned.equals(target, ignoreCase = true)) {
+            _stage6Input.value = target
+            _stage6Status.value = Stage6WordStatus.CORRECT
+            _stage6Score.value += 1
+            speak(word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+        } else if (matchesWithLenientUmlauts(cleaned, target)) {
+            _stage6Input.value = cleaned
+            _stage6Status.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+            _stage6Score.value += 1
+            speak(word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+        } else {
+            handleStage6WrongAttempt(word, cleaned, target, allowLenientUmlauts = true)
         }
     }
 
@@ -1065,11 +1599,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
      * and automatically inserting spaces/hyphens where needed).
      */
     fun useStage6Hint() {
-        val currentStatus = _stage6Status.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_stage6Status.value.isResolved) return
         val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
         val target = word.german.trim()
-        val current = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _stage6Input.value
+        val current = _stage6Input.value
 
         val nextInput = computeNextHintInput(current, target)
         _stage6HintsUsed.value += 1
@@ -1086,8 +1619,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun removeStage6Letter() {
-        val currentStatus = _stage6Status.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_stage6Status.value.isResolved) return
         if (_stage6Input.value.isNotEmpty()) {
             _stage6Input.value = backspaceOverSeparators(_stage6Input.value)
             _stage6Status.value = Stage6WordStatus.TYPING
@@ -1095,8 +1627,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun clearStage6() {
-        val currentStatus = _stage6Status.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_stage6Status.value.isResolved) return
         _stage6Input.value = ""
         _stage6Status.value = Stage6WordStatus.TYPING
     }
@@ -1109,13 +1640,227 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         } else {
             _stage6Finished.value = true
             viewModelScope.launch {
-                repository.completeStage(
+                val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
-                    stage = 6,
+                    stage = 7,
                     score = _stage6Score.value,
                     enabledStages = _enabledStages.value,
-                    level = _selectedLevel.value
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
                 )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
+            }
+        }
+    }
+
+    // ==========================================
+    // === STAGE 8: MISSING LETTERS (LÜCKENWORT) ===
+    // ==========================================
+    fun startStage8MissingLetters(subtopicId: String) {
+        viewModelScope.launch {
+            val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12)
+                .filter { it.german.trim().count { ch -> ch.isLetter() } >= 2 }
+                .shuffled()
+            val questions = words.map { word ->
+                val target = word.german.trim()
+                val blanks = buildMissingLettersIndices(target)
+                val pool = buildMissingLettersPool(target, blanks)
+                MissingLettersQ(
+                    word = word,
+                    blankIndices = blanks,
+                    letterPool = pool
+                )
+            }
+            _stage8Questions.value = questions
+            _stage8Index.value = 0
+            _stage8Score.value = 0
+            _stage8Finished.value = questions.isEmpty()
+            _lastCompletedUnlockedSrs.value = false
+            prepareStage8Question(0)
+            navigateToStage(Screen.Stage8MissingLetters(subtopicId))
+            if (questions.isEmpty()) {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 8,
+                    score = 0,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
+            }
+        }
+    }
+
+    private fun prepareStage8Question(index: Int) {
+        val q = _stage8Questions.value.getOrNull(index) ?: return
+        _stage8Input.value = ""
+        _stage8Status.value = Stage6WordStatus.TYPING
+        _stage8AttemptsLeft.value = MAX_STAGE6_ATTEMPTS
+        speak(q.word.displayWithArticle)
+    }
+
+    private fun expectedMissingString(q: MissingLettersQ): String {
+        val target = q.word.german.trim()
+        return buildString {
+            q.blankIndices.forEach { idx ->
+                if (idx in target.indices) append(target[idx])
+            }
+        }
+    }
+
+    private fun handleStage8WrongAttempt(
+        q: MissingLettersQ,
+        submitted: String,
+        expectedMissing: String,
+        allowLenientUmlauts: Boolean = false
+    ) {
+        val remaining = (_stage8AttemptsLeft.value - 1).coerceAtLeast(0)
+        _stage8AttemptsLeft.value = remaining
+        if (remaining > 0) {
+            _stage8Input.value = keepCorrectMissingPrefix(submitted, expectedMissing, allowLenientUmlauts)
+            _stage8Status.value = Stage6WordStatus.WRONG_TRY
+        } else {
+            _stage8Status.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+            _stage8Questions.value = _stage8Questions.value + q.copy(
+                letterPool = q.letterPool.shuffled(),
+                isRetry = true
+            )
+            speak(q.word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.AGAIN) }
+        }
+    }
+
+    fun addStage8Letter(char: Char) {
+        if (_stage8Status.value.isResolved) return
+        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
+        val expected = expectedMissingString(q)
+        if (_stage8Input.value.length >= expected.length) return
+
+        val updated = _stage8Input.value + char
+        _stage8Input.value = updated
+
+        if (updated.equals(expected, ignoreCase = true)) {
+            _stage8Input.value = expected
+            _stage8Status.value = Stage6WordStatus.CORRECT
+            _stage8Score.value += 1
+            speak(q.word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
+        } else if (updated.length >= expected.length) {
+            handleStage8WrongAttempt(q, updated, expected)
+        } else {
+            _stage8Status.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun insertStage8Umlaut(char: Char) {
+        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
+            if (_stage8Status.value.isResolved) return
+            val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
+            val expected = expectedMissingString(q)
+            val updated = _stage8Input.value + char
+            _stage8Input.value = updated
+            if (updated.trim().equals(expected, ignoreCase = true) ||
+                updated.trim().equals(q.word.german.trim(), ignoreCase = true)
+            ) {
+                _stage8Input.value = expected
+                _stage8Status.value = Stage6WordStatus.CORRECT
+                _stage8Score.value += 1
+                speak(q.word.displayWithArticle)
+                viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
+            } else {
+                _stage8Status.value = Stage6WordStatus.TYPING
+            }
+        } else {
+            addStage8Letter(char)
+        }
+    }
+
+    fun updateStage8TypedText(raw: String) {
+        if (_stage8Status.value.isResolved) return
+        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
+        _stage8Input.value = stripOptionalArticlePrefix(raw, q.word.article)
+        _stage8Status.value = Stage6WordStatus.TYPING
+    }
+
+    fun submitStage8TypedAnswer() {
+        if (_stage8Status.value.isResolved) return
+        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
+        val target = q.word.german.trim()
+        val expected = expectedMissingString(q)
+        val cleaned = stripOptionalArticlePrefix(_stage8Input.value, q.word.article).trim()
+        if (cleaned.isEmpty()) return
+
+        when {
+            cleaned.equals(expected, ignoreCase = true) || cleaned.equals(target, ignoreCase = true) -> {
+                _stage8Input.value = expected
+                _stage8Status.value = Stage6WordStatus.CORRECT
+                _stage8Score.value += 1
+                speak(q.word.displayWithArticle)
+                viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
+            }
+            matchesMissingLettersLenient(cleaned, expected, target) -> {
+                _stage8Input.value = expected
+                _stage8Status.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+                _stage8Score.value += 1
+                speak(q.word.displayWithArticle)
+                viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
+            }
+            else -> {
+                handleStage8WrongAttempt(q, cleaned, expected, allowLenientUmlauts = true)
+            }
+        }
+    }
+
+    fun useStage8Hint() {
+        if (_stage8Status.value.isResolved) return
+        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
+        val expected = expectedMissingString(q)
+        val nextInput = computeNextMissingHint(_stage8Input.value, expected)
+        _stage8Input.value = nextInput
+        if (nextInput.equals(expected, ignoreCase = true)) {
+            _stage8Status.value = Stage6WordStatus.CORRECT
+            _stage8Score.value += 1
+            speak(q.word.displayWithArticle)
+            viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
+        } else {
+            _stage8Status.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun removeStage8Letter() {
+        if (_stage8Status.value.isResolved) return
+        if (_stage8Input.value.isNotEmpty()) {
+            _stage8Input.value = _stage8Input.value.dropLast(1)
+            _stage8Status.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun clearStage8() {
+        if (_stage8Status.value.isResolved) return
+        _stage8Input.value = ""
+        _stage8Status.value = Stage6WordStatus.TYPING
+    }
+
+    fun nextStage8MissingLetters(subtopicId: String) {
+        val nextIdx = _stage8Index.value + 1
+        if (nextIdx < _stage8Questions.value.size) {
+            _stage8Index.value = nextIdx
+            prepareStage8Question(nextIdx)
+        } else {
+            _stage8Finished.value = true
+            viewModelScope.launch {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 8,
+                    score = _stage8Score.value,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
                 refreshReviewDashboard()
             }
         }
@@ -1164,6 +1909,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _mixedReviewFinished.value = false
             _mixedReviewIsEarlyPractice.value = earlyPractice
             resetMixedItemState()
+            stockPhotoRepository.prefetchWordsAsync(
+                builtItems.filter {
+                    it is MixedReviewItem.FlashcardReview ||
+                        it is MixedReviewItem.MultipleChoiceReview ||
+                        it is MixedReviewItem.ArticleReview ||
+                        it is MixedReviewItem.PluralReview
+                }.take(4).map { it.word }
+            )
             navigateToStage(Screen.MixedReview)
             builtItems.firstOrNull()?.let { speakForMixedItem(it) }
         }
@@ -1207,7 +1960,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 srsStep = srsStep,
                 correctArticle = word.article.lowercase().trim()
             )
-            5 -> {
+            5 -> MixedReviewItem.PluralReview(
+                word = word,
+                srsStep = srsStep,
+                options = generatePluralOptions(word),
+                correctPlural = word.plural.trim()
+            )
+            6 -> {
                 val blankSentence = word.exampleDe.replace(
                     Regex(Regex.escape(word.german), RegexOption.IGNORE_CASE),
                     "_________"
@@ -1223,13 +1982,24 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     correctOption = word.german
                 )
             }
-            else -> {
+            7 -> {
                 val targetLetters = word.german.trim().filter { it != ' ' && it != '-' }.toList()
                 val extraLetters = listOf('e', 'a', 'i', 'r', 's', 't', 'n', 'l', 'ä', 'ö', 'ü').shuffled().take(3)
                 MixedReviewItem.SpellingReview(
                     word = word,
                     srsStep = srsStep,
                     letterPool = (targetLetters + extraLetters).shuffled()
+                )
+            }
+            else -> {
+                val target = word.german.trim()
+                val blanks = buildMissingLettersIndices(target)
+                val pool = buildMissingLettersPool(target, blanks)
+                MixedReviewItem.MissingLettersReview(
+                    word = word,
+                    srsStep = srsStep,
+                    blankIndices = blanks,
+                    letterPool = pool
                 )
             }
         }
@@ -1251,24 +2021,63 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             is MixedReviewItem.ListeningReview -> speak(item.word.displayWithArticle)
             is MixedReviewItem.MultipleChoiceReview -> speak(item.word.displayWithArticle)
             is MixedReviewItem.ArticleReview -> speak(item.word.german)
+            is MixedReviewItem.PluralReview -> speak(item.word.displayWithArticle)
             is MixedReviewItem.FillBlankReview -> Unit
             is MixedReviewItem.SpellingReview -> speak(item.word.displayWithArticle)
+            is MixedReviewItem.MissingLettersReview -> speak(item.word.displayWithArticle)
         }
     }
 
-    private fun recordMixedOutcome(word: WordEntity, isCorrect: Boolean) {
+    private fun appendMixedRetry(item: MixedReviewItem) {
+        val retryItem: MixedReviewItem = when (item) {
+            is MixedReviewItem.FlashcardReview -> item.copy(isRetry = true)
+            is MixedReviewItem.ListeningReview -> {
+                val targetLabel = item.options.getOrNull(item.correctIndex)
+                val reshuffled = item.options.shuffled()
+                val newIdx = targetLabel?.let { reshuffled.indexOf(it) }?.takeIf { it >= 0 } ?: 0
+                item.copy(options = reshuffled, correctIndex = newIdx, isRetry = true)
+            }
+            is MixedReviewItem.MultipleChoiceReview -> {
+                val targetLabel = item.options.getOrNull(item.correctIndex)
+                val reshuffled = item.options.shuffled()
+                val newIdx = targetLabel?.let { reshuffled.indexOf(it) }?.takeIf { it >= 0 } ?: 0
+                item.copy(options = reshuffled, correctIndex = newIdx, isRetry = true)
+            }
+            is MixedReviewItem.ArticleReview -> item.copy(isRetry = true)
+            is MixedReviewItem.PluralReview -> item.copy(options = item.options.shuffled(), isRetry = true)
+            is MixedReviewItem.FillBlankReview -> item.copy(options = item.options.shuffled(), isRetry = true)
+            is MixedReviewItem.SpellingReview -> item.copy(letterPool = item.letterPool.shuffled(), isRetry = true)
+            is MixedReviewItem.MissingLettersReview -> item.copy(letterPool = item.letterPool.shuffled(), isRetry = true)
+        }
+        _mixedReviewItems.value = _mixedReviewItems.value + retryItem
+    }
+
+    private fun recordMixedOutcome(item: MixedReviewItem, isCorrect: Boolean) {
+        if (item.isRetry) {
+            if (isCorrect) {
+                _mixedReviewScore.value += 1
+                _mixedLastFeedback.value = "Виправлено! Слово закріплено в цій сесії"
+            } else {
+                appendMixedRetry(item)
+                _mixedLastFeedback.value = "Ще одна помилка — слово додано в кінець для закріплення"
+            }
+            return
+        }
+
         if (isCorrect) {
             _mixedReviewScore.value += 1
+        } else {
+            appendMixedRetry(item)
         }
         incrementReviewsDoneToday()
         viewModelScope.launch {
-            val res = repository.recordSpacedReview(word.id, isCorrect)
+            val res = repository.recordSpacedReview(item.word.id, isCorrect)
             if (res != null) {
                 val intervalText = SpacedRepetition.formatIntervalUk(res.intervalHours)
                 _mixedLastFeedback.value = when {
                     res.isMastered -> "Слово закріплено (${res.newStep}/${SpacedRepetition.TARGET_REPETITIONS}) · перевірка $intervalText"
                     isCorrect -> "Повтор ${res.newStep} з ${SpacedRepetition.TARGET_REPETITIONS} · наступний раз $intervalText"
-                    else -> "Повернемося до слова $intervalText (крок ${res.newStep}/${SpacedRepetition.TARGET_REPETITIONS})"
+                    else -> "Слово додано в кінець цієї сесії · наступний раз $intervalText"
                 }
             }
         }
@@ -1281,7 +2090,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun answerMixedFlashcard(remembered: Boolean) {
         val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.FlashcardReview
             ?: return
-        recordMixedOutcome(item.word, remembered)
+        recordMixedOutcome(item, remembered)
         nextMixedReviewItem()
     }
 
@@ -1294,7 +2103,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             else -> return
         }
         _mixedSelectedOptionIndex.value = optionIndex
-        recordMixedOutcome(item.word, isCorrect)
+        recordMixedOutcome(item, isCorrect)
     }
 
     fun answerMixedArticle(article: String) {
@@ -1304,7 +2113,17 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _mixedSelectedString.value = article
         val isCorrect = article.equals(item.correctArticle, ignoreCase = true)
         speak("${item.correctArticle} ${item.word.german}")
-        recordMixedOutcome(item.word, isCorrect)
+        recordMixedOutcome(item, isCorrect)
+    }
+
+    fun answerMixedPlural(option: String) {
+        if (_mixedSelectedString.value != null) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.PluralReview
+            ?: return
+        _mixedSelectedString.value = option
+        val isCorrect = option.equals(item.correctPlural, ignoreCase = true)
+        speak(item.correctPlural)
+        recordMixedOutcome(item, isCorrect)
     }
 
     fun answerMixedFillBlank(option: String) {
@@ -1314,17 +2133,34 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _mixedSelectedString.value = option
         val isCorrect = option.equals(item.correctOption, ignoreCase = true)
         speak(item.word.exampleDe)
-        recordMixedOutcome(item.word, isCorrect)
+        recordMixedOutcome(item, isCorrect)
+    }
+
+    private fun handleMixedSpellingWrongAttempt(
+        item: MixedReviewItem.SpellingReview,
+        submitted: String,
+        target: String,
+        allowLenientUmlauts: Boolean = false
+    ) {
+        val remaining = (_mixedSpellingAttemptsLeft.value - 1).coerceAtLeast(0)
+        _mixedSpellingAttemptsLeft.value = remaining
+        if (remaining > 0) {
+            _mixedSpellingInput.value = keepCorrectPrefix(submitted, target, allowLenientUmlauts)
+            _mixedSpellingStatus.value = Stage6WordStatus.WRONG_TRY
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item, isCorrect = false)
+        }
     }
 
     fun addMixedSpellingLetter(char: Char) {
-        val currentStatus = _mixedSpellingStatus.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_mixedSpellingStatus.value.isResolved) return
         val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
             ?: return
         val target = item.word.german.trim()
 
-        val baseInput = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _mixedSpellingInput.value
+        val baseInput = _mixedSpellingInput.value
         if (baseInput.length >= target.length) return
 
         val withLeadingSep = autoAdvanceSeparators(baseInput, target)
@@ -1335,44 +2171,86 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         if (newText.equals(target, ignoreCase = true)) {
             _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
             speak(item.word.displayWithArticle)
-            recordMixedOutcome(item.word, isCorrect = true)
+            recordMixedOutcome(item, isCorrect = true)
         } else if (newText.length >= target.length) {
-            val remaining = (_mixedSpellingAttemptsLeft.value - 1).coerceAtLeast(0)
-            _mixedSpellingAttemptsLeft.value = remaining
-            if (remaining > 0) {
-                _mixedSpellingStatus.value = Stage6WordStatus.WRONG_TRY
-            } else {
-                _mixedSpellingStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
-                speak(item.word.displayWithArticle)
-                recordMixedOutcome(item.word, isCorrect = false)
-            }
+            handleMixedSpellingWrongAttempt(item, newText, target)
         } else {
             _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         }
     }
 
-    fun useMixedSpellingHint() {
-        val currentStatus = _mixedSpellingStatus.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+    fun insertMixedSpellingUmlaut(char: Char) {
+        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
+            if (_mixedSpellingStatus.value.isResolved) return
+            val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
+                ?: return
+            val target = item.word.german.trim()
+            val updated = _mixedSpellingInput.value + char
+            _mixedSpellingInput.value = updated
+            if (updated.trim().equals(target, ignoreCase = true)) {
+                _mixedSpellingInput.value = target
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            } else {
+                _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+            }
+        } else {
+            addMixedSpellingLetter(char)
+        }
+    }
+
+    fun updateMixedSpellingTypedText(raw: String) {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
+            ?: return
+        _mixedSpellingInput.value = stripOptionalArticlePrefix(raw, item.word.article)
+        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun submitMixedSpellingTypedAnswer() {
+        if (_mixedSpellingStatus.value.isResolved) return
         val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
             ?: return
         val target = item.word.german.trim()
-        val current = if (currentStatus == Stage6WordStatus.WRONG_TRY) "" else _mixedSpellingInput.value
+        val cleaned = stripOptionalArticlePrefix(_mixedSpellingInput.value, item.word.article).trim()
+        if (cleaned.isEmpty()) return
+
+        if (cleaned.equals(target, ignoreCase = true)) {
+            _mixedSpellingInput.value = target
+            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item, isCorrect = true)
+        } else if (matchesWithLenientUmlauts(cleaned, target)) {
+            _mixedSpellingInput.value = cleaned
+            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item, isCorrect = true)
+        } else {
+            handleMixedSpellingWrongAttempt(item, cleaned, target, allowLenientUmlauts = true)
+        }
+    }
+
+    fun useMixedSpellingHint() {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
+            ?: return
+        val target = item.word.german.trim()
+        val current = _mixedSpellingInput.value
 
         val nextInput = computeNextHintInput(current, target)
         _mixedSpellingInput.value = nextInput
         if (nextInput.equals(target, ignoreCase = true)) {
             _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
             speak(item.word.displayWithArticle)
-            recordMixedOutcome(item.word, isCorrect = true)
+            recordMixedOutcome(item, isCorrect = true)
         } else {
             _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         }
     }
 
     fun removeMixedSpellingLetter() {
-        val currentStatus = _mixedSpellingStatus.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_mixedSpellingStatus.value.isResolved) return
         if (_mixedSpellingInput.value.isNotEmpty()) {
             _mixedSpellingInput.value = backspaceOverSeparators(_mixedSpellingInput.value)
             _mixedSpellingStatus.value = Stage6WordStatus.TYPING
@@ -1380,8 +2258,146 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun clearMixedSpelling() {
-        val currentStatus = _mixedSpellingStatus.value
-        if (currentStatus == Stage6WordStatus.CORRECT || currentStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) return
+        if (_mixedSpellingStatus.value.isResolved) return
+        _mixedSpellingInput.value = ""
+        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+    }
+
+    // --- Mixed Review: Stage 8 (Missing Letters) ---
+    private fun expectedMixedMissingString(item: MixedReviewItem.MissingLettersReview): String {
+        val target = item.word.german.trim()
+        return buildString {
+            item.blankIndices.forEach { idx ->
+                if (idx in target.indices) append(target[idx])
+            }
+        }
+    }
+
+    private fun handleMixedMissingWrongAttempt(
+        item: MixedReviewItem.MissingLettersReview,
+        submitted: String,
+        expectedMissing: String,
+        allowLenientUmlauts: Boolean = false
+    ) {
+        val remaining = (_mixedSpellingAttemptsLeft.value - 1).coerceAtLeast(0)
+        _mixedSpellingAttemptsLeft.value = remaining
+        if (remaining > 0) {
+            _mixedSpellingInput.value = keepCorrectMissingPrefix(submitted, expectedMissing, allowLenientUmlauts)
+            _mixedSpellingStatus.value = Stage6WordStatus.WRONG_TRY
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item, isCorrect = false)
+        }
+    }
+
+    fun addMixedMissingLetter(char: Char) {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
+            ?: return
+        val expected = expectedMixedMissingString(item)
+        if (_mixedSpellingInput.value.length >= expected.length) return
+
+        val updated = _mixedSpellingInput.value + char
+        _mixedSpellingInput.value = updated
+
+        if (updated.equals(expected, ignoreCase = true)) {
+            _mixedSpellingInput.value = expected
+            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item, isCorrect = true)
+        } else if (updated.length >= expected.length) {
+            handleMixedMissingWrongAttempt(item, updated, expected)
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun insertMixedMissingUmlaut(char: Char) {
+        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
+            if (_mixedSpellingStatus.value.isResolved) return
+            val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
+                ?: return
+            val expected = expectedMixedMissingString(item)
+            val updated = _mixedSpellingInput.value + char
+            _mixedSpellingInput.value = updated
+            if (updated.trim().equals(expected, ignoreCase = true) ||
+                updated.trim().equals(item.word.german.trim(), ignoreCase = true)
+            ) {
+                _mixedSpellingInput.value = expected
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            } else {
+                _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+            }
+        } else {
+            addMixedMissingLetter(char)
+        }
+    }
+
+    fun updateMixedMissingTypedText(raw: String) {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
+            ?: return
+        _mixedSpellingInput.value = stripOptionalArticlePrefix(raw, item.word.article)
+        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun submitMixedMissingTypedAnswer() {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
+            ?: return
+        val target = item.word.german.trim()
+        val expected = expectedMixedMissingString(item)
+        val cleaned = stripOptionalArticlePrefix(_mixedSpellingInput.value, item.word.article).trim()
+        if (cleaned.isEmpty()) return
+
+        when {
+            cleaned.equals(expected, ignoreCase = true) || cleaned.equals(target, ignoreCase = true) -> {
+                _mixedSpellingInput.value = expected
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            }
+            matchesMissingLettersLenient(cleaned, expected, target) -> {
+                _mixedSpellingInput.value = expected
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            }
+            else -> {
+                handleMixedMissingWrongAttempt(item, cleaned, expected, allowLenientUmlauts = true)
+            }
+        }
+    }
+
+    fun useMixedMissingHint() {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
+            ?: return
+        val expected = expectedMixedMissingString(item)
+        val nextInput = computeNextMissingHint(_mixedSpellingInput.value, expected)
+        _mixedSpellingInput.value = nextInput
+        if (nextInput.equals(expected, ignoreCase = true)) {
+            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+            speak(item.word.displayWithArticle)
+            recordMixedOutcome(item, isCorrect = true)
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun removeMixedMissingLetter() {
+        if (_mixedSpellingStatus.value.isResolved) return
+        if (_mixedSpellingInput.value.isNotEmpty()) {
+            _mixedSpellingInput.value = _mixedSpellingInput.value.dropLast(1)
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun clearMixedMissing() {
+        if (_mixedSpellingStatus.value.isResolved) return
         _mixedSpellingInput.value = ""
         _mixedSpellingStatus.value = Stage6WordStatus.TYPING
     }
@@ -1392,6 +2408,17 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _mixedReviewIndex.value = nextIdx
             resetMixedItemState()
             _mixedReviewItems.value.getOrNull(nextIdx)?.let { speakForMixedItem(it) }
+            stockPhotoRepository.prefetchWordsAsync(
+                _mixedReviewItems.value.drop(nextIdx + 1)
+                    .filter {
+                        it is MixedReviewItem.FlashcardReview ||
+                            it is MixedReviewItem.MultipleChoiceReview ||
+                            it is MixedReviewItem.ArticleReview ||
+                            it is MixedReviewItem.PluralReview
+                    }
+                    .take(3)
+                    .map { it.word }
+            )
         } else {
             _mixedReviewFinished.value = true
             refreshReviewDashboard()
@@ -1400,6 +2427,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     override fun onCleared() {
         super.onCleared()
+        offlineDownloadJob?.cancel()
         ttsManager.shutdown()
     }
 
@@ -1407,11 +2435,171 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         const val MAX_STAGE6_ATTEMPTS = 3
         const val DEFAULT_DAILY_REVIEW_LIMIT = 60
         const val MIXED_ROUND_SIZE = 15
-        val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6)
+        val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7, 8)
         val DAILY_LIMIT_PRESETS: List<Int> = listOf(40, 60, 80)
 
         internal fun nextEnabledStage(enabledStages: Set<Int>, afterStage: Int): Int? {
-            return enabledStages.filter { it in 1..6 && it > afterStage }.minOrNull()
+            return enabledStages.filter { it in 1..8 && it > afterStage }.minOrNull()
+        }
+
+        internal fun isPluralizableNoun(word: WordEntity): Boolean {
+            val art = word.article.lowercase().trim()
+            if (art !in listOf("der", "die", "das")) return false
+            val pl = word.plural.trim()
+            return pl.startsWith("die ", ignoreCase = true) && pl.length > 4
+        }
+
+        /**
+         * Builds 4 distinct, linguistically plausible German plural choices ("die ...")
+         * always containing the exact correct plural form.
+         */
+        internal fun generatePluralOptions(word: WordEntity): List<String> {
+            val correct = word.plural.trim()
+            val singular = word.german.trim()
+            if (correct.isEmpty()) return listOf("die $singular")
+
+            val baseStem = if (singular.endsWith("e") && singular.length > 2) {
+                singular.dropLast(1)
+            } else {
+                singular
+            }
+            val umlautedSingular = applyFirstVowelUmlaut(singular)
+            val umlautedBase = applyFirstVowelUmlaut(baseStem)
+
+            val rawCandidates = linkedSetOf<String>()
+            fun addCandidate(form: String) {
+                val cleaned = "die ${form.trim()}"
+                if (!cleaned.equals(correct, ignoreCase = true) && form.trim().length >= 2) {
+                    rawCandidates.add(cleaned)
+                }
+            }
+
+            // Plausible German plural endings (-e, -en, -n, -er, -s, unchanged, with/without umlaut)
+            if (singular.endsWith("in") && singular.length > 3) {
+                addCandidate("${singular}nen")
+                addCandidate("${singular}en")
+                addCandidate("${singular}e")
+                addCandidate("${singular}s")
+            }
+            addCandidate("${singular}e")
+            addCandidate("${singular}en")
+            addCandidate("${singular}n")
+            addCandidate("${singular}er")
+            addCandidate("${singular}s")
+            addCandidate(singular)
+            if (baseStem != singular) {
+                addCandidate("${baseStem}en")
+                addCandidate("${baseStem}er")
+                addCandidate("${baseStem}e")
+            }
+            if (umlautedSingular != singular) {
+                addCandidate("${umlautedSingular}e")
+                addCandidate("${umlautedSingular}er")
+                addCandidate(umlautedSingular)
+                addCandidate("${umlautedSingular}en")
+            }
+            if (umlautedBase != baseStem) {
+                addCandidate("${umlautedBase}er")
+                addCandidate("${umlautedBase}e")
+            }
+
+            val distractors = rawCandidates.shuffled().take(3)
+            return (distractors + correct).distinct().shuffled()
+        }
+
+        private fun applyFirstVowelUmlaut(word: String): String {
+            // Find the last stressed stem vowel (a, o, u) before final syllable, or first occurrence
+            val idx = word.indexOfLast { it in listOf('a', 'o', 'u', 'A', 'O', 'U') }
+            if (idx < 0) return word
+            val replacement = when (word[idx]) {
+                'a' -> 'ä'
+                'o' -> 'ö'
+                'u' -> 'ü'
+                'A' -> 'Ä'
+                'O' -> 'Ö'
+                'U' -> 'Ü'
+                else -> word[idx]
+            }
+            return word.substring(0, idx) + replacement + word.substring(idx + 1)
+        }
+
+        /**
+         * Selects 1..5 non-adjacent-friendly letter indices to hide inside a German word for Stage 8.
+         * Keeps index 0 visible when the word has >= 4 letters so the word shape stays recognizable,
+         * and prioritizes umlauts/vowels so learners actively recall tricky spelling spots.
+         */
+        internal fun buildMissingLettersIndices(word: String): List<Int> {
+            val trimmed = word.trim()
+            val letterIndices = trimmed.indices.filter { trimmed[it].isLetter() }
+            if (letterIndices.isEmpty()) return emptyList()
+            if (letterIndices.size == 1) return letterIndices
+
+            val targetCount = when (letterIndices.size) {
+                2, 3 -> 1
+                4, 5 -> 2
+                6, 7, 8 -> 3
+                9, 10, 11 -> 4
+                else -> 5
+            }
+
+            val candidateIndices = if (letterIndices.size >= 4) {
+                letterIndices.drop(1) // Keep first letter visible for anchor context
+            } else {
+                letterIndices
+            }
+
+            val prioritySet = setOf('ä', 'ö', 'ü', 'ß', 'a', 'e', 'i', 'o', 'u', 'Ä', 'Ö', 'Ü', 'A', 'E', 'I', 'O', 'U')
+            val prioritized = candidateIndices.filter { trimmed[it] in prioritySet }.shuffled()
+            val others = candidateIndices.filter { trimmed[it] !in prioritySet }.shuffled()
+            val ordered = prioritized + others
+
+            val chosen = mutableListOf<Int>()
+            // First pass: prefer non-adjacent blanks for visual readability
+            for (idx in ordered) {
+                if (chosen.size >= targetCount) break
+                if (chosen.none { kotlin.math.abs(it - idx) == 1 }) {
+                    chosen.add(idx)
+                }
+            }
+            // Second pass: fill remaining slots if needed
+            for (idx in ordered) {
+                if (chosen.size >= targetCount) break
+                if (idx !in chosen) {
+                    chosen.add(idx)
+                }
+            }
+            return chosen.sorted()
+        }
+
+        internal fun buildMissingLettersPool(word: String, blankIndices: List<Int>): List<Char> {
+            val trimmed = word.trim()
+            val required = blankIndices.mapNotNull { idx -> trimmed.getOrNull(idx)?.lowercaseChar() }
+            val commonExtras = listOf('e', 'a', 'i', 'o', 'u', 'r', 's', 't', 'n', 'l', 'h', 'ä', 'ö', 'ü')
+                .filter { it !in required }
+                .shuffled()
+                .take(4)
+            return (required + commonExtras).shuffled()
+        }
+
+        internal fun matchesMissingLettersLenient(
+            input: String,
+            expectedMissing: String,
+            fullTarget: String
+        ): Boolean {
+            return matchesWithLenientUmlauts(input, expectedMissing) ||
+                matchesWithLenientUmlauts(input, fullTarget)
+        }
+
+        internal fun keepCorrectMissingPrefix(
+            input: String,
+            expectedMissing: String,
+            allowLenientUmlauts: Boolean = false
+        ): String {
+            return keepCorrectPrefix(input, expectedMissing, allowLenientUmlauts)
+        }
+
+        internal fun computeNextMissingHint(current: String, expectedMissing: String): String {
+            return computeNextHintInput(current, expectedMissing)
         }
 
         internal fun pickMixedStageForWord(
@@ -1426,14 +2614,20 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (4 in enabledStages && word.article.lowercase().trim() in listOf("der", "die", "das")) {
                 eligible.add(4)
             }
-            if (5 in enabledStages &&
+            if (5 in enabledStages && isPluralizableNoun(word)) {
+                eligible.add(5)
+            }
+            if (6 in enabledStages &&
                 word.exampleDe.isNotBlank() &&
                 word.exampleDe.contains(word.german, ignoreCase = true)
             ) {
-                eligible.add(5)
-            }
-            if (6 in enabledStages && word.german.trim().length in 2..24) {
                 eligible.add(6)
+            }
+            if (7 in enabledStages && word.german.trim().length in 2..24) {
+                eligible.add(7)
+            }
+            if (8 in enabledStages && word.german.trim().count { it.isLetter() } >= 3) {
+                eligible.add(8)
             }
             if (eligible.isEmpty()) return enabledStages.minOrNull() ?: 3
 
@@ -1488,6 +2682,123 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 target
             }
             return autoAdvanceSeparators(revealed, target)
+        }
+
+        /**
+         * Returns true if [input] matches [target] when allowing plain base letters or standard
+         * German ASCII digraphs in place of umlauts / Eszett (ä -> a/ae, ö -> o/oe, ü -> u/ue, ß -> ss/s).
+         * Does NOT forgive spurious umlauts where [target] has plain letters.
+         */
+        internal fun matchesWithLenientUmlauts(input: String, target: String): Boolean {
+            val inLow = input.trim().lowercase()
+            val tgtLow = target.trim().lowercase()
+            if (inLow.isEmpty() || tgtLow.isEmpty()) return false
+
+            val memo = Array(inLow.length + 1) { IntArray(tgtLow.length + 1) { -1 } }
+            fun match(i: Int, j: Int): Boolean {
+                if (i == inLow.length && j == tgtLow.length) return true
+                if (i == inLow.length || j == tgtLow.length) return false
+                val cached = memo[i][j]
+                if (cached != -1) return cached == 1
+
+                val t = tgtLow[j]
+                val ok = when (t) {
+                    'ä' -> (inLow[i] == 'ä' && match(i + 1, j + 1)) ||
+                        (inLow[i] == 'a' && match(i + 1, j + 1)) ||
+                        (i + 1 < inLow.length && inLow[i] == 'a' && inLow[i + 1] == 'e' && match(i + 2, j + 1))
+                    'ö' -> (inLow[i] == 'ö' && match(i + 1, j + 1)) ||
+                        (inLow[i] == 'o' && match(i + 1, j + 1)) ||
+                        (i + 1 < inLow.length && inLow[i] == 'o' && inLow[i + 1] == 'e' && match(i + 2, j + 1))
+                    'ü' -> (inLow[i] == 'ü' && match(i + 1, j + 1)) ||
+                        (inLow[i] == 'u' && match(i + 1, j + 1)) ||
+                        (i + 1 < inLow.length && inLow[i] == 'u' && inLow[i + 1] == 'e' && match(i + 2, j + 1))
+                    'ß' -> (inLow[i] == 'ß' && match(i + 1, j + 1)) ||
+                        (i + 1 < inLow.length && inLow[i] == 's' && inLow[i + 1] == 's' && match(i + 2, j + 1)) ||
+                        (inLow[i] == 's' && match(i + 1, j + 1))
+                    else -> inLow[i] == t && match(i + 1, j + 1)
+                }
+                memo[i][j] = if (ok) 1 else 0
+                return ok
+            }
+            return match(0, 0)
+        }
+
+        /**
+         * Retains the longest case-insensitive matching prefix from the start of [input] against
+         * [target], returning [target]'s proper casing and advancing past spaces/hyphens.
+         * When [allowLenientUmlauts] is true (manual keyboard mode), plain a/o/u/s/ss/ae/oe/ue
+         * also advance past matching ä/ö/ü/ß characters.
+         * Returns empty string if even the very first character is incorrect.
+         */
+        internal fun keepCorrectPrefix(
+            input: String,
+            target: String,
+            allowLenientUmlauts: Boolean = false
+        ): String {
+            if (input.isEmpty() || target.isEmpty()) return ""
+            if (!allowLenientUmlauts) {
+                var prefixLen = 0
+                while (prefixLen < input.length &&
+                    prefixLen < target.length &&
+                    input[prefixLen].equals(target[prefixLen], ignoreCase = true)
+                ) {
+                    prefixLen++
+                }
+                if (prefixLen == 0) return ""
+                val matched = target.substring(0, prefixLen)
+                return autoAdvanceSeparators(matched, target)
+            }
+
+            val inLow = input.lowercase()
+            val tgtLow = target.lowercase()
+            var i = 0
+            var j = 0
+            while (i < inLow.length && j < tgtLow.length) {
+                val ic = inLow[i]
+                val tc = tgtLow[j]
+                when {
+                    ic == tc -> {
+                        i++
+                        j++
+                    }
+                    tc == 'ä' && ic == 'a' -> {
+                        i += if (i + 1 < inLow.length && inLow[i + 1] == 'e' && (j + 1 >= tgtLow.length || tgtLow[j + 1] != 'e')) 2 else 1
+                        j++
+                    }
+                    tc == 'ö' && ic == 'o' -> {
+                        i += if (i + 1 < inLow.length && inLow[i + 1] == 'e' && (j + 1 >= tgtLow.length || tgtLow[j + 1] != 'e')) 2 else 1
+                        j++
+                    }
+                    tc == 'ü' && ic == 'u' -> {
+                        i += if (i + 1 < inLow.length && inLow[i + 1] == 'e' && (j + 1 >= tgtLow.length || tgtLow[j + 1] != 'e')) 2 else 1
+                        j++
+                    }
+                    tc == 'ß' && ic == 's' -> {
+                        i += if (i + 1 < inLow.length && inLow[i + 1] == 's' && (j + 1 >= tgtLow.length || tgtLow[j + 1] != 's')) 2 else 1
+                        j++
+                    }
+                    else -> break
+                }
+            }
+            if (j == 0) return ""
+            val matched = target.substring(0, j)
+            return autoAdvanceSeparators(matched, target)
+        }
+
+        /**
+         * Strips an optional leading article ("der ", "die ", "das ") when typing in keyboard mode,
+         * since the article badge is already displayed automatically before the input field.
+         */
+        internal fun stripOptionalArticlePrefix(input: String, article: String): String {
+            val trimmed = input.trimStart()
+            val cleanArticle = article.trim()
+            if (cleanArticle.isEmpty()) return trimmed
+            val prefix = "$cleanArticle "
+            return if (trimmed.startsWith(prefix, ignoreCase = true)) {
+                trimmed.substring(prefix.length).trimStart()
+            } else {
+                trimmed
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ import com.example.data.repository.PhotoCandidate
 import com.example.data.repository.StockPhotoProvider
 import com.example.data.repository.StockPhotoQueryBuilder
 import com.example.data.repository.StockPhotoRepository
+import com.example.data.repository.VocabularyRepository
 import com.example.ui.LearningViewModel
 import com.example.ui.ReviewDashboardState
 import com.example.ui.components.illustrations.WordArtworkKey
@@ -468,10 +469,204 @@ class ExampleUnitTest {
         assertEquals(45, dashboard.availableTodayCount)
         assertEquals(90, dashboard.deferredToTomorrowCount)
 
-        // Enabled stage skipping
-        val customStages = setOf(1, 3, 6)
+        // Enabled stage skipping (8-stage flow)
+        val customStages = setOf(1, 3, 5, 8)
         assertEquals(3, LearningViewModel.nextEnabledStage(customStages, 1))
-        assertEquals(6, LearningViewModel.nextEnabledStage(customStages, 3))
-        assertNull(LearningViewModel.nextEnabledStage(customStages, 6))
+        assertEquals(5, LearningViewModel.nextEnabledStage(customStages, 3))
+        assertEquals(8, LearningViewModel.nextEnabledStage(customStages, 5))
+        assertNull(LearningViewModel.nextEnabledStage(customStages, 8))
+    }
+
+    @Test
+    fun stage6SmartPrefixRetentionAndArticleStrippingWorkCorrectly() {
+        // Keeps correct prefix when mistake happens mid-word
+        assertEquals("Apfe", LearningViewModel.keepCorrectPrefix("Apfex", "Apfel"))
+
+        // Clears entire input if the very first character is wrong
+        assertEquals("", LearningViewModel.keepCorrectPrefix("Xpfel", "Apfel"))
+
+        // Case-insensitive matching preserves target canonical casing & auto-advances space
+        assertEquals("guten Mo", LearningViewModel.keepCorrectPrefix("guten moxgen", "guten Morgen"))
+        assertEquals("Rote ", LearningViewModel.keepCorrectPrefix("Rote X", "Rote Bete"))
+
+        // Keyboard input gracefully strips optional leading article matching word's article
+        assertEquals("Tomate", LearningViewModel.stripOptionalArticlePrefix("die Tomate", "die"))
+        assertEquals("Tomate", LearningViewModel.stripOptionalArticlePrefix("DIE  Tomate", "die"))
+        assertEquals("Tomate", LearningViewModel.stripOptionalArticlePrefix("Tomate", "die"))
+        assertEquals("Auto", LearningViewModel.stripOptionalArticlePrefix("Auto", ""))
+    }
+
+    @Test
+    fun spacedRepetitionEnrollmentRequiresAllEightStagesCompleted() {
+        assertTrue(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 5, 6, 7, 8)))
+        assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 5, 6, 7)))
+        assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 6, 7, 8)))
+        assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 5, 6)))
+        assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(8)))
+        assertFalse(VocabularyRepository.isAllStagesCompleted(emptySet()))
+    }
+
+    @Test
+    fun keyboardModeLenientUmlautMatchingAcceptsMissingDiacriticsAndRejectsErrors() {
+        // Plain base letters a/o/u for ä/ö/ü and ss/s for ß
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Buro", "Büro"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Buero", "Büro"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Madchen", "Mädchen"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Maedchen", "Mädchen"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Apfel", "Äpfel"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Aepfel", "Äpfel"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Ol", "Öl"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Oel", "Öl"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Strasse", "Straße"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Strase", "Straße"))
+        assertTrue(LearningViewModel.matchesWithLenientUmlauts("Kuhlschranke", "Kühlschränke"))
+
+        // Rejects real typos and spurious umlauts where target has plain letters
+        assertFalse(LearningViewModel.matchesWithLenientUmlauts("Kätze", "Katze"))
+        assertFalse(LearningViewModel.matchesWithLenientUmlauts("Bura", "Büro"))
+        assertFalse(LearningViewModel.matchesWithLenientUmlauts("Strasze", "Straße"))
+
+        // Lenient prefix retention in keyboard mode
+        assertEquals("Küch", LearningViewModel.keepCorrectPrefix("Kuchxx", "Küche", allowLenientUmlauts = true))
+        assertEquals("Mädch", LearningViewModel.keepCorrectPrefix("Maedchxx", "Mädchen", allowLenientUmlauts = true))
+        assertEquals("Straß", LearningViewModel.keepCorrectPrefix("Strassx", "Straße", allowLenientUmlauts = true))
+    }
+
+    @Test
+    fun stage5PluralTrainerFiltersNounsAndBuildsPlausibleOptions() {
+        val apple = WordEntity(
+            german = "Apfel",
+            article = "der",
+            plural = "die Äpfel",
+            translationUk = "яблуко",
+            translationEn = "apple",
+            categoryId = "food",
+            subtopicId = "food_fruits"
+        )
+        val milk = WordEntity(
+            german = "Milch",
+            article = "die",
+            plural = "-",
+            translationUk = "молоко",
+            translationEn = "milk",
+            categoryId = "food",
+            subtopicId = "food_drinks"
+        )
+        val schweigen = WordEntity(
+            german = "schweigen",
+            article = "",
+            plural = "schwieg, geschwiegen",
+            translationUk = "мовчати",
+            translationEn = "to be silent",
+            categoryId = "verbs",
+            subtopicId = "verbs_communication"
+        )
+        val adj = WordEntity(
+            german = "trocken",
+            article = "",
+            plural = "",
+            translationUk = "сухий",
+            translationEn = "dry",
+            categoryId = "adjectives",
+            subtopicId = "adj_sensory"
+        )
+
+        assertTrue(LearningViewModel.isPluralizableNoun(apple))
+        assertFalse(LearningViewModel.isPluralizableNoun(milk))
+        assertFalse(LearningViewModel.isPluralizableNoun(schweigen))
+        assertFalse(LearningViewModel.isPluralizableNoun(adj))
+
+        val options = LearningViewModel.generatePluralOptions(apple)
+        assertEquals(4, options.size)
+        assertEquals(4, options.distinct().size)
+        assertTrue(options.contains("die Äpfel"))
+        assertTrue(options.all { it.startsWith("die ") })
+    }
+
+    @Test
+    fun stage8MissingLettersIndicesLenientUmlautsAndHintsWorkCorrectly() {
+        val word = "Kühlschrank"
+        val blanks = LearningViewModel.buildMissingLettersIndices(word)
+        assertTrue("Should mask at least 2 letters", blanks.size >= 2)
+        assertTrue("Should leave visible context letters", blanks.size < word.length)
+        assertEquals("Blank indices must be sorted", blanks.sorted(), blanks)
+        assertFalse("First letter should remain visible as an anchor", blanks.contains(0))
+
+        val pool = LearningViewModel.buildMissingLettersPool(word, blanks)
+        val expectedMissing = buildString { blanks.forEach { append(word[it]) } }
+        assertTrue("Pool must be at least as large as missing letters", pool.size >= expectedMissing.length)
+
+        // Lenient umlaut matching on missing-letter sequence and full word
+        assertTrue(LearningViewModel.matchesMissingLettersLenient("u", "ü", "Büro"))
+        assertTrue(LearningViewModel.matchesMissingLettersLenient("Buro", "ü", "Büro"))
+        assertTrue(LearningViewModel.matchesMissingLettersLenient("Strasse", "ß", "Straße"))
+        assertFalse(LearningViewModel.matchesMissingLettersLenient("x", "ü", "Büro"))
+
+        // Prefix retention and single-letter hints for missing slots
+        assertEquals("ü", LearningViewModel.keepCorrectMissingPrefix("ux", "üa", allowLenientUmlauts = true))
+        assertEquals("a", LearningViewModel.computeNextMissingHint("", "ae"))
+        assertEquals("ae", LearningViewModel.computeNextMissingHint("a", "ae"))
+        assertEquals("ae", LearningViewModel.computeNextMissingHint("ax", "ae"))
+    }
+
+    @Test
+    fun stockPhotoRelevanceWholeWordPhraseSynergyAndJunkFiltering() {
+        // 1. Whole-word matching prevents short-word substring false positives
+        assertTrue(StockPhotoRepository.tagMatchesToken("car", "car"))
+        assertTrue(StockPhotoRepository.tagMatchesToken("sports cars", "car"))
+        assertFalse(StockPhotoRepository.tagMatchesToken("carrot", "car"))
+        assertFalse(StockPhotoRepository.tagMatchesToken("scarf", "car"))
+        assertFalse(StockPhotoRepository.tagMatchesToken("office", "ice"))
+        assertFalse(StockPhotoRepository.tagMatchesToken("teacher", "tea"))
+        assertFalse(StockPhotoRepository.tagMatchesToken("bread", "red"))
+
+        // 2. Multi-word phrase synergy picks actual "bell pepper" over a church "bell"
+        val paprika = WordEntity(
+            german = "Paprika",
+            article = "die",
+            translationUk = "перець",
+            translationEn = "bell pepper",
+            categoryId = "food",
+            subtopicId = "food_vegetables"
+        )
+        val paprikaPlan = StockPhotoQueryBuilder.build(paprika)
+        val paprikaCandidates = listOf(
+            PhotoCandidate("https://example.com/church_bell.jpg", 800, 600, "a", listOf("bell", "church", "metal", "bronze"), likes = 90),
+            PhotoCandidate("https://example.com/bell_pepper.jpg", 800, 600, "b", listOf("bell pepper", "pepper", "vegetable", "fresh"), likes = 45)
+        )
+        assertEquals(
+            "https://example.com/bell_pepper.jpg",
+            StockPhotoRepository.pickBestLandscapeCandidate(paprikaCandidates, paprikaPlan.scoringProfile)?.url
+        )
+
+        // 3. Ambiguous single-word fallback guard stops "ice cream" -> "cream" and "washing machine" -> "machine"
+        val iceCreamPlan = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Eis", article = "das", translationUk = "морозиво", translationEn = "ice cream", categoryId = "food", subtopicId = "food_sweets")
+        )
+        assertFalse("Should never fall back to ambiguous 'cream'", iceCreamPlan.steps.any { it.query == "cream" })
+
+        val washerPlan = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Waschmaschine", article = "die", translationUk = "пральна машина", translationEn = "washing machine", categoryId = "home", subtopicId = "home_appliances")
+        )
+        assertFalse("Should never fall back to ambiguous 'machine'", washerPlan.steps.any { it.query == "machine" })
+        assertTrue("Native German query must be included", washerPlan.steps.any { it.lang == "de" && it.query == "waschmaschine" })
+
+        // 4. Curated visual query for German verbs like schweigen
+        val schweigenPlan = StockPhotoQueryBuilder.build(
+            WordEntity(german = "schweigen", article = "", translationUk = "мовчати", translationEn = "to be silent", categoryId = "verbs", subtopicId = "verbs_communication")
+        )
+        assertEquals("quiet finger lips", schweigenPlan.steps.first().query)
+
+        // 5. Real photograph beats AI-generated / chalkboard / scrabble junk images
+        val book = WordEntity(german = "Buch", article = "das", translationUk = "книга", translationEn = "book", categoryId = "education", subtopicId = "education_supplies")
+        val bookPlan = StockPhotoQueryBuilder.build(book)
+        val bookCandidates = listOf(
+            PhotoCandidate("https://example.com/ai_book.jpg", 800, 600, "a", listOf("book", "ai generated", "fantasy", "3d", "render"), likes = 10),
+            PhotoCandidate("https://example.com/real_book.jpg", 800, 600, "b", listOf("book", "reading", "library", "education", "desk"), likes = 120)
+        )
+        assertEquals(
+            "https://example.com/real_book.jpg",
+            StockPhotoRepository.pickBestLandscapeCandidate(bookCandidates, bookPlan.scoringProfile)?.url
+        )
     }
 }

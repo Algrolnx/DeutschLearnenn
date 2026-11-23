@@ -82,6 +82,7 @@ fun StageFlashcardsScreen(
     val isFlipped by viewModel.stage1Flipped.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage1Finished.collectAsStateWithLifecycle()
     val allowPhotoChange by viewModel.stage1AllowPhotoChange.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val currentWord = words.getOrNull(currentIndex)
@@ -117,7 +118,8 @@ fun StageFlashcardsScreen(
             repo.prefetchWordsAsync(
                 listOfNotNull(
                     words.getOrNull(currentIndex + 1),
-                    words.getOrNull(currentIndex + 2)
+                    words.getOrNull(currentIndex + 2),
+                    words.getOrNull(currentIndex + 3)
                 )
             )
         }
@@ -205,10 +207,10 @@ fun StageFlashcardsScreen(
                         stageNumber = 1,
                         nextStageNumber = nextEnabled,
                         title = "Етап 1 пройдено!",
-                        subtitle = if (nextEnabled != null) {
-                            "Ви ознайомилися з усіма словами. Далі відкрито Етап $nextEnabled!"
-                        } else {
-                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        subtitle = when {
+                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            nextEnabled != null -> "Ви ознайомилися з усіма словами на 100%. Далі відкрито Етап $nextEnabled!"
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 1) },
                         onBackToHub = { viewModel.navigateBack() }
@@ -222,6 +224,12 @@ fun StageFlashcardsScreen(
                         totalCount = words.size,
                         onFlip = { viewModel.flipStage1Card() },
                         onSpeakWord = { slow -> viewModel.speak(currentWord.displayWithArticle, slow) },
+                        onSpeakPlural = {
+                            val pl = currentWord.plural.trim()
+                            if (pl.isNotBlank() && pl != "-") {
+                                viewModel.speak(pl)
+                            }
+                        },
                         onSpeakExample = {
                             if (currentWord.exampleDe.isNotBlank()) {
                                 viewModel.speak(currentWord.exampleDe)
@@ -304,7 +312,7 @@ fun StageCompletedSuccessCard(
     subtitle: String,
     onNextStage: () -> Unit,
     onBackToHub: () -> Unit,
-    nextStageNumber: Int? = if (stageNumber < 6) stageNumber + 1 else null,
+    nextStageNumber: Int? = if (stageNumber < 8) stageNumber + 1 else null,
     modifier: Modifier = Modifier
 ) {
     val extended = LocalAppExtendedColors.current
@@ -437,4 +445,33 @@ fun StageExitConfirmationDialog(
             }
         }
     )
+}
+
+@Composable
+fun RetryMistakeBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = StreakAmber.copy(alpha = 0.16f),
+        border = BorderStroke(1.dp, StreakAmber.copy(alpha = 0.55f)),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                tint = StreakAmber,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = "Повтор помилки",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = StreakAmber
+            )
+        }
+    }
 }

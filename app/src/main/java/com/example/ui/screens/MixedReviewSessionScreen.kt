@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +23,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.Headphones
@@ -48,6 +52,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -63,14 +69,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.LearningViewModel
 import com.example.ui.MixedReviewItem
+import com.example.ui.Stage6InputMode
 import com.example.ui.Stage6WordStatus
 import com.example.ui.components.GenderBadge
 import com.example.ui.components.SpeakerButton
@@ -103,6 +112,7 @@ fun MixedReviewSessionScreen(
     val spellingInput by viewModel.mixedSpellingInput.collectAsStateWithLifecycle()
     val spellingStatus by viewModel.mixedSpellingStatus.collectAsStateWithLifecycle()
     val spellingAttemptsLeft by viewModel.mixedSpellingAttemptsLeft.collectAsStateWithLifecycle()
+    val spellingInputMode by viewModel.stage6InputMode.collectAsStateWithLifecycle()
     val lastFeedback by viewModel.mixedLastFeedback.collectAsStateWithLifecycle()
     val dashboard by viewModel.reviewDashboard.collectAsStateWithLifecycle()
 
@@ -193,6 +203,7 @@ fun MixedReviewSessionScreen(
                 modifier = Modifier
                     .widthIn(max = 560.dp)
                     .fillMaxSize()
+                    .imePadding()
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -209,10 +220,11 @@ fun MixedReviewSessionScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 if (isFinished || currentItem == null) {
+                    val uniqueTotal = items.count { !it.isRetry }.coerceAtLeast(1)
                     Spacer(modifier = Modifier.weight(0.25f))
                     MixedReviewCompletedCard(
-                        score = score,
-                        total = items.size,
+                        score = minOf(score, uniqueTotal),
+                        total = uniqueTotal,
                         reviewsDoneToday = dashboard.reviewsDoneToday,
                         dailyLimit = dashboard.dailyLimit,
                         canStartAnotherRound = dashboard.remainingDailyQuota > 0 && dashboard.dueCount > 0,
@@ -221,6 +233,10 @@ fun MixedReviewSessionScreen(
                     )
                     Spacer(modifier = Modifier.weight(0.75f))
                 } else {
+                    if (currentItem.isRetry) {
+                        RetryMistakeBadge()
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                     when (currentItem) {
                         is MixedReviewItem.FlashcardReview -> {
                             WordFlashcard(
@@ -230,6 +246,10 @@ fun MixedReviewSessionScreen(
                                 totalCount = items.size,
                                 onFlip = { viewModel.flipMixedFlashcard() },
                                 onSpeakWord = { slow -> viewModel.speak(currentItem.word.displayWithArticle, slow) },
+                                onSpeakPlural = {
+                                    val pl = currentItem.word.plural.trim()
+                                    if (pl.isNotBlank() && pl != "-") viewModel.speak(pl)
+                                },
                                 onSpeakExample = {
                                     if (currentItem.word.exampleDe.isNotBlank()) {
                                         viewModel.speak(currentItem.word.exampleDe)
@@ -434,6 +454,18 @@ fun MixedReviewSessionScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.primary
                                     )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    SpeakerButton(
+                                        onSpeak = { slow ->
+                                            val text = if (selectedString != null) {
+                                                currentItem.word.displayWithArticle
+                                            } else {
+                                                currentItem.word.german
+                                            }
+                                            viewModel.speak(text, slow)
+                                        },
+                                        size = 44.dp
+                                    )
                                 }
                             }
 
@@ -470,6 +502,118 @@ fun MixedReviewSessionScreen(
                                     showResult = selectedString != null,
                                     onClick = { viewModel.answerMixedArticle("das") }
                                 )
+                            }
+
+                            MixedNextFooter(
+                                isAnswered = selectedString != null,
+                                feedback = lastFeedback,
+                                isLast = currentIndex + 1 >= items.size,
+                                onNext = { viewModel.nextMixedReviewItem() }
+                            )
+                        }
+
+                        is MixedReviewItem.PluralReview -> {
+                            Card(
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, extended.cardBorder, RoundedCornerShape(20.dp))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    WordIllustrationView(word = currentItem.word, height = 132.dp, showBadges = false)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.DynamicFeed, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Оберіть правильну множину:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        if (currentItem.word.article.isNotBlank()) {
+                                            GenderBadge(article = currentItem.word.article)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                        Text(
+                                            text = currentItem.word.german,
+                                            fontFamily = LoraFontFamily,
+                                            fontSize = 27.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Text(
+                                        text = "${currentItem.word.translationUk} · ${currentItem.word.translationEn}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    SpeakerButton(
+                                        onSpeak = { slow ->
+                                            val text = if (selectedString != null) {
+                                                currentItem.correctPlural
+                                            } else {
+                                                currentItem.word.displayWithArticle
+                                            }
+                                            viewModel.speak(text, slow)
+                                        },
+                                        size = 44.dp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                currentItem.options.forEach { option ->
+                                    val isSelected = selectedString == option
+                                    val isCorrect = option.equals(currentItem.correctPlural, ignoreCase = true)
+                                    val (bgColor, borderColor, textColor) = when {
+                                        selectedString == null -> Triple(MaterialTheme.colorScheme.surface, extended.cardBorder, MaterialTheme.colorScheme.onSurface)
+                                        isCorrect -> Triple(SuccessGreen.copy(alpha = 0.14f), SuccessGreen, SuccessGreen)
+                                        isSelected -> Triple(ErrorRed.copy(alpha = 0.14f), ErrorRed, ErrorRed)
+                                        else -> Triple(MaterialTheme.colorScheme.surface, extended.cardBorder.copy(alpha = 0.5f), MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(bgColor)
+                                            .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
+                                            .clickable(enabled = selectedString == null) { viewModel.answerMixedPlural(option) }
+                                            .padding(horizontal = 16.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = option,
+                                                fontFamily = LoraFontFamily,
+                                                fontSize = 18.sp,
+                                                fontWeight = if (isSelected || (selectedString != null && isCorrect)) FontWeight.Bold else FontWeight.Medium,
+                                                color = textColor
+                                            )
+                                            if (selectedString != null) {
+                                                if (isCorrect) Icon(Icons.Default.Check, contentDescription = null, tint = SuccessGreen)
+                                                else if (isSelected) Icon(Icons.Default.Close, contentDescription = null, tint = ErrorRed)
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             MixedNextFooter(
@@ -572,7 +716,7 @@ fun MixedReviewSessionScreen(
                         }
 
                         is MixedReviewItem.SpellingReview -> {
-                            val isResolved = spellingStatus == Stage6WordStatus.CORRECT || spellingStatus == Stage6WordStatus.OUT_OF_ATTEMPTS
+                            val isResolved = spellingStatus.isResolved
                             Column(
                                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -640,70 +784,154 @@ fun MixedReviewSessionScreen(
 
                                 val boxBorder = when (spellingStatus) {
                                     Stage6WordStatus.CORRECT -> SuccessGreen
+                                    Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
                                     Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
                                     Stage6WordStatus.TYPING -> extended.cardBorder
                                 }
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(60.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(
-                                            when (spellingStatus) {
-                                                Stage6WordStatus.CORRECT -> SuccessGreen.copy(alpha = 0.12f)
-                                                Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed.copy(alpha = 0.12f)
-                                                Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.surface
+
+                                if (spellingInputMode == Stage6InputMode.KEYBOARD) {
+                                    OutlinedTextField(
+                                        value = spellingInput,
+                                        onValueChange = { viewModel.updateMixedSpellingTypedText(it) },
+                                        enabled = !isResolved,
+                                        singleLine = true,
+                                        placeholder = {
+                                            Text("Введіть слово...", fontFamily = MonoFontFamily, fontSize = 16.sp)
+                                        },
+                                        leadingIcon = if (currentItem.word.article.isNotBlank()) {
+                                            {
+                                                val genderColor = getGenderColor(currentItem.word.article)
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = genderColor.copy(alpha = 0.14f),
+                                                    modifier = Modifier.padding(start = 10.dp)
+                                                ) {
+                                                    Text(
+                                                        text = currentItem.word.article.lowercase(),
+                                                        fontFamily = MonoFontFamily,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = genderColor,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
                                             }
-                                        )
-                                        .border(2.dp, boxBorder, RoundedCornerShape(14.dp))
-                                        .padding(horizontal = 14.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (currentItem.word.article.isNotBlank()) {
-                                            val genderColor = getGenderColor(currentItem.word.article)
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = genderColor.copy(alpha = 0.14f)
-                                            ) {
-                                                Text(
-                                                    text = currentItem.word.article.lowercase(),
-                                                    fontFamily = MonoFontFamily,
-                                                    fontSize = 15.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = genderColor,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                        }
-                                        Text(
-                                            text = if (spellingInput.isEmpty()) "Натискайте літери..." else spellingInput,
+                                        } else {
+                                            null
+                                        },
+                                        textStyle = TextStyle(
                                             fontFamily = MonoFontFamily,
-                                            fontSize = if (spellingInput.isEmpty()) 16.sp else 20.sp,
+                                            fontSize = 19.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = when (spellingStatus) {
                                                 Stage6WordStatus.CORRECT -> SuccessGreen
+                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
                                                 Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
-                                                Stage6WordStatus.TYPING -> if (spellingInput.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface
+                                                Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.onSurface
                                             }
-                                        )
+                                        ),
+                                        keyboardOptions = KeyboardOptions(
+                                            imeAction = ImeAction.Done,
+                                            autoCorrectEnabled = false
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = { viewModel.submitMixedSpellingTypedAnswer() }
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = if (spellingStatus == Stage6WordStatus.TYPING) MaterialTheme.colorScheme.primary else boxBorder,
+                                            unfocusedBorderColor = boxBorder,
+                                            disabledBorderColor = boxBorder,
+                                            disabledTextColor = when (spellingStatus) {
+                                                Stage6WordStatus.CORRECT -> SuccessGreen
+                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                                Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                                else -> MaterialTheme.colorScheme.onSurface
+                                            },
+                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                            unfocusedContainerColor = if (spellingStatus == Stage6WordStatus.WRONG_TRY) ErrorRed.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface,
+                                            disabledContainerColor = when (spellingStatus) {
+                                                Stage6WordStatus.CORRECT -> SuccessGreen.copy(alpha = 0.12f)
+                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellowBg
+                                                Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed.copy(alpha = 0.12f)
+                                                else -> MaterialTheme.colorScheme.surface
+                                            }
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(60.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(
+                                                when (spellingStatus) {
+                                                    Stage6WordStatus.CORRECT -> SuccessGreen.copy(alpha = 0.12f)
+                                                    Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellowBg
+                                                    Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed.copy(alpha = 0.12f)
+                                                    Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.surface
+                                                }
+                                            )
+                                            .border(2.dp, boxBorder, RoundedCornerShape(14.dp))
+                                            .padding(horizontal = 14.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (currentItem.word.article.isNotBlank()) {
+                                                val genderColor = getGenderColor(currentItem.word.article)
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = genderColor.copy(alpha = 0.14f)
+                                                ) {
+                                                    Text(
+                                                        text = currentItem.word.article.lowercase(),
+                                                        fontFamily = MonoFontFamily,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = genderColor,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                            }
+                                            Text(
+                                                text = if (spellingInput.isEmpty()) "Натискайте літери..." else spellingInput,
+                                                fontFamily = MonoFontFamily,
+                                                fontSize = if (spellingInput.isEmpty()) 16.sp else 20.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = when (spellingStatus) {
+                                                    Stage6WordStatus.CORRECT -> SuccessGreen
+                                                    Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                                    Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                                    Stage6WordStatus.TYPING -> if (spellingInput.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface
+                                                }
+                                            )
+                                        }
                                     }
                                 }
 
-                                if (spellingStatus == Stage6WordStatus.WRONG_TRY) {
+                                if (spellingStatus == Stage6WordStatus.CORRECT_UMLAUT_WARNING) {
+                                    UmlautCorrectedFeedbackCard(word = currentItem.word)
+                                } else if (spellingStatus == Stage6WordStatus.WRONG_TRY) {
                                     Text(
-                                        text = "Невірно · залишилось спроб: $spellingAttemptsLeft",
+                                        text = if (spellingInput.isNotEmpty()) {
+                                            "Невірно · правильний початок збережено, продовжуйте далі (спроб: $spellingAttemptsLeft)"
+                                        } else {
+                                            "Невірно · спробуйте з початку (спроб: $spellingAttemptsLeft)"
+                                        },
                                         color = ErrorRed,
                                         fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
                                     )
                                 } else if (spellingStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) {
                                     Text(
                                         text = "Правильно: ${currentItem.word.displayWithArticle}",
                                         color = ErrorRed,
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
 
@@ -712,38 +940,46 @@ fun MixedReviewSessionScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        listOf('ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü').forEach { umlaut ->
+                                        listOf('ä', 'ö', 'ü', 'ß').forEach { umlaut ->
                                             Box(
                                                 modifier = Modifier
-                                                    .padding(horizontal = 3.dp)
-                                                    .size(38.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .size(44.dp)
                                                     .clip(RoundedCornerShape(10.dp))
                                                     .background(MaterialTheme.colorScheme.primaryContainer)
-                                                    .clickable { viewModel.addMixedSpellingLetter(umlaut) },
+                                                    .clickable { viewModel.insertMixedSpellingUmlaut(umlaut) },
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text(umlaut.toString(), fontFamily = LoraFontFamily, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text(
+                                                    umlaut.toString(),
+                                                    fontFamily = LoraFontFamily,
+                                                    fontSize = 17.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
                                             }
                                         }
                                     }
 
-                                    FlowRow(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        currentItem.letterPool.forEach { char ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .padding(horizontal = 3.dp)
-                                                    .size(46.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(MaterialTheme.colorScheme.surface)
-                                                    .border(1.dp, extended.cardBorder, RoundedCornerShape(10.dp))
-                                                    .clickable { viewModel.addMixedSpellingLetter(char) },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(char.toString(), fontFamily = LoraFontFamily, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    if (spellingInputMode == Stage6InputMode.LETTER_TILES) {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            currentItem.letterPool.forEach { char ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .padding(horizontal = 3.dp)
+                                                        .size(46.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(MaterialTheme.colorScheme.surface)
+                                                        .border(1.dp, extended.cardBorder, RoundedCornerShape(10.dp))
+                                                        .clickable { viewModel.addMixedSpellingLetter(char) },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(char.toString(), fontFamily = LoraFontFamily, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                     }
@@ -757,6 +993,36 @@ fun MixedReviewSessionScreen(
                                     isLast = currentIndex + 1 >= items.size,
                                     onNext = { viewModel.nextMixedReviewItem() }
                                 )
+                            } else if (spellingInputMode == Stage6InputMode.KEYBOARD) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.submitMixedSpellingTypedAnswer() },
+                                        enabled = spellingInput.isNotBlank(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1.35f).height(48.dp)
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Перевірити", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { viewModel.useMixedSpellingHint() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = StreakAmber.copy(alpha = 0.20f),
+                                            contentColor = StreakAmber
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    ) {
+                                        Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Підказка", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             } else {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(
@@ -781,6 +1047,267 @@ fun MixedReviewSessionScreen(
                                     }
                                     Button(
                                         onClick = { viewModel.useMixedSpellingHint() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = StreakAmber.copy(alpha = 0.20f),
+                                            contentColor = StreakAmber
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1.25f).height(48.dp)
+                                    ) {
+                                        Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Підказка", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        is MixedReviewItem.MissingLettersReview -> {
+                            val isResolved = spellingStatus.isResolved
+                            Column(
+                                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Card(
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, extended.cardBorder, RoundedCornerShape(20.dp))
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (currentItem.word.article.isNotBlank()) {
+                                                GenderBadge(article = currentItem.word.article)
+                                            } else {
+                                                Spacer(modifier = Modifier.width(1.dp))
+                                            }
+                                            Text(
+                                                text = "Спроби: $spellingAttemptsLeft / ${LearningViewModel.MAX_STAGE6_ATTEMPTS}",
+                                                fontFamily = MonoFontFamily,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (spellingAttemptsLeft == 1) ErrorRed else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = currentItem.word.translationUk,
+                                            fontFamily = LoraFontFamily,
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Text(
+                                            text = currentItem.word.translationEn,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        SpeakerButton(
+                                            onSpeak = { slow -> viewModel.speak(currentItem.word.displayWithArticle, slow) },
+                                            size = 44.dp
+                                        )
+                                    }
+                                }
+
+                                MissingLettersWordDisplay(
+                                    word = currentItem.word.german.trim(),
+                                    blankIndices = currentItem.blankIndices,
+                                    userInput = spellingInput,
+                                    status = spellingStatus
+                                )
+
+                                if (spellingInputMode == Stage6InputMode.KEYBOARD) {
+                                    val boxBorder = when (spellingStatus) {
+                                        Stage6WordStatus.CORRECT -> SuccessGreen
+                                        Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                        Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                        Stage6WordStatus.TYPING -> extended.cardBorder
+                                    }
+                                    OutlinedTextField(
+                                        value = spellingInput,
+                                        onValueChange = { viewModel.updateMixedMissingTypedText(it) },
+                                        enabled = !isResolved,
+                                        singleLine = true,
+                                        placeholder = {
+                                            Text("Введіть пропущені літери або слово...", fontFamily = MonoFontFamily, fontSize = 14.sp)
+                                        },
+                                        textStyle = TextStyle(
+                                            fontFamily = MonoFontFamily,
+                                            fontSize = 19.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = when (spellingStatus) {
+                                                Stage6WordStatus.CORRECT -> SuccessGreen
+                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                                Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                                Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.onSurface
+                                            }
+                                        ),
+                                        keyboardOptions = KeyboardOptions(
+                                            imeAction = ImeAction.Done,
+                                            autoCorrectEnabled = false
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = { viewModel.submitMixedMissingTypedAnswer() }
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = if (spellingStatus == Stage6WordStatus.TYPING) MaterialTheme.colorScheme.primary else boxBorder,
+                                            unfocusedBorderColor = boxBorder,
+                                            disabledBorderColor = boxBorder,
+                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                            unfocusedContainerColor = if (spellingStatus == Stage6WordStatus.WRONG_TRY) ErrorRed.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+
+                                if (spellingStatus == Stage6WordStatus.CORRECT_UMLAUT_WARNING) {
+                                    UmlautCorrectedFeedbackCard(word = currentItem.word)
+                                } else if (spellingStatus == Stage6WordStatus.WRONG_TRY) {
+                                    Text(
+                                        text = if (spellingInput.isNotEmpty()) {
+                                            "Невірно · вірні літери збережено, продовжуйте далі (спроб: $spellingAttemptsLeft)"
+                                        } else {
+                                            "Невірно · спробуйте ще (спроб: $spellingAttemptsLeft)"
+                                        },
+                                        color = ErrorRed,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                } else if (spellingStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) {
+                                    Text(
+                                        text = "Правильно: ${currentItem.word.displayWithArticle}",
+                                        color = ErrorRed,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                if (!isResolved) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        listOf('ä', 'ö', 'ü', 'ß').forEach { umlaut ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .padding(horizontal = 4.dp)
+                                                    .size(44.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                                    .clickable { viewModel.insertMixedMissingUmlaut(umlaut) },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    umlaut.toString(),
+                                                    fontFamily = LoraFontFamily,
+                                                    fontSize = 17.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (spellingInputMode == Stage6InputMode.LETTER_TILES) {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            currentItem.letterPool.forEach { char ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .padding(horizontal = 3.dp)
+                                                        .size(46.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(MaterialTheme.colorScheme.surface)
+                                                        .border(1.dp, extended.cardBorder, RoundedCornerShape(10.dp))
+                                                        .clickable { viewModel.addMixedMissingLetter(char) },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(char.toString(), fontFamily = LoraFontFamily, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isResolved) {
+                                MixedNextFooter(
+                                    isAnswered = true,
+                                    feedback = lastFeedback,
+                                    isLast = currentIndex + 1 >= items.size,
+                                    onNext = { viewModel.nextMixedReviewItem() }
+                                )
+                            } else if (spellingInputMode == Stage6InputMode.KEYBOARD) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.submitMixedMissingTypedAnswer() },
+                                        enabled = spellingInput.isNotBlank(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1.35f).height(48.dp)
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Перевірити", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { viewModel.useMixedMissingHint() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = StreakAmber.copy(alpha = 0.20f),
+                                            contentColor = StreakAmber
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    ) {
+                                        Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Підказка", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.removeMixedMissingLetter() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = extended.subtleFill),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(0.8f).height(48.dp)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Видалити", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Button(
+                                        onClick = { viewModel.clearMixedMissing() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = extended.subtleFill),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    ) {
+                                        Text("Очистити", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Button(
+                                        onClick = { viewModel.useMixedMissingHint() },
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = StreakAmber.copy(alpha = 0.20f),
                                             contentColor = StreakAmber

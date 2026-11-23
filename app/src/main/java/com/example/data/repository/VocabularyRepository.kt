@@ -40,6 +40,10 @@ class VocabularyRepository(
         appContext?.getSharedPreferences("deutschlern_srs_steps", Context.MODE_PRIVATE)
     }
 
+    private val subtopicStagesPrefs by lazy {
+        appContext?.getSharedPreferences("deutschlern_subtopic_stages", Context.MODE_PRIVATE)
+    }
+
     fun observeWordCount(): Flow<Int> = wordDao.observeWordCount()
 
     fun observeFavoriteCount(): Flow<Int> = wordDao.observeFavoriteCount()
@@ -70,6 +74,10 @@ class VocabularyRepository(
         val standard = listOf("A1", "A2", "B1", "B2")
         val filtered = standard.filter { it in found }
         filtered.ifEmpty { listOf("A1") }
+    }
+
+    suspend fun getWordsByLevelOnce(level: String): List<WordEntity> = withContext(Dispatchers.IO) {
+        wordDao.getWordsByLevelOnce(level)
     }
 
     suspend fun getDistractorsForWord(target: WordEntity, count: Int = 3): List<WordEntity> = withContext(Dispatchers.IO) {
@@ -430,25 +438,74 @@ class VocabularyRepository(
         }
     }
 
+    private fun stageSetKey(subtopicId: String, level: String): String =
+        "stages_${subtopicId}_${level.uppercase()}"
+
+    fun getCompletedStageSet(
+        subtopicId: String,
+        level: String,
+        fallbackProgress: SubtopicProgressEntity? = null
+    ): Set<Int> {
+        val raw = subtopicStagesPrefs?.getString(stageSetKey(subtopicId, level), null)
+        if (raw != null) {
+            return raw.split(",")
+                .mapNotNull { it.trim().toIntOrNull() }
+                .filter { it in 1..TOTAL_STAGES }
+                .toSet()
+        }
+        val legacyCount = fallbackProgress?.completedStages ?: 0
+        return if (legacyCount >= TOTAL_STAGES) {
+            ALL_STAGES
+        } else if (legacyCount > 0) {
+            (1..legacyCount).toSet()
+        } else {
+            emptySet()
+        }
+    }
+
+    private fun saveCompletedStageSet(subtopicId: String, level: String, stages: Set<Int>) {
+        subtopicStagesPrefs?.edit()
+            ?.putString(stageSetKey(subtopicId, level), stages.sorted().joinToString(","))
+            ?.apply()
+    }
+
+    /**
+     * Marks a stage as completed (only called once the learner reaches 100% mastery of that stage
+     * via cyclic mistake repetition). Spaced repetition enrollment happens STRICTLY after all 8
+     * stages (1..8) have been completed at 100% for this subtopic.
+     *
+     * @return true if this completion unlocked Spaced Repetition (all 8 stages reached 100%).
+     */
     suspend fun completeStage(
         subtopicId: String,
         stage: Int,
         score: Int,
-        enabledStages: Set<Int> = setOf(1, 2, 3, 4, 5, 6),
-        level: String = "A1"
-    ) = withContext(Dispatchers.IO) {
+        enabledStages: Set<Int> = ALL_STAGES,
+        level: String = "A1",
+        achieved100Percent: Boolean = true
+    ): Boolean = withContext(Dispatchers.IO) {
         val currentProgress = wordDao.getSubtopicProgress(subtopicId).firstOrNull()
             ?: SubtopicProgressEntity(subtopicId = subtopicId)
+        val completedSet = getCompletedStageSet(subtopicId, level, currentProgress).toMutableSet()
+        if (achieved100Percent && stage in 1..TOTAL_STAGES) {
+            completedSet.add(stage)
+            saveCompletedStageSet(subtopicId, level, completedSet)
+        }
+
+        val allStagesMastered = isAllStagesCompleted(completedSet)
         val nextEnabled = enabledStages.filter { it > stage }.minOrNull()
         val newUnlocked = if (nextEnabled != null) {
             maxOf(currentProgress.unlockedStage, nextEnabled)
         } else {
-            6
+            TOTAL_STAGES
         }
-        val newCompleted = if (nextEnabled == null) {
-            6
+        val newCompleted = if (allStagesMastered) {
+            TOTAL_STAGES
         } else {
-            maxOf(currentProgress.completedStages, stage)
+            maxOf(
+                currentProgress.completedStages.coerceAtMost(TOTAL_STAGES - 1),
+                completedSet.size.coerceAtMost(TOTAL_STAGES - 1)
+            )
         }
         val newStars = currentProgress.stars + if (score >= 4) 3 else if (score >= 2) 2 else 1
 
@@ -459,37 +516,26 @@ class VocabularyRepository(
             4 -> currentProgress.copy(unlockedStage = newUnlocked, completedStages = newCompleted, stars = newStars, stage4Score = score)
             5 -> currentProgress.copy(unlockedStage = newUnlocked, completedStages = newCompleted, stars = newStars, stage5Score = score)
             6 -> currentProgress.copy(unlockedStage = newUnlocked, completedStages = newCompleted, stars = newStars, stage6Score = score)
+            7, 8 -> currentProgress.copy(unlockedStage = newUnlocked, completedStages = newCompleted, stars = newStars)
             else -> currentProgress
         }
         wordDao.saveSubtopicProgress(updated)
 
-        // When the learner completes the final enabled stage of a subtopic,
-        // ensure every word in that subtopic enters the 6h -> 16-repetition cycle.
-        if (nextEnabled == null) {
+        // Enroll subtopic words into the 6h -> 16-repetition cycle ONLY when all 8 stages are 100% done!
+        if (allStagesMastered) {
             enrollSubtopicWordsForSrs(subtopicId, level)
         }
+        allStagesMastered
     }
 
     /**
-     * Records a practice answer during initial subtopic stages (Stages 1..6).
-     * Enrolls newly seen words into the 6-hour first review slot without prematurely
-     * skipping steps in the 16-repetition cycle.
+     * Records a practice answer during initial subtopic stages (Stages 1..8).
+     * Never enrolls words prematurely into Spaced Repetition; enrollment happens strictly
+     * after all 8 stages of the subtopic are completed at 100%.
      */
     suspend fun recordReview(wordId: Int, rating: ReviewRating) = withContext(Dispatchers.IO) {
-        val word = wordDao.getWordById(wordId) ?: return@withContext
         val isCorrectDelta = if (rating != ReviewRating.AGAIN) 1 else 0
-        if (word.nextReviewTimestamp == 0L) {
-            val firstReview = SpacedRepetition.initialEnrollmentTimestamp()
-            saveWordSrsStep(wordId, 0)
-            wordDao.updateReviewResult(
-                id = wordId,
-                newBox = 1,
-                nextReview = firstReview,
-                isCorrectDelta = isCorrectDelta
-            )
-        } else {
-            wordDao.incrementWordCountsOnly(wordId, isCorrectDelta)
-        }
+        wordDao.incrementWordCountsOnly(wordId, isCorrectDelta)
     }
 
     /**
@@ -521,5 +567,15 @@ class VocabularyRepository(
             wordDao.insertAll(chunk)
         }
         srsPrefs?.edit()?.clear()?.apply()
+        subtopicStagesPrefs?.edit()?.clear()?.apply()
+    }
+
+    companion object {
+        const val TOTAL_STAGES: Int = 8
+        val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7, 8)
+
+        internal fun isAllStagesCompleted(completedStages: Set<Int>): Boolean {
+            return ALL_STAGES.all { it in completedStages }
+        }
     }
 }

@@ -76,6 +76,7 @@ fun StageMultipleChoiceScreen(
     val selectedAnswer by viewModel.stage3SelectedAnswer.collectAsStateWithLifecycle()
     val score by viewModel.stage3Score.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage3Finished.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val currentQ = questions.getOrNull(currentIndex)
@@ -181,10 +182,10 @@ fun StageMultipleChoiceScreen(
                         stageNumber = 3,
                         nextStageNumber = nextEnabled,
                         title = "Етап 3 пройдено!",
-                        subtitle = if (nextEnabled != null) {
-                            "Ви набрали $score з ${questions.size} балів! Далі відкрито Етап $nextEnabled."
-                        } else {
-                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        subtitle = when {
+                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            nextEnabled != null -> "Усі ${questions.count { !it.isRetry }} слів засвоєно на 100%! Далі відкрито Етап $nextEnabled."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 3) },
                         onBackToHub = { viewModel.navigateBack() }
@@ -203,6 +204,10 @@ fun StageMultipleChoiceScreen(
                                 .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            if (currentQ.isRetry) {
+                                RetryMistakeBadge()
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
                             WordIllustrationView(
                                 word = currentQ.word,
                                 height = 152.dp,
@@ -346,6 +351,16 @@ fun StageMultipleChoiceScreen(
                     }
 
                     if (selectedAnswer != null) {
+                        if (selectedAnswer != currentQ.correctIndex) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Помилка · слово повернеться в кінці етапу для повторення",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ErrorRed,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = { viewModel.nextStage3(subtopicId) },

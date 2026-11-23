@@ -53,6 +53,9 @@ interface WordDao {
     @Query("SELECT * FROM words WHERE level = :level ORDER BY id ASC")
     fun getWordsByLevel(level: String): Flow<List<WordEntity>>
 
+    @Query("SELECT * FROM words WHERE UPPER(level) = UPPER(:level) ORDER BY id ASC")
+    suspend fun getWordsByLevelOnce(level: String): List<WordEntity>
+
     @Query("SELECT * FROM words WHERE nextReviewTimestamp <= :currentTimestamp OR nextReviewTimestamp = 0 ORDER BY nextReviewTimestamp ASC, box ASC LIMIT 60")
     fun getWordsDueForReview(currentTimestamp: Long): Flow<List<WordEntity>>
 

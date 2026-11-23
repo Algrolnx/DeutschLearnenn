@@ -23,7 +23,9 @@ import com.example.ui.screens.StageArticleScreen
 import com.example.ui.screens.StageFillBlankScreen
 import com.example.ui.screens.StageFlashcardsScreen
 import com.example.ui.screens.StageListeningScreen
+import com.example.ui.screens.StageMissingLettersScreen
 import com.example.ui.screens.StageMultipleChoiceScreen
+import com.example.ui.screens.StagePluralScreen
 import com.example.ui.screens.StageSpellingScreen
 import com.example.ui.screens.SubtopicHubScreen
 import com.example.ui.screens.SubtopicsListScreen
@@ -71,11 +73,19 @@ class MainActivity : ComponentActivity() {
                                 subtopicId = screen.subtopicId,
                                 viewModel = viewModel
                             )
-                            is Screen.Stage5FillBlank -> StageFillBlankScreen(
+                            is Screen.Stage5PluralTrainer -> StagePluralScreen(
                                 subtopicId = screen.subtopicId,
                                 viewModel = viewModel
                             )
-                            is Screen.Stage6Spelling -> StageSpellingScreen(
+                            is Screen.Stage6FillBlank -> StageFillBlankScreen(
+                                subtopicId = screen.subtopicId,
+                                viewModel = viewModel
+                            )
+                            is Screen.Stage7Spelling -> StageSpellingScreen(
+                                subtopicId = screen.subtopicId,
+                                viewModel = viewModel
+                            )
+                            is Screen.Stage8MissingLetters -> StageMissingLettersScreen(
                                 subtopicId = screen.subtopicId,
                                 viewModel = viewModel
                             )

@@ -257,6 +257,21 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
+    fun isHdAudioCached(text: String): Boolean {
+        val cleaned = text.trim()
+        if (cleaned.isEmpty()) return true
+        val key = sha256(cleaned.lowercase(Locale.GERMAN))
+        val targetFile = File(cacheDir, "$key.mp3")
+        return targetFile.exists() && targetFile.length() > 512L
+    }
+
+    suspend fun prefetchHdAudio(text: String): Boolean {
+        val cleaned = text.trim()
+        if (cleaned.isEmpty()) return true
+        if (isHdAudioCached(cleaned)) return true
+        return resolveOrFetchHdAudio(cleaned) != null
+    }
+
     private suspend fun resolveOrFetchHdAudio(text: String): File? = withContext(Dispatchers.IO) {
         val key = sha256(text.lowercase(Locale.GERMAN))
         val targetFile = File(cacheDir, "$key.mp3")

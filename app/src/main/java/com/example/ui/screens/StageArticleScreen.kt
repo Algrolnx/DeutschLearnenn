@@ -76,6 +76,7 @@ fun StageArticleScreen(
     val selectedArticle by viewModel.stage4SelectedArticle.collectAsStateWithLifecycle()
     val score by viewModel.stage4Score.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage4Finished.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val currentQ = questions.getOrNull(currentIndex)
@@ -177,14 +178,18 @@ fun StageArticleScreen(
 
                 if (isFinished || currentQ == null) {
                     val nextEnabled = viewModel.getNextEnabledStage(4)
+                    val autoSkipped = questions.isEmpty()
                     StageCompletedSuccessCard(
                         stageNumber = 4,
                         nextStageNumber = nextEnabled,
-                        title = "Етап 4 пройдено!",
-                        subtitle = if (nextEnabled != null) {
-                            "Ви відмінно орієнтуєтеся в граматичних родах! Далі відкрито Етап $nextEnabled."
-                        } else {
-                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        title = if (autoSkipped) "Етап 4 зараховано автоматично" else "Етап 4 пройдено!",
+                        subtitle = when {
+                            autoSkipped && unlockedSrs -> "У цій підтемі немає іменників з артиклями — етап зараховано, і всі 8 етапів завершено на 100%!"
+                            autoSkipped && nextEnabled != null -> "У цій підтемі немає іменників з артиклями (наприклад, дієслова чи прикметники) — етап зараховано. Далі відкрито Етап $nextEnabled."
+                            autoSkipped -> "У цій підтемі немає іменників з артиклями — етап зараховано автоматично."
+                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            nextEnabled != null -> "Усі слова засвоєно на 100%! Далі відкрито Етап $nextEnabled."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 4) },
                         onBackToHub = { viewModel.navigateBack() }
@@ -203,6 +208,11 @@ fun StageArticleScreen(
                                 .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            if (currentQ.isRetry) {
+                                RetryMistakeBadge()
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+
                             WordIllustrationView(
                                 word = currentQ.word,
                                 height = 152.dp,
@@ -251,10 +261,42 @@ fun StageArticleScreen(
                                 textAlign = TextAlign.Center
                             )
 
+                            if (selectedArticle != null && LearningViewModel.isPluralizableNoun(currentQ.word)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = extended.warningYellowBg,
+                                    modifier = Modifier
+                                        .border(
+                                            1.dp,
+                                            extended.warningYellow.copy(alpha = 0.55f),
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable { viewModel.speak(currentQ.word.plural.trim()) }
+                                ) {
+                                    Text(
+                                        text = "Множина: ${currentQ.word.plural.trim()}",
+                                        fontFamily = LoraFontFamily,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = extended.warningYellow,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(12.dp))
 
                             SpeakerButton(
-                                onSpeak = { slow -> viewModel.speak(currentQ.word.displayWithArticle, slow) },
+                                onSpeak = { slow ->
+                                    val spokenText = if (selectedArticle != null) {
+                                        currentQ.word.displayWithArticle
+                                    } else {
+                                        currentQ.word.german
+                                    }
+                                    viewModel.speak(spokenText, slow)
+                                },
                                 size = 46.dp
                             )
                         }
@@ -299,6 +341,16 @@ fun StageArticleScreen(
                     }
 
                     if (selectedArticle != null) {
+                        if (!selectedArticle.equals(currentQ.correctArticle, ignoreCase = true)) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Помилка · слово повернеться в кінці етапу для повторення",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ErrorRed,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = { viewModel.nextStage4(subtopicId) },

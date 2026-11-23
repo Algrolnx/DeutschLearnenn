@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -26,6 +28,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.math.ln
 
 enum class StockPhotoProvider(val displayName: String) {
     PIXABAY("Pixabay")
@@ -47,27 +50,54 @@ internal data class PhotoCandidate(
 )
 
 private sealed interface PixabayCallResult {
-    data class Hits(val ranked: List<CachedStockPhoto>) : PixabayCallResult
+    data class Hits(
+        val ranked: List<CachedStockPhoto>,
+        val bestScore: Float
+    ) : PixabayCallResult
     data object Empty : PixabayCallResult
     data object TransientFailure : PixabayCallResult
 }
 
 /**
  * Resolves relevant stock photographs for German vocabulary cards via Pixabay API.
- * - Uses Secrets Gradle Plugin (`BuildConfig.PIXABAY_API_KEY`).
- * - Inspects Pixabay's `tags` array across up to 20 candidates per single request,
- *   ranking candidates by primary-tag match, subtopic-preferred/avoided tags, and 4:3 framing.
- * - Permanently caches chosen URLs on-device (SharedPreferences) and image bytes (Coil 120 MB DiskCache).
- * - Supports one-tap cycling through alternative ranked photos (`cycleNextPhoto`).
+ * - Dedicated HTTP clients with tuned connection pools & host concurrency so JSON lookups
+ *   never block image byte downloads.
+ * - Priority-separated semaphores so currently visible cards never queue behind background prefetch.
+ * - O(1) in-memory subtopic URL index (no repeated SharedPreferences full scans).
+ * - Whole-word tag matching, multi-word phrase synergy, landscape-only orientation, AI/text junk filtering,
+ *   and quality-gated multi-step search that self-corrects noisy hits while keeping 1-call speed for clean hits.
  */
 class StockPhotoRepository private constructor(context: Context) {
 
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+    // Fast, dedicated client for Pixabay JSON metadata calls
+    private val apiHttpClient = OkHttpClient.Builder()
+        .dispatcher(Dispatcher().apply {
+            maxRequests = 24
+            maxRequestsPerHost = 12
+        })
+        .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("User-Agent", USER_AGENT)
+                .build()
+            chain.proceed(req)
+        }
+        .build()
+
+    // Separate high-concurrency client for Coil CDN image downloads
+    private val imageHttpClient = OkHttpClient.Builder()
+        .dispatcher(Dispatcher().apply {
+            maxRequests = 32
+            maxRequestsPerHost = 16
+        })
+        .connectionPool(ConnectionPool(12, 5, TimeUnit.MINUTES))
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()
                 .header("User-Agent", USER_AGENT)
@@ -77,20 +107,20 @@ class StockPhotoRepository private constructor(context: Context) {
         .build()
 
     val imageLoader: ImageLoader = ImageLoader.Builder(appContext)
-        .okHttpClient(httpClient)
+        .okHttpClient(imageHttpClient)
         .memoryCache {
             MemoryCache.Builder(appContext)
-                .maxSizePercent(0.20)
+                .maxSizePercent(0.25)
                 .build()
         }
         .diskCache {
             DiskCache.Builder()
                 .directory(File(appContext.cacheDir, "word_photos_coil"))
-                .maxSizeBytes(120L * 1024L * 1024L)
+                .maxSizeBytes(300L * 1024L * 1024L)
                 .build()
         }
         .respectCacheHeaders(false)
-        .crossfade(true)
+        .crossfade(100)
         .build()
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -98,8 +128,15 @@ class StockPhotoRepository private constructor(context: Context) {
     private val alternativesCache = ConcurrentHashMap<String, List<CachedStockPhoto>>()
     private val verifiedEmptyCache = ConcurrentHashMap<String, Boolean>()
     private val inFlight = ConcurrentHashMap<String, Deferred<CachedStockPhoto?>>()
-    private val apiConcurrencyGuard = Semaphore(permits = 3)
+
+    // Separate concurrency lanes: visible cards never wait behind background prefetching
+    private val foregroundApiGuard = Semaphore(permits = 5)
+    private val prefetchApiGuard = Semaphore(permits = 2)
+
     private val subtopicSelectionLock = Any()
+    private val subtopicUrlIndex = HashMap<String, MutableMap<String, String>>()
+    @Volatile
+    private var subtopicIndexHydrated = false
 
     @Volatile
     private var pixabayCooldownUntilMs: Long = 0L
@@ -112,19 +149,31 @@ class StockPhotoRepository private constructor(context: Context) {
     fun getCachedSync(word: WordEntity): CachedStockPhoto? {
         val key = cacheKey(word)
         memoryUrlCache[key]?.let { return it }
-        return readFromDiskCache(key)?.also { memoryUrlCache[key] = it }
+        return readFromDiskCache(key)?.also { cached ->
+            memoryUrlCache[key] = cached
+            recordSubtopicUrl(word.subtopicId, key, cached.imageUrl)
+        }
     }
 
-    suspend fun resolvePhoto(word: WordEntity): CachedStockPhoto? {
+    /**
+     * Checks whether a full-card bitmap is already decoded in Coil's RAM cache for instant 0ms display.
+     */
+    fun isInMemoryCache(imageUrl: String, memoryKey: String = imageUrl): Boolean {
+        val cache = imageLoader.memoryCache ?: return false
+        return cache[MemoryCache.Key(memoryKey)] != null
+    }
+
+    suspend fun resolvePhoto(word: WordEntity, highPriority: Boolean = true): CachedStockPhoto? {
         val key = cacheKey(word)
         memoryUrlCache[key]?.let { return it }
 
         readFromDiskCache(key)?.let { cached ->
             memoryUrlCache[key] = cached
+            recordSubtopicUrl(word.subtopicId, key, cached.imageUrl)
             return cached
         }
 
-        return fetchAndCache(word, key)
+        return fetchAndCache(word, key, highPriority)
     }
 
     /**
@@ -137,7 +186,7 @@ class StockPhotoRepository private constructor(context: Context) {
 
         var pool = alternativesCache[key]
         if (pool == null || pool.size <= 1) {
-            val outcome = apiConcurrencyGuard.withPermit {
+            val outcome = foregroundApiGuard.withPermit {
                 withContext(Dispatchers.IO) {
                     fetchFromPixabay(word)
                 }
@@ -154,6 +203,7 @@ class StockPhotoRepository private constructor(context: Context) {
             val usedByOthers = getUsedUrlsInSubtopic(word.subtopicId, excludeKey = key)
             val chosen = selectNextCycleCandidate(candidates, currentUrl, usedByOthers)
             memoryUrlCache[key] = chosen
+            recordSubtopicUrlLocked(word.subtopicId, key, chosen.imageUrl)
             writeToDiskCache(key, chosen)
             chosen
         }
@@ -161,31 +211,94 @@ class StockPhotoRepository private constructor(context: Context) {
     }
 
     /**
-     * Fire-and-forget background prefetch on the repository scope so card navigation
-     * never cancels an in-flight Pixabay lookup or poisons the next card's load.
+     * Fire-and-forget parallel background prefetch on the repository scope so card navigation
+     * never cancels an in-flight lookup and upcoming cards are already decoded in Coil RAM cache.
      */
     fun prefetchWordsAsync(words: List<WordEntity>) {
         if (words.isEmpty() || !hasConfiguredApiKey() || System.currentTimeMillis() < pixabayCooldownUntilMs) {
             return
         }
-        repoScope.launch {
-            for (word in words) {
-                if (System.currentTimeMillis() < pixabayCooldownUntilMs) break
+        val uniqueWords = words.distinctBy { cacheKey(it) }.take(4)
+        for (word in uniqueWords) {
+            val cached = getCachedSync(word)
+            if (cached != null) {
+                if (!isInMemoryCache(cached.imageUrl)) {
+                    enqueueCardBitmapWarmup(cached.imageUrl)
+                }
+                continue
+            }
+            repoScope.launch {
+                if (System.currentTimeMillis() < pixabayCooldownUntilMs) return@launch
                 prefetchWord(word)
             }
         }
     }
 
     /**
-     * Gently prefetches the photo URL and warms Coil's disk/memory cache for an upcoming card.
+     * Gently prefetches the photo URL (via background lane) and warms Coil's disk + RAM cache.
      */
     suspend fun prefetchWord(word: WordEntity) {
         if (!hasConfiguredApiKey() || System.currentTimeMillis() < pixabayCooldownUntilMs) return
-        val resolved = resolvePhoto(word) ?: return
+        val resolved = resolvePhoto(word, highPriority = false) ?: return
+        if (!isInMemoryCache(resolved.imageUrl)) {
+            enqueueCardBitmapWarmup(resolved.imageUrl)
+        }
+    }
+
+    private fun enqueueCardBitmapWarmup(imageUrl: String) {
         val request = ImageRequest.Builder(appContext)
-            .data(resolved.imageUrl)
+            .data(imageUrl)
+            .size(CARD_DECODE_WIDTH, CARD_DECODE_HEIGHT)
+            .memoryCacheKey(imageUrl)
             .build()
         imageLoader.enqueue(request)
+    }
+
+    fun remainingCooldownMs(): Long {
+        return (pixabayCooldownUntilMs - System.currentTimeMillis()).coerceAtLeast(0L)
+    }
+
+    /**
+     * Returns true if this word already has both a cached photo URL and its image bytes
+     * stored inside Coil's on-device disk cache for offline viewing.
+     */
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
+    fun isPhotoDiskCached(word: WordEntity): Boolean {
+        val cached = getCachedSync(word) ?: return false
+        return try {
+            val diskCache = imageLoader.diskCache ?: return false
+            diskCache.openSnapshot(cached.imageUrl)?.use { true } ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Resolves (if needed) and downloads the image bytes into Coil's disk cache synchronously
+     * on Dispatchers.IO so the card displays seamlessly without internet.
+     */
+    suspend fun preloadWordForOffline(word: WordEntity): Boolean = withContext(Dispatchers.IO) {
+        if (isPhotoDiskCached(word)) return@withContext true
+        val resolved = getCachedSync(word) ?: run {
+            if (!hasConfiguredApiKey() || remainingCooldownMs() > 0L) return@withContext false
+            resolvePhoto(word, highPriority = false)
+        } ?: return@withContext false
+
+        try {
+            val request = ImageRequest.Builder(appContext)
+                .data(resolved.imageUrl)
+                .size(CARD_DECODE_WIDTH, CARD_DECODE_HEIGHT)
+                .memoryCacheKey(resolved.imageUrl)
+                .allowHardware(false)
+                .build()
+            val result = imageLoader.execute(request)
+            result.drawable != null || isPhotoDiskCached(word)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "Offline image download failed for '${word.german}': ${e.message}")
+            false
+        }
     }
 
     /**
@@ -196,19 +309,27 @@ class StockPhotoRepository private constructor(context: Context) {
         memoryUrlCache.remove(key)
         alternativesCache.remove(key)
         verifiedEmptyCache.remove(key)
+        synchronized(subtopicSelectionLock) {
+            subtopicUrlIndex[word.subtopicId.lowercase()]?.remove(key)
+        }
         prefs.edit().remove(key).apply()
-        return fetchAndCache(word, key)
+        return fetchAndCache(word, key, highPriority = true)
     }
 
-    private suspend fun fetchAndCache(word: WordEntity, key: String): CachedStockPhoto? {
+    private suspend fun fetchAndCache(
+        word: WordEntity,
+        key: String,
+        highPriority: Boolean
+    ): CachedStockPhoto? {
         if (!hasConfiguredApiKey() || verifiedEmptyCache.containsKey(key)) {
             return null
         }
 
+        val guard = if (highPriority) foregroundApiGuard else prefetchApiGuard
         val deferred = inFlight.computeIfAbsent(key) {
             repoScope.async {
                 try {
-                    val outcome = apiConcurrencyGuard.withPermit {
+                    val outcome = guard.withPermit {
                         val usedSnapshot = synchronized(subtopicSelectionLock) {
                             getUsedUrlsInSubtopic(word.subtopicId, excludeKey = key)
                         }
@@ -222,6 +343,7 @@ class StockPhotoRepository private constructor(context: Context) {
                                 if (best != null) {
                                     alternativesCache[key] = outcome.ranked
                                     memoryUrlCache[key] = best
+                                    recordSubtopicUrlLocked(word.subtopicId, key, best.imageUrl)
                                     writeToDiskCache(key, best)
                                 }
                                 best
@@ -261,19 +383,39 @@ class StockPhotoRepository private constructor(context: Context) {
 
         val variationSeed = abs("${word.subtopicId}_${word.german}".hashCode())
         var sawTransientError = false
+        var bestFreshHits: PixabayCallResult.Hits? = null
         var fallbackDuplicateHits: PixabayCallResult.Hits? = null
+        var nonFallbackStepsTried = 0
 
         for (step in plan.steps) {
             if (System.currentTimeMillis() < pixabayCooldownUntilMs) {
-                return fallbackDuplicateHits ?: PixabayCallResult.TransientFailure
+                return bestFreshHits ?: fallbackDuplicateHits ?: PixabayCallResult.TransientFailure
             }
+
+            // Cap non-fallback probes once we already found a reasonable fresh hit so speed stays snappy
+            if (!step.isSubtopicFallback && bestFreshHits != null && nonFallbackStepsTried >= MAX_QUALITY_PROBE_STEPS) {
+                return bestFreshHits
+            }
+            if (step.isSubtopicFallback && bestFreshHits != null) {
+                return bestFreshHits
+            }
+
+            if (!step.isSubtopicFallback) {
+                nonFallbackStepsTried++
+            }
+
             when (val res = queryPixabay(step, plan.scoringProfile, variationSeed)) {
                 is PixabayCallResult.Hits -> {
                     val hasFreshUrl = res.ranked.any { it.imageUrl !in usedUrlsInSubtopic }
                     if (hasFreshUrl) {
-                        return res
-                    }
-                    if (fallbackDuplicateHits == null) {
+                        if (bestFreshHits == null || res.bestScore < bestFreshHits.bestScore) {
+                            bestFreshHits = res
+                        }
+                        // Fast 1-call exit whenever we hit a crisp, high-confidence visual match
+                        if (step.isSubtopicFallback || res.bestScore <= GOOD_MATCH_SCORE_THRESHOLD) {
+                            return bestFreshHits
+                        }
+                    } else if (fallbackDuplicateHits == null || res.bestScore < fallbackDuplicateHits.bestScore) {
                         fallbackDuplicateHits = res
                     }
                 }
@@ -281,12 +423,13 @@ class StockPhotoRepository private constructor(context: Context) {
                 PixabayCallResult.TransientFailure -> {
                     sawTransientError = true
                     if (System.currentTimeMillis() < pixabayCooldownUntilMs) {
-                        return fallbackDuplicateHits ?: PixabayCallResult.TransientFailure
+                        return bestFreshHits ?: fallbackDuplicateHits ?: PixabayCallResult.TransientFailure
                     }
                 }
             }
         }
 
+        if (bestFreshHits != null) return bestFreshHits
         if (fallbackDuplicateHits != null) return fallbackDuplicateHits
         return if (sawTransientError) PixabayCallResult.TransientFailure else PixabayCallResult.Empty
     }
@@ -301,7 +444,7 @@ class StockPhotoRepository private constructor(context: Context) {
         }
         val encodedQ = URLEncoder.encode(step.query, "UTF-8")
         val url = "https://pixabay.com/api/?key=$pixabayApiKey&q=$encodedQ&lang=${step.lang}" +
-            "&image_type=photo&safesearch=true&per_page=20"
+            "&image_type=photo&orientation=horizontal&safesearch=true&per_page=20"
 
         val request = Request.Builder()
             .url(url)
@@ -309,7 +452,7 @@ class StockPhotoRepository private constructor(context: Context) {
             .build()
 
         return try {
-            httpClient.newCall(request).execute().use { response ->
+            apiHttpClient.newCall(request).execute().use { response ->
                 if (response.code == 429) {
                     val resetSeconds = response.header("X-RateLimit-Reset")?.toLongOrNull()
                     val cooldownMs = if (resetSeconds != null && resetSeconds in 1L..60L) {
@@ -349,21 +492,27 @@ class StockPhotoRepository private constructor(context: Context) {
                 }
                 if (candidates.isEmpty()) return PixabayCallResult.Empty
 
+                val scored = candidates.mapIndexed { idx, cand ->
+                    cand to scoreCandidate(cand, idx, profile)
+                }.sortedBy { it.second }
+
+                val bestScore = scored.firstOrNull()?.second ?: Float.MAX_VALUE
                 val rankedCandidates = if (step.isSubtopicFallback) {
                     rankSubtopicFallbackCandidates(candidates, profile, variationSeed)
                 } else {
-                    rankCandidates(candidates, profile)
+                    scored.map { it.first }
                 }
                 if (rankedCandidates.isEmpty()) return PixabayCallResult.Empty
 
                 PixabayCallResult.Hits(
-                    rankedCandidates.take(12).map { cand ->
+                    ranked = rankedCandidates.take(12).map { cand ->
                         CachedStockPhoto(
                             imageUrl = cand.url,
                             provider = StockPhotoProvider.PIXABAY,
                             photographer = cand.photographer
                         )
-                    }
+                    },
+                    bestScore = bestScore
                 )
             }
         } catch (e: Exception) {
@@ -375,20 +524,43 @@ class StockPhotoRepository private constructor(context: Context) {
     private fun cacheKey(word: WordEntity): String =
         "${word.subtopicId.lowercase()}_${word.german.lowercase().trim()}"
 
-    private fun getUsedUrlsInSubtopic(subtopicId: String, excludeKey: String): Set<String> {
-        val prefix = "${subtopicId.lowercase()}_"
-        val used = HashSet<String>()
-        memoryUrlCache.forEach { (k, photo) ->
-            if (k != excludeKey && k.startsWith(prefix)) {
-                used.add(photo.imageUrl)
+    private fun ensureSubtopicIndexHydratedLocked() {
+        if (subtopicIndexHydrated) return
+        prefs.all.forEach { (k, v) ->
+            if (v is String) {
+                val url = v.substringAfter('|', "").substringBefore('|')
+                val subtopicId = extractSubtopicPrefix(k)
+                if (url.isNotBlank() && subtopicId != null) {
+                    subtopicUrlIndex.getOrPut(subtopicId) { HashMap() }[k] = url
+                }
             }
         }
-        prefs.all.forEach { (k, v) ->
-            if (k != excludeKey && k.startsWith(prefix) && v is String) {
-                val url = v.substringAfter('|', "").substringBefore('|')
-                if (url.isNotBlank()) {
-                    used.add(url)
-                }
+        subtopicIndexHydrated = true
+    }
+
+    private fun extractSubtopicPrefix(cacheKey: String): String? {
+        val lastSep = cacheKey.lastIndexOf('_')
+        return if (lastSep > 0) cacheKey.substring(0, lastSep) else null
+    }
+
+    private fun recordSubtopicUrl(subtopicId: String, key: String, url: String) {
+        synchronized(subtopicSelectionLock) {
+            recordSubtopicUrlLocked(subtopicId, key, url)
+        }
+    }
+
+    private fun recordSubtopicUrlLocked(subtopicId: String, key: String, url: String) {
+        ensureSubtopicIndexHydratedLocked()
+        subtopicUrlIndex.getOrPut(subtopicId.lowercase()) { HashMap() }[key] = url
+    }
+
+    private fun getUsedUrlsInSubtopic(subtopicId: String, excludeKey: String): Set<String> {
+        ensureSubtopicIndexHydratedLocked()
+        val entries = subtopicUrlIndex[subtopicId.lowercase()] ?: return emptySet()
+        val used = HashSet<String>(entries.size)
+        entries.forEach { (k, url) ->
+            if (k != excludeKey && url.isNotBlank()) {
+                used.add(url)
             }
         }
         return used
@@ -415,13 +587,29 @@ class StockPhotoRepository private constructor(context: Context) {
         private const val PREFS_NAME = "deutschlern_stock_photo_cache_v4"
         private const val DEFAULT_RATE_LIMIT_COOLDOWN_MS = 15_000L
         private const val TARGET_ASPECT_RATIO = 4f / 3f
+        internal const val CARD_DECODE_WIDTH = 640
+        internal const val CARD_DECODE_HEIGHT = 480
+        internal const val THUMB_DECODE_SIZE = 200
+        internal const val GOOD_MATCH_SCORE_THRESHOLD = 0.35f
+        private const val MAX_QUALITY_PROBE_STEPS = 3
+
+        private val tagWordSplitRegex = Regex("[\\s\\-/]+")
+
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
 
         private val universalJunkTags = setOf(
             "clipart", "vector", "illustration", "cartoon", "logo", "icon",
             "text", "quote", "typography", "collage", "mockup", "frame",
-            "background", "wallpaper", "abstract", "banner", "template", "drawing"
+            "background", "wallpaper", "abstract", "banner", "template", "drawing",
+            "ai", "digital", "3d", "render", "cgi", "surreal", "fantasy",
+            "silhouette", "scrabble", "letters", "alphabet", "word", "words",
+            "chalkboard", "blackboard", "infographic", "diagram", "chart",
+            "sticker", "emoji", "emoticon", "meme"
+        )
+
+        private val universalJunkPhrases = setOf(
+            "ai generated", "digital art", "word cloud", "text message"
         )
 
         @Volatile
@@ -445,7 +633,28 @@ class StockPhotoRepository private constructor(context: Context) {
         }
 
         /**
-         * Ranks Pixabay candidates by semantic tag relevance (primary tag match, subtopic boost/avoid tags)
+         * Whole-word / clean-plural tag matching so short words never produce false substring hits
+         * (e.g., "car" must NOT match "carrot"/"scarf"; "ice" must NOT match "office"/"police").
+         */
+        internal fun tagMatchesToken(tag: String, token: String): Boolean {
+            if (tag.isBlank() || token.isBlank()) return false
+            val cleanToken = token.lowercase().trim()
+            val cleanTag = tag.lowercase().trim()
+            if (cleanTag == cleanToken) return true
+            val words = cleanTag.split(tagWordSplitRegex)
+            return words.any { w ->
+                when {
+                    w == cleanToken -> true
+                    w == "${cleanToken}s" || w == "${cleanToken}es" -> true
+                    cleanToken.length >= 5 && w.startsWith(cleanToken) -> true
+                    else -> false
+                }
+            }
+        }
+
+        /**
+         * Ranks Pixabay candidates by semantic tag relevance (whole-word primary tag match,
+         * multi-word phrase synergy, subtopic boost/avoid tags, AI/text junk filtering, likes quality)
          * combined with 4:3 horizontal framing fitness. Lower score = better match.
          */
         internal fun rankCandidates(
@@ -470,41 +679,63 @@ class StockPhotoRepository private constructor(context: Context) {
 
             var semanticScore = 0f
             if (item.tags.isNotEmpty()) {
-                val tagWords = item.tags.flatMap { it.split(' ') }.toSet()
+                val tagWords = item.tags.flatMap { it.split(tagWordSplitRegex) }
+                    .filter { it.isNotEmpty() }
+                    .toSet()
 
-                // 1. Primary tag position bonus: photos whose 1st/2nd tag matches the actual word are far more accurate
+                // 1. Multi-word query phrase synergy (e.g., "bell pepper", "orange juice", "school building")
+                if (profile.primaryQueryTokens.size >= 2) {
+                    val matchedPrimaryCount = profile.primaryQueryTokens.count { token ->
+                        item.tags.any { tag -> tagMatchesToken(tag, token) }
+                    }
+                    semanticScore += when {
+                        matchedPrimaryCount == profile.primaryQueryTokens.size -> -2.2f
+                        matchedPrimaryCount == 1 -> 0.5f
+                        else -> 1.8f
+                    }
+                }
+
+                // 2. Primary tag position bonus using whole-word matching (no substring false positives!)
                 if (profile.subjectTokens.isNotEmpty()) {
                     val firstTag = item.tags.getOrNull(0).orEmpty()
                     val secondTag = item.tags.getOrNull(1).orEmpty()
                     val topFive = item.tags.take(5)
                     semanticScore += when {
-                        profile.subjectTokens.any { token -> firstTag.contains(token) } -> -2.4f
-                        profile.subjectTokens.any { token -> secondTag.contains(token) } -> -1.6f
-                        topFive.any { tag -> profile.subjectTokens.any { token -> tag.contains(token) } } -> -0.7f
-                        else -> 1.2f
+                        profile.subjectTokens.any { token -> tagMatchesToken(firstTag, token) } -> -2.4f
+                        profile.subjectTokens.any { token -> tagMatchesToken(secondTag, token) } -> -1.6f
+                        topFive.any { tag -> profile.subjectTokens.any { token -> tagMatchesToken(tag, token) } } -> -0.7f
+                        else -> 1.4f
                     }
                 }
 
-                // 2. Subtopic preferred tags boost (e.g., building/interior/shop for city_places)
+                // 3. Subtopic preferred tags boost (e.g., building/interior/shop for city_places)
                 if (profile.preferredTags.isNotEmpty()) {
                     val prefHits = tagWords.count { it in profile.preferredTags }
                     semanticScore -= (prefHits * 0.85f).coerceAtMost(2.55f)
                 }
 
-                // 3. Subtopic avoid tags penalty (e.g., pills/children/laptop for city_places)
+                // 4. Subtopic avoid tags penalty (e.g., pills/children/laptop for city_places)
                 if (profile.avoidTags.isNotEmpty()) {
                     val avoidHits = tagWords.count { it in profile.avoidTags }
                     semanticScore += (avoidHits * 2.2f).coerceAtMost(6.6f)
                 }
 
-                // 4. Universal junk tag penalty (clipart, text quotes, logos, mockups)
+                // 5. Universal junk & AI/text-board tag penalty
                 if (!profile.allowGraphicStyle) {
-                    val junkHits = tagWords.count { it in universalJunkTags && it !in profile.subjectTokens }
-                    semanticScore += (junkHits * 2.0f).coerceAtMost(4.0f)
+                    val junkWordHits = tagWords.count { it in universalJunkTags && it !in profile.subjectTokens }
+                    val junkPhraseHits = item.tags.count { it in universalJunkPhrases }
+                    semanticScore += ((junkWordHits + junkPhraseHits) * 2.0f).coerceAtMost(4.5f)
                 }
             }
 
-            return ratioDiff + isPortraitPenalty + isUltraWidePenalty + semanticScore + (apiIndex * 0.05f)
+            // 6. Gentle popularity quality tie-breaker (iconic crisp photos vs 0-like random uploads)
+            val likesBonus = if (item.likes > 0) {
+                (ln((item.likes + 1).toDouble()).toFloat() * 0.09f).coerceAtMost(0.55f)
+            } else {
+                0f
+            }
+
+            return ratioDiff + isPortraitPenalty + isUltraWidePenalty + semanticScore - likesBonus + (apiIndex * 0.05f)
         }
 
         internal fun pickBestLandscapeCandidate(

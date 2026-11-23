@@ -48,6 +48,7 @@ import com.example.data.repository.StockPhotoRepository
 import com.example.ui.components.illustrations.WordVectorArtwork
 import com.example.ui.theme.LocalAppExtendedColors
 import com.example.ui.theme.MonoFontFamily
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -55,7 +56,8 @@ import kotlinx.coroutines.launch
  * - Vector artwork is ONLY rendered as an offline/unavailable fallback (never underneath a loaded photo).
  * - Photo cycling ("Інше") is strictly gated behind `allowPhotoChange`, which is only enabled during
  *   Stage 1's initial pass before completion so learners always retain the same visual anchor afterwards.
- * - Pixabay attribution lives cleanly in Settings rather than cluttering every flashcard photo.
+ * - Uses sized Coil requests matching `StockPhotoRepository.prefetchWord` so prefetched cards hit RAM
+ *   cache on frame 1 without spinner flicker or crossfade lag.
  */
 @Composable
 fun WordPhotoSurface(
@@ -65,6 +67,7 @@ fun WordPhotoSurface(
     showFallbackIcon: Boolean = true,
     fitWholeSubject: Boolean = false,
     allowPhotoChange: Boolean = false,
+    isThumbnail: Boolean = false,
     onPhotoReadyChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -76,10 +79,18 @@ fun WordPhotoSurface(
     var resolvedPhoto by remember(word.id, word.german, word.subtopicId) {
         mutableStateOf(repository.getCachedSync(word))
     }
+    val initialMemCached = remember(word.id, word.german, word.subtopicId, resolvedPhoto?.imageUrl, isThumbnail) {
+        val url = resolvedPhoto?.imageUrl ?: return@remember false
+        val memKey = if (isThumbnail) "$url#thumb" else url
+        repository.isInMemoryCache(url, memKey)
+    }
     var isFetchingUrl by remember(word.id, word.german, word.subtopicId) {
         mutableStateOf(resolvedPhoto == null && hasApiKey)
     }
     var isImageLoaded by remember(word.id, word.german, word.subtopicId) {
+        mutableStateOf(initialMemCached)
+    }
+    var showLoadingSpinner by remember(word.id, word.german, word.subtopicId) {
         mutableStateOf(false)
     }
     var photoUnavailable by remember(word.id, word.german, word.subtopicId) {
@@ -95,12 +106,23 @@ fun WordPhotoSurface(
     LaunchedEffect(word.id, word.german, word.subtopicId) {
         if (resolvedPhoto == null && hasApiKey) {
             isFetchingUrl = true
-            val fetched = repository.resolvePhoto(word)
+            val fetched = repository.resolvePhoto(word, highPriority = !isThumbnail)
             resolvedPhoto = fetched
             photoUnavailable = fetched == null
             isFetchingUrl = false
         }
         onPhotoReadyChange(true)
+    }
+
+    // Avoid distracting 1-frame spinner flicker for fast RAM/disk cached images
+    val isPendingLoad = isFetchingUrl || (resolvedPhoto != null && !isImageLoaded && !photoUnavailable)
+    LaunchedEffect(isPendingLoad, word.id, resolvedPhoto?.imageUrl) {
+        if (isPendingLoad) {
+            delay(140L)
+            showLoadingSpinner = true
+        } else {
+            showLoadingSpinner = false
+        }
     }
 
     LaunchedEffect(word.id, word.german, word.subtopicId, needsRefreshAfterError) {
@@ -135,11 +157,25 @@ fun WordPhotoSurface(
 
         val activePhoto: CachedStockPhoto? = resolvedPhoto
         if (activePhoto != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
+            val imageRequest = remember(activePhoto.imageUrl, isThumbnail) {
+                val memKey = if (isThumbnail) "${activePhoto.imageUrl}#thumb" else activePhoto.imageUrl
+                val alreadyInRam = repository.isInMemoryCache(activePhoto.imageUrl, memKey)
+                ImageRequest.Builder(context)
                     .data(activePhoto.imageUrl)
-                    .crossfade(180)
-                    .build(),
+                    .apply {
+                        if (isThumbnail) {
+                            size(StockPhotoRepository.THUMB_DECODE_SIZE, StockPhotoRepository.THUMB_DECODE_SIZE)
+                        } else {
+                            size(StockPhotoRepository.CARD_DECODE_WIDTH, StockPhotoRepository.CARD_DECODE_HEIGHT)
+                        }
+                    }
+                    .memoryCacheKey(memKey)
+                    .crossfade(if (alreadyInRam) 0 else 100)
+                    .build()
+            }
+
+            AsyncImage(
+                model = imageRequest,
                 imageLoader = repository.imageLoader,
                 contentDescription = "${word.german} — ${word.translationUk}",
                 contentScale = if (fitWholeSubject) ContentScale.Fit else ContentScale.Crop,
@@ -206,7 +242,7 @@ fun WordPhotoSurface(
             }
         }
 
-        if ((isFetchingUrl || (activePhoto != null && !isImageLoaded && !photoUnavailable))) {
+        if (showLoadingSpinner && isPendingLoad) {
             CircularProgressIndicator(
                 strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),

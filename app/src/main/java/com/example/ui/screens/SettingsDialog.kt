@@ -28,8 +28,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -37,6 +40,7 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VolumeUp
@@ -49,6 +53,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -70,6 +75,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.LearningViewModel
+import com.example.ui.Stage6InputMode
 import com.example.ui.components.CefrLevels
 import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.ErrorRed
@@ -101,6 +107,8 @@ fun SettingsDialog(
     val ioStatus by viewModel.ioStatusMessage.collectAsStateWithLifecycle()
     val enabledStages by viewModel.enabledStages.collectAsStateWithLifecycle()
     val dailyReviewLimit by viewModel.dailyReviewLimit.collectAsStateWithLifecycle()
+    val stage6InputMode by viewModel.stage6InputMode.collectAsStateWithLifecycle()
+    val offlineState by viewModel.offlineDownloadState.collectAsStateWithLifecycle()
 
     val exportJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -394,6 +402,232 @@ fun SettingsDialog(
                 HorizontalDivider(color = extended.cardBorder)
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // Section 1.2: Offline Level Preload (Photos + HD Audio)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Офлайн-завантаження рівнів",
+                        fontFamily = LoraFontFamily,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Попередньо завантажте фото та HD-вимову обраного рівня, щоб займатися без інтернету. Можна зупинити й продовжити пізніше.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (offlineState.isRunning) {
+                    val dlProgress = if (offlineState.totalWords > 0) {
+                        (offlineState.processedWords.toFloat() / offlineState.totalWords).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("offline_download_progress_card")
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = offlineState.statusMessage ?: "Завантаження рівня ${offlineState.activeLevel}...",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${(dlProgress * 100).toInt()}%",
+                                    fontFamily = MonoFontFamily,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { dlProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(7.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = if (offlineState.isPausedForRateLimit) StreakAmber else MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Фото: ${offlineState.photosReady} · Аудіо: ${offlineState.audioReady}",
+                                    fontFamily = MonoFontFamily,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedButton(
+                                    onClick = { viewModel.cancelOfflineLevelDownload() },
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.6f)),
+                                    modifier = Modifier
+                                        .height(36.dp)
+                                        .testTag("cancel_offline_download_button")
+                                ) {
+                                    Icon(Icons.Default.Stop, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Зупинити", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                } else if (!offlineState.statusMessage.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = SuccessGreen.copy(alpha = 0.13f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = offlineState.statusMessage!!,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val summaryByLevel = offlineState.levelSummaries.associateBy { it.level.uppercase() }
+                    CefrLevels.forEach { info ->
+                        val lvl = info.code.uppercase()
+                        val status = summaryByLevel[lvl]
+                        val cachedCount = status?.cachedWords ?: 0
+                        val totalCount = status?.totalWords ?: 0
+                        val isComplete = status?.isComplete == true
+                        val isThisDownloading = offlineState.isRunning && offlineState.activeLevel == lvl
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = extended.subtleFill,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isComplete) SuccessGreen.copy(alpha = 0.45f) else extended.cardBorder
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(info.accentColor.copy(alpha = 0.16f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = lvl,
+                                            fontFamily = MonoFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = info.accentColor
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "Рівень $lvl",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = if (totalCount > 0) {
+                                                "У кеші: $cachedCount / $totalCount слів"
+                                            } else {
+                                                "Перевірка кешу..."
+                                            },
+                                            fontFamily = MonoFontFamily,
+                                            fontSize = 11.sp,
+                                            color = if (isComplete) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                if (isComplete) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(SuccessGreen.copy(alpha = 0.14f))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.CloudDone, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Готово", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { viewModel.startOfflineLevelDownload(lvl) },
+                                        enabled = !offlineState.isRunning,
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.primary
+                                        ),
+                                        modifier = Modifier
+                                            .height(40.dp)
+                                            .testTag("offline_download_${lvl.lowercase()}")
+                                    ) {
+                                        Text(
+                                            text = when {
+                                                isThisDownloading -> "Йде..."
+                                                cachedCount > 0 -> "Дозавантажити"
+                                                else -> "Завантажити"
+                                            },
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = extended.cardBorder)
+                Spacer(modifier = Modifier.height(14.dp))
+
                 // Section 1.5: Customizable Learning & Review Stages
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -437,14 +671,14 @@ fun SettingsDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Рекомендовано залишити всі 6 етапів",
+                                text = "Рекомендовано залишити всі 8 етапів",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Поєднання карток, слухання, тестів, артиклів, контексту й правопису активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. За бажанням ви можете вимкнути окремі етапи нижче (мінімум 1 має залишитися активним).",
+                                text = "Поєднання карток, слухання, тестів, артиклів, множини, контексту, правопису й пропущених літер активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. Слова потрапляють у цикл «Повторення» лише після проходження всіх 8 етапів підтеми на 100%.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 17.sp
@@ -456,12 +690,14 @@ fun SettingsDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val stageOptions = listOf(
-                    Triple(1, "Етап 1 · Картки (Lernkarten)", "Знайомство зі словом, фото та озвученням"),
+                    Triple(1, "Етап 1 · Картки (Lernkarten)", "Знайомство зі словом, фото, множиною та озвученням"),
                     Triple(2, "Етап 2 · Слухання (Hören)", "Сприйняття німецької мови на слух"),
                     Triple(3, "Етап 3 · Тест (Wortwahl)", "Вибір перекладу з 4 варіантів"),
                     Triple(4, "Етап 4 · Артиклі (der / die / das)", "Тренажер граматичного роду іменників"),
-                    Triple(5, "Етап 5 · Пропуски (Lückentext)", "Підстановка слова в живе речення"),
-                    Triple(6, "Етап 6 · Правопис (Schreiben)", "Написання слова з літер (3 спроби + підказка)")
+                    Triple(5, "Етап 5 · Множина (Plural-Trainer)", "Форми множини іменників (die ...)"),
+                    Triple(6, "Етап 6 · Пропуски (Lückentext)", "Підстановка слова в живе речення"),
+                    Triple(7, "Етап 7 · Правопис (Schreiben)", "Повне написання слова (літери або клавіатура · 3 спроби)"),
+                    Triple(8, "Етап 8 · Пропущені літери (Lückenwort)", "Вставка пропущених літер у слові (3 спроби)")
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -510,6 +746,77 @@ fun SettingsDialog(
                             }
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Stage 7 & 8 Input Mode Selector (Letter Tiles vs Keyboard)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Keyboard,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Введення на Етапах 7 і 8",
+                        fontFamily = LoraFontFamily,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Оберіть зручний спосіб написання слів на Етапах 7–8 та в повторенні.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val isTiles = stage6InputMode == Stage6InputMode.LETTER_TILES
+                    val isKeyboard = stage6InputMode == Stage6InputMode.KEYBOARD
+                    FilterChip(
+                        selected = isTiles,
+                        onClick = { viewModel.setStage6InputMode(Stage6InputMode.LETTER_TILES) },
+                        label = {
+                            Text(
+                                text = "Натискати літери",
+                                fontSize = 12.sp,
+                                fontWeight = if (isTiles) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("stage6_mode_tiles")
+                    )
+                    FilterChip(
+                        selected = isKeyboard,
+                        onClick = { viewModel.setStage6InputMode(Stage6InputMode.KEYBOARD) },
+                        label = {
+                            Text(
+                                text = "З клавіатури",
+                                fontSize = 12.sp,
+                                fontWeight = if (isKeyboard) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("stage6_mode_keyboard")
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))

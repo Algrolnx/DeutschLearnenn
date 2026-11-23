@@ -74,6 +74,7 @@ fun StageListeningScreen(
     val selectedAnswer by viewModel.stage2SelectedAnswer.collectAsStateWithLifecycle()
     val score by viewModel.stage2Score.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage2Finished.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val currentQ = questions.getOrNull(currentIndex)
@@ -179,10 +180,10 @@ fun StageListeningScreen(
                         stageNumber = 2,
                         nextStageNumber = nextEnabled,
                         title = "Етап 2 пройдено!",
-                        subtitle = if (nextEnabled != null) {
-                            "Ви чудово розпізнаєте німецьку мову на слух. Далі відкрито Етап $nextEnabled!"
-                        } else {
-                            "Підтему завершено! Через 6 годин слова з'являться у вкладці «Повторення»."
+                        subtitle = when {
+                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            nextEnabled != null -> "Усі слова розпізнано на слух на 100%! Далі відкрито Етап $nextEnabled."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 2) },
                         onBackToHub = { viewModel.navigateBack() }
@@ -201,6 +202,10 @@ fun StageListeningScreen(
                                 .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            if (currentQ.isRetry) {
+                                RetryMistakeBadge()
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -338,6 +343,15 @@ fun StageListeningScreen(
                     }
 
                     if (selectedAnswer != null) {
+                        if (selectedAnswer != currentQ.correctIndex) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Помилка · слово повернеться в кінці етапу для повторення",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ErrorRed
+                            )
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = { viewModel.nextStage2(subtopicId) },

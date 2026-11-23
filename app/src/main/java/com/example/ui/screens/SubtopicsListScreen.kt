@@ -175,7 +175,7 @@ fun SubtopicsListScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Оберіть тему для карток та 6 етапів",
+                                text = "Оберіть тему для карток та 8 етапів",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -261,7 +261,7 @@ fun SubtopicRowCard(
                 modifier = Modifier
                     .width(5.dp)
                     .fillMaxHeight()
-                    .background(if (completedStages == 6) SuccessGreen else topicColor)
+                    .background(if (completedStages >= 8) SuccessGreen else topicColor)
             )
 
             Column(
@@ -276,7 +276,7 @@ fun SubtopicRowCard(
                 ) {
                     TopicPixelIcon(
                         iconKey = subtopic.iconKey,
-                        accentColor = if (completedStages == 6) SuccessGreen else topicColor,
+                        accentColor = if (completedStages >= 8) SuccessGreen else topicColor,
                         innerPadding = 6.dp,
                         modifier = Modifier.size(40.dp)
                     )
@@ -349,16 +349,16 @@ fun SubtopicRowCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        for (i in 1..6) {
+                        for (i in 1..8) {
                             val isDone = i <= completedStages
                             Box(
                                 modifier = Modifier
-                                    .padding(end = 4.dp)
-                                    .size(width = 18.dp, height = 5.dp)
+                                    .padding(end = 3.dp)
+                                    .size(width = 14.dp, height = 5.dp)
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(
                                         if (isDone) {
-                                            if (completedStages == 6) SuccessGreen else topicColor
+                                            if (completedStages >= 8) SuccessGreen else topicColor
                                         } else {
                                             extended.cardBorder
                                         }
@@ -367,11 +367,11 @@ fun SubtopicRowCard(
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "$completedStages / 6",
+                            text = "${completedStages.coerceAtMost(8)} / 8",
                             fontFamily = MonoFontFamily,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (completedStages == 6) SuccessGreen else topicColor
+                            color = if (completedStages >= 8) SuccessGreen else topicColor
                         )
                     }
 

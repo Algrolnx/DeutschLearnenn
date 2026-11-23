@@ -14,16 +14,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,6 +38,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,13 +54,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.WordEntity
 import com.example.ui.LearningViewModel
+import com.example.ui.Stage6InputMode
 import com.example.ui.Stage6WordStatus
 import com.example.ui.components.GenderBadge
 import com.example.ui.components.SpeakerButton
@@ -81,12 +95,16 @@ fun StageSpellingScreen(
     val status by viewModel.stage6Status.collectAsStateWithLifecycle()
     val attemptsLeft by viewModel.stage6AttemptsLeft.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage6Finished.collectAsStateWithLifecycle()
+    val inputMode by viewModel.stage6InputMode.collectAsStateWithLifecycle()
+    val retryIndices by viewModel.stage6RetryIndices.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val currentWord = words.getOrNull(currentIndex)
+    val isRetryWord = currentIndex in retryIndices
     val progress = if (words.isNotEmpty()) (currentIndex.toFloat() / words.size) else 0f
     val isSessionActive = !isFinished && currentWord != null
-    val isWordResolved = status == Stage6WordStatus.CORRECT || status == Stage6WordStatus.OUT_OF_ATTEMPTS
+    val isWordResolved = status.isResolved
 
     val requestExit: () -> Unit = {
         if (isSessionActive) {
@@ -116,7 +134,7 @@ fun StageSpellingScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Етап 6: Правопис · Schreiben",
+                            text = "Етап 7: Правопис · Schreiben",
                             fontFamily = LoraFontFamily,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleMedium
@@ -174,6 +192,7 @@ fun StageSpellingScreen(
                 modifier = Modifier
                     .widthIn(max = 560.dp)
                     .fillMaxSize()
+                    .imePadding()
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -190,12 +209,17 @@ fun StageSpellingScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (isFinished || currentWord == null) {
+                    val nextEnabled = viewModel.getNextEnabledStage(7)
                     StageCompletedSuccessCard(
-                        stageNumber = 6,
-                        nextStageNumber = null,
-                        title = "Підтему завершено!",
-                        subtitle = "Вітаємо! Усі слова додано в цикл запам'ятовування: перше повторення з'явиться через 6 годин у вкладці «Повторення».",
-                        onNextStage = { viewModel.navigateBack() },
+                        stageNumber = 7,
+                        nextStageNumber = nextEnabled,
+                        title = if (unlockedSrs) "Підтему завершено на 100%!" else "Етап 7 пройдено!",
+                        subtitle = when {
+                            unlockedSrs -> "Вітаємо! Усі 8 етапів пройдено на 100% — слова додано в цикл запам'ятовування (перше повторення через 6 годин у вкладці «Повторення»)."
+                            nextEnabled != null -> "Усі слова написано на 100%! Далі відкрито фінальний Етап $nextEnabled."
+                            else -> "Етап 7 пройдено на 100%! Щоб слова потрапили у вкладку «Повторення», пройдіть усі 8 етапів цієї підтеми."
+                        },
+                        onNextStage = { viewModel.startNextEnabledStage(subtopicId, 7) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {
@@ -220,6 +244,11 @@ fun StageSpellingScreen(
                                     .fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
+                                if (isRetryWord) {
+                                    RetryMistakeBadge()
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+
                                 if (currentWord.article.isNotBlank()) {
                                     GenderBadge(article = currentWord.article)
                                     Spacer(modifier = Modifier.height(6.dp))
@@ -266,65 +295,148 @@ fun StageSpellingScreen(
                         ) {
                             val boxBorder = when (status) {
                                 Stage6WordStatus.CORRECT -> SuccessGreen
+                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
                                 Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
                                 Stage6WordStatus.TYPING -> extended.cardBorder
                             }
 
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(62.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        when (status) {
-                                            Stage6WordStatus.CORRECT -> SuccessGreen.copy(alpha = 0.12f)
-                                            Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed.copy(alpha = 0.12f)
-                                            Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.surface
-                                        }
-                                    )
-                                    .border(2.dp, boxBorder, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 14.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    // Show article prefix + automatic space visually so learners never need to type "der/die/das "
-                                    if (currentWord.article.isNotBlank()) {
-                                        val genderColor = getGenderColor(currentWord.article)
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = genderColor.copy(alpha = 0.14f)
-                                        ) {
-                                            Text(
-                                                text = currentWord.article.lowercase(),
-                                                fontFamily = MonoFontFamily,
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = genderColor,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                    }
-
-                                    Text(
-                                        text = if (currentInput.isEmpty()) "Натискайте літери..." else currentInput,
-                                        fontFamily = MonoFontFamily,
-                                        fontSize = if (currentInput.isEmpty()) 17.sp else 21.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = if (currentInput.isEmpty()) 0.sp else 1.5.sp,
-                                        color = when (status) {
-                                            Stage6WordStatus.CORRECT -> SuccessGreen
-                                            Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
-                                            Stage6WordStatus.TYPING -> if (currentInput.isEmpty()) {
-                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
+                            if (inputMode == Stage6InputMode.KEYBOARD) {
+                                OutlinedTextField(
+                                    value = currentInput,
+                                    onValueChange = { viewModel.updateStage6TypedText(it) },
+                                    enabled = !isWordResolved,
+                                    singleLine = true,
+                                    placeholder = {
+                                        Text(
+                                            text = "Введіть слово...",
+                                            fontFamily = MonoFontFamily,
+                                            fontSize = 16.sp
+                                        )
+                                    },
+                                    leadingIcon = if (currentWord.article.isNotBlank()) {
+                                        {
+                                            val genderColor = getGenderColor(currentWord.article)
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = genderColor.copy(alpha = 0.14f),
+                                                modifier = Modifier.padding(start = 10.dp)
+                                            ) {
+                                                Text(
+                                                    text = currentWord.article.lowercase(),
+                                                    fontFamily = MonoFontFamily,
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = genderColor,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
                                             }
                                         }
-                                    )
+                                    } else {
+                                        null
+                                    },
+                                    textStyle = TextStyle(
+                                        fontFamily = MonoFontFamily,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = when (status) {
+                                            Stage6WordStatus.CORRECT -> SuccessGreen
+                                            Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                            Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                            Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    ),
+                                    keyboardOptions = KeyboardOptions(
+                                        imeAction = ImeAction.Done,
+                                        autoCorrectEnabled = false
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = { viewModel.submitStage6TypedAnswer() }
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = if (status == Stage6WordStatus.TYPING) MaterialTheme.colorScheme.primary else boxBorder,
+                                        unfocusedBorderColor = boxBorder,
+                                        disabledBorderColor = boxBorder,
+                                        disabledTextColor = when (status) {
+                                            Stage6WordStatus.CORRECT -> SuccessGreen
+                                            Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                            Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        },
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = when (status) {
+                                            Stage6WordStatus.WRONG_TRY -> ErrorRed.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surface
+                                        },
+                                        disabledContainerColor = when (status) {
+                                            Stage6WordStatus.CORRECT -> SuccessGreen.copy(alpha = 0.12f)
+                                            Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellowBg
+                                            Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed.copy(alpha = 0.12f)
+                                            else -> MaterialTheme.colorScheme.surface
+                                        }
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("stage6_keyboard_input")
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(62.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(
+                                            when (status) {
+                                                Stage6WordStatus.CORRECT -> SuccessGreen.copy(alpha = 0.12f)
+                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellowBg
+                                                Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed.copy(alpha = 0.12f)
+                                                Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.surface
+                                            }
+                                        )
+                                        .border(2.dp, boxBorder, RoundedCornerShape(14.dp))
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        if (currentWord.article.isNotBlank()) {
+                                            val genderColor = getGenderColor(currentWord.article)
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = genderColor.copy(alpha = 0.14f)
+                                            ) {
+                                                Text(
+                                                    text = currentWord.article.lowercase(),
+                                                    fontFamily = MonoFontFamily,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = genderColor,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                        }
+
+                                        Text(
+                                            text = if (currentInput.isEmpty()) "Натискайте літери..." else currentInput,
+                                            fontFamily = MonoFontFamily,
+                                            fontSize = if (currentInput.isEmpty()) 17.sp else 21.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = if (currentInput.isEmpty()) 0.sp else 1.5.sp,
+                                            color = when (status) {
+                                                Stage6WordStatus.CORRECT -> SuccessGreen
+                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
+                                                Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
+                                                Stage6WordStatus.TYPING -> if (currentInput.isEmpty()) {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
 
@@ -338,10 +450,18 @@ fun StageSpellingScreen(
                                         fontSize = 14.sp
                                     )
                                 }
+                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    UmlautCorrectedFeedbackCard(word = currentWord)
+                                }
                                 Stage6WordStatus.WRONG_TRY -> {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Невірно · залишилось спроб: $attemptsLeft. Спробуйте ще або натисніть «Підказка».",
+                                        text = if (currentInput.isNotEmpty()) {
+                                            "Невірно · правильний початок збережено, продовжуйте далі (спроб: $attemptsLeft)"
+                                        } else {
+                                            "Невірно · спробуйте з початку або натисніть «Підказка» (спроб: $attemptsLeft)"
+                                        },
                                         color = ErrorRed,
                                         fontWeight = FontWeight.Medium,
                                         fontSize = 13.sp,
@@ -351,7 +471,7 @@ fun StageSpellingScreen(
                                 Stage6WordStatus.OUT_OF_ATTEMPTS -> {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Спроби вичерпано · Правильно: ${currentWord.displayWithArticle}",
+                                        text = "Спроби вичерпано · Правильно: ${currentWord.displayWithArticle}. Слово повернеться в кінці етапу.",
                                         color = ErrorRed,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
@@ -370,14 +490,14 @@ fun StageSpellingScreen(
                                         .padding(bottom = 8.dp),
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-                                    listOf('ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü').forEach { umlaut ->
+                                    listOf('ä', 'ö', 'ü', 'ß').forEach { umlaut ->
                                         Box(
                                             modifier = Modifier
-                                                .padding(horizontal = 3.dp)
-                                                .size(40.dp)
+                                                .padding(horizontal = 4.dp)
+                                                .size(44.dp)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(MaterialTheme.colorScheme.primaryContainer)
-                                                .clickable { viewModel.addStage6Letter(umlaut) },
+                                                .clickable { viewModel.insertStage6Umlaut(umlaut) },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
@@ -385,35 +505,37 @@ fun StageSpellingScreen(
                                                 fontFamily = LoraFontFamily,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary,
-                                                fontSize = 16.sp
+                                                fontSize = 17.sp
                                             )
                                         }
                                     }
                                 }
 
-                                FlowRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    letterPool.forEach { char ->
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(horizontal = 3.dp)
-                                                .size(48.dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(MaterialTheme.colorScheme.surface)
-                                                .border(1.dp, extended.cardBorder, RoundedCornerShape(10.dp))
-                                                .clickable { viewModel.addStage6Letter(char) },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = char.toString(),
-                                                fontFamily = LoraFontFamily,
-                                                fontSize = 18.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
+                                if (inputMode == Stage6InputMode.LETTER_TILES) {
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        letterPool.forEach { char ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .padding(horizontal = 3.dp)
+                                                    .size(48.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(MaterialTheme.colorScheme.surface)
+                                                    .border(1.dp, extended.cardBorder, RoundedCornerShape(10.dp))
+                                                    .clickable { viewModel.addStage6Letter(char) },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = char.toString(),
+                                                    fontFamily = LoraFontFamily,
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -438,6 +560,58 @@ fun StageSpellingScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
+                        }
+                    } else if (inputMode == Stage6InputMode.KEYBOARD) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { viewModel.submitStage6TypedAnswer() },
+                                enabled = currentInput.isNotBlank(),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1.35f)
+                                    .height(48.dp)
+                                    .testTag("stage6_check_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Перевірити",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Button(
+                                onClick = { viewModel.useStage6Hint() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = StreakAmber.copy(alpha = 0.20f),
+                                    contentColor = StreakAmber
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("stage6_hint_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lightbulb,
+                                    contentDescription = "Підказка однієї літери",
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "Підказка",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     } else {
                         Row(
@@ -505,6 +679,67 @@ fun StageSpellingScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun UmlautCorrectedFeedbackCard(
+    word: WordEntity,
+    modifier: Modifier = Modifier
+) {
+    val extended = LocalAppExtendedColors.current
+    val highlightedWord = remember(word.displayWithArticle, extended.warningYellow) {
+        val specialChars = setOf('ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü')
+        buildAnnotatedString {
+            word.displayWithArticle.forEach { ch ->
+                if (ch in specialChars) {
+                    withStyle(
+                        SpanStyle(
+                            color = extended.warningYellow,
+                            fontWeight = FontWeight.ExtraBold,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ) {
+                        append(ch)
+                    }
+                } else {
+                    append(ch)
+                }
+            }
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = extended.warningYellowBg,
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.5.dp, extended.warningYellow, RoundedCornerShape(14.dp))
+            .testTag("umlaut_warning_feedback_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Зараховано! Зверніть увагу на умлаут:",
+                color = extended.warningYellow,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = highlightedWord,
+                fontFamily = LoraFontFamily,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

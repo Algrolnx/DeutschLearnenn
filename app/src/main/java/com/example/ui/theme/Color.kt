@@ -32,6 +32,10 @@ val GenderNeutralOnDark = Color(0xFFCCC5B9)
 val StreakAmber = Color(0xFFC87D18)
 val SuccessGreen = Color(0xFF287D56)
 val ErrorRed = Color(0xFFC53B3B)
+val WarningYellow = Color(0xFFB37E00)
+val WarningYellowContainer = Color(0xFFFFF6D6)
+val WarningYellowOnDark = Color(0xFFF5C443)
+val WarningYellowDarkContainer = Color(0xFF3A3014)
 val NeutralVariant = Color(0xFF6B655D)
 
 // Leitner SRS Box Colors

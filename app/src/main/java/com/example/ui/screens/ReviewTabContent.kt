@@ -193,7 +193,7 @@ fun ReviewTabContent(
                                 )
                                 Text(
                                     text = when {
-                                        dashboard.enrolledCount == 0 -> "Пройдіть першу підтему — слова з'являться тут через 6 годин"
+                                        dashboard.enrolledCount == 0 -> "Пройдіть усі 8 етапів першої підтеми на 100% — слова з'являться тут через 6 годин"
                                         dailyGoalReached -> "Мозку потрібен час на закріплення. Нова порція завтра!"
                                         dashboard.availableTodayCount > 0 -> "Короткий раунд до $nextRoundCount слів у перемішку з різними етапами"
                                         dashboard.nextReviewTimestamp != null -> "Наступна порція: ${SpacedRepetition.formatTimeUntilUk(dashboard.nextReviewTimestamp!!)}"
@@ -400,7 +400,7 @@ fun ReviewTabContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Етапи в міксі (${enabledStages.size} з 6)",
+                            text = "Етапи в міксі (${enabledStages.size} з 8)",
                             fontFamily = LoraFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
@@ -423,7 +423,7 @@ fun ReviewTabContent(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        (1..6).forEach { stage ->
+                        (1..8).forEach { stage ->
                             val isActive = stage in enabledStages
                             Surface(
                                 shape = RoundedCornerShape(9.dp),
@@ -556,7 +556,9 @@ fun shortStageNameUk(stage: Int): String = when (stage) {
     2 -> "2. Слухання"
     3 -> "3. Тест"
     4 -> "4. Артиклі"
-    5 -> "5. Пропуски"
-    6 -> "6. Правопис"
+    5 -> "5. Множина"
+    6 -> "6. Речення"
+    7 -> "7. Правопис"
+    8 -> "8. Літери"
     else -> "Етап $stage"
 }

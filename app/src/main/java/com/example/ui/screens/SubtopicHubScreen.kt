@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Favorite
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.Button
@@ -108,14 +110,18 @@ fun SubtopicHubScreen(
     val progress = remember(allProgress, subtopicId) {
         viewModel.getProgressForSubtopic(subtopicId)
     }
+    val completedStageSet = remember(allProgress, subtopicId, selectedLevel) {
+        viewModel.getCompletedStageSetForSubtopic(subtopicId)
+    }
 
     val visibleStages = remember(enabledStages) { enabledStages.sorted() }
     val firstEnabledStage = visibleStages.firstOrNull() ?: 1
     val effectiveUnlockedStage = maxOf(progress.unlockedStage, firstEnabledStage)
-    val nextStage = visibleStages.firstOrNull { it >= effectiveUnlockedStage }
+    val nextStage = visibleStages.firstOrNull { it !in completedStageSet && it <= effectiveUnlockedStage }
+        ?: visibleStages.firstOrNull { it >= effectiveUnlockedStage }
         ?: visibleStages.lastOrNull()
         ?: 1
-    val completedVisibleCount = visibleStages.count { progress.completedStages >= it }
+    val completedVisibleCount = visibleStages.count { it in completedStageSet }
     val allVisibleCompleted = visibleStages.isNotEmpty() && completedVisibleCount == visibleStages.size
     val stageFraction = if (visibleStages.isNotEmpty()) {
         (completedVisibleCount.toFloat() / visibleStages.size).coerceIn(0f, 1f)
@@ -339,20 +345,20 @@ fun SubtopicHubScreen(
                         .fillMaxWidth()
                 ) {
                     Text(
-                        text = if (visibleStages.size == 6) {
-                            "Lernreise · 6 Етапів закріплення"
+                        text = if (visibleStages.size == 8) {
+                            "Lernreise · 8 Етапів закріплення"
                         } else {
-                            "Lernreise · Активні етапи (${visibleStages.size} з 6)"
+                            "Lernreise · Активні етапи (${visibleStages.size} з 8)"
                         },
                         fontFamily = LoraFontFamily,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (visibleStages.size == 6) {
-                            "Усі слова та картки знаходяться у Етапі 1"
+                        text = if (visibleStages.size == 8) {
+                            "Пройдіть усі 8 етапів на 100%, щоб відкрити інтервальне повторення"
                         } else {
-                            "Частину етапів вимкнено в налаштуваннях · рекомендуємо всі 6"
+                            "Частину етапів вимкнено · для «Повторення» потрібні всі 8 етапів на 100%"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -362,14 +368,16 @@ fun SubtopicHubScreen(
 
                     visibleStages.forEachIndexed { idx, stageNum ->
                         val isUnlocked = effectiveUnlockedStage >= stageNum
-                        val isCompleted = progress.completedStages >= stageNum
+                        val isCompleted = stageNum in completedStageSet
                         val (titleDe, titleUk, icon) = when (stageNum) {
-                            1 -> Triple("Lernkarten", "Знайомство з картками (${words.size} слів)", Icons.Default.ViewCarousel)
+                            1 -> Triple("Lernkarten", "Знайомство з картками та множиною (${words.size} слів)", Icons.Default.ViewCarousel)
                             2 -> Triple("Hören & Verstehen", "Слухання та сприйняття на слух", Icons.Default.Headphones)
                             3 -> Triple("Wortwahl (Quiz)", "Вибір перекладу (4 варіанти)", Icons.Default.Quiz)
                             4 -> Triple("Artikel-Trainer", "Рід іменників (der / die / das)", Icons.Default.Shield)
-                            5 -> Triple("Lückentext", "Доповнення пропусків у реченнях", Icons.Default.Extension)
-                            else -> Triple("Buchstabieren & Schreiben", "Правопис та написання з літер", Icons.Default.Edit)
+                            5 -> Triple("Plural-Trainer", "Форми множини іменників (die ...)", Icons.Default.DynamicFeed)
+                            6 -> Triple("Lückentext", "Доповнення пропусків у реченнях", Icons.Default.Extension)
+                            7 -> Triple("Buchstabieren & Schreiben", "Правопис слова з літер або клавіатури", Icons.Default.Edit)
+                            else -> Triple("Lückenwort", "Вставте пропущені літери у слові", Icons.Default.Spellcheck)
                         }
                         StageRoadmapNode(
                             stageNumber = stageNum,
@@ -432,6 +440,7 @@ fun SubtopicWordCardItem(
                 word = word,
                 accentColor = getGenderColor(word.article),
                 showFallbackIcon = true,
+                isThumbnail = true,
                 modifier = Modifier
                     .size(68.dp)
                     .clip(RoundedCornerShape(12.dp))
@@ -649,7 +658,9 @@ fun getStageActionTitle(stage: Int): String = when (stage) {
     2 -> "Перейти до Етапу 2: Слухання"
     3 -> "Перейти до Етапу 3: Тест"
     4 -> "Перейти до Етапу 4: Тренажер родів"
-    5 -> "Перейти до Етапу 5: Пропуски"
-    6 -> "Перейти до Етапу 6: Правопис"
+    5 -> "Перейти до Етапу 5: Множина"
+    6 -> "Перейти до Етапу 6: Пропуски в реченні"
+    7 -> "Перейти до Етапу 7: Правопис"
+    8 -> "Перейти до Етапу 8: Пропущені літери"
     else -> "Почати навчання"
 }

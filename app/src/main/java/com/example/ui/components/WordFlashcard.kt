@@ -74,6 +74,7 @@ fun WordFlashcard(
     onSpeakExample: () -> Unit,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
+    onSpeakPlural: (() -> Unit)? = null,
     showNavigationArrows: Boolean = false,
     onPrev: () -> Unit = {},
     onNext: () -> Unit = {},
@@ -265,11 +266,15 @@ fun WordFlashcard(
                             lineHeight = 38.sp
                         )
 
-                        if (word.transcription.isNotBlank() || word.plural.isNotBlank()) {
+                        val pluralTrimmed = word.plural.trim()
+                        val isNounPlural = word.article.lowercase().trim() in listOf("der", "die", "das") &&
+                            pluralTrimmed.startsWith("die ", ignoreCase = true)
+
+                        if (word.transcription.isNotBlank() || pluralTrimmed.isNotBlank()) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 if (word.transcription.isNotBlank()) {
                                     Surface(
@@ -286,18 +291,59 @@ fun WordFlashcard(
                                     }
                                 }
 
-                                if (word.plural.isNotBlank()) {
+                                if (isNounPlural) {
+                                    Surface(
+                                        shape = RoundedCornerShape(9.dp),
+                                        color = extended.warningYellowBg,
+                                        border = BorderStroke(1.dp, extended.warningYellow.copy(alpha = 0.45f)),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(9.dp))
+                                            .clickable(enabled = onSpeakPlural != null) { onSpeakPlural?.invoke() }
+                                            .testTag("flashcard_plural_badge")
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        ) {
+                                            Text(
+                                                text = "Множина: ",
+                                                fontFamily = ManropeFontFamily,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = extended.warningYellow
+                                            )
+                                            Text(
+                                                text = pluralTrimmed,
+                                                fontFamily = LoraFontFamily,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = foregroundInk
+                                            )
+                                            if (onSpeakPlural != null) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.VolumeUp,
+                                                    contentDescription = "Вимовити множину",
+                                                    tint = extended.warningYellow,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else if (pluralTrimmed.isNotBlank() && pluralTrimmed != "-") {
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = pillBg
                                     ) {
                                         Text(
-                                            text = "Pl: ${word.plural}",
+                                            text = "Форми: $pluralTrimmed",
                                             fontFamily = ManropeFontFamily,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = secondaryInk,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
                                         )
                                     }
                                 }
@@ -436,6 +482,23 @@ fun WordFlashcard(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                val backPlural = word.plural.trim()
+                                if (word.article.lowercase().trim() in listOf("der", "die", "das") &&
+                                    backPlural.startsWith("die ", ignoreCase = true)
+                                ) {
+                                    Text(
+                                        text = "Множина: $backPlural",
+                                        fontFamily = ManropeFontFamily,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = extended.warningYellow,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.clickable(enabled = onSpeakPlural != null) {
+                                            onSpeakPlural?.invoke()
+                                        }
+                                    )
+                                }
                             }
                         }
 
