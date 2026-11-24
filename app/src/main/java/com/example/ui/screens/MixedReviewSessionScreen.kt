@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.LearningViewModel
 import com.example.ui.MixedReviewItem
+import com.example.ui.Screen
 import com.example.ui.Stage6InputMode
 import com.example.ui.Stage6WordStatus
 import com.example.ui.components.GenderBadge
@@ -92,12 +93,14 @@ import com.example.ui.theme.LoraFontFamily
 import com.example.ui.theme.MonoFontFamily
 import com.example.ui.theme.StreakAmber
 import com.example.ui.theme.SuccessGreen
+import com.example.util.GrammarRuleExplainer
 import com.example.util.SpacedRepetition
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MixedReviewSessionScreen(
     viewModel: LearningViewModel,
+    finalMixSubtopicId: String? = null,
     modifier: Modifier = Modifier
 ) {
     val extended = LocalAppExtendedColors.current
@@ -110,11 +113,15 @@ fun MixedReviewSessionScreen(
     val selectedOptionIndex by viewModel.mixedSelectedOptionIndex.collectAsStateWithLifecycle()
     val selectedString by viewModel.mixedSelectedString.collectAsStateWithLifecycle()
     val spellingInput by viewModel.mixedSpellingInput.collectAsStateWithLifecycle()
+    val spellingSelectedArticle by viewModel.mixedSpellingSelectedArticle.collectAsStateWithLifecycle()
+    val spellingErrorHint by viewModel.mixedSpellingErrorHint.collectAsStateWithLifecycle()
     val spellingStatus by viewModel.mixedSpellingStatus.collectAsStateWithLifecycle()
     val spellingAttemptsLeft by viewModel.mixedSpellingAttemptsLeft.collectAsStateWithLifecycle()
     val spellingInputMode by viewModel.stage6InputMode.collectAsStateWithLifecycle()
     val lastFeedback by viewModel.mixedLastFeedback.collectAsStateWithLifecycle()
     val dashboard by viewModel.reviewDashboard.collectAsStateWithLifecycle()
+    val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
+    val isFinalMixMode = finalMixSubtopicId != null
 
     var showExitDialog by remember { mutableStateOf(false) }
 
@@ -148,7 +155,11 @@ fun MixedReviewSessionScreen(
                 title = {
                     Column {
                         Text(
-                            text = if (isEarlyPractice) "Тренування · Мікс етапів" else "Повторення · Мікс етапів",
+                            text = when {
+                                isFinalMixMode -> "Етап 8: Фінальний мікс"
+                                isEarlyPractice -> "Тренування · Мікс етапів"
+                                else -> "Повторення · Мікс етапів"
+                            },
                             fontFamily = LoraFontFamily,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleMedium
@@ -157,7 +168,7 @@ fun MixedReviewSessionScreen(
                             text = if (currentItem != null && !isFinished) {
                                 "${shortStageNameUk(currentItem.stageType)} · ${currentIndex + 1} з ${items.size}"
                             } else {
-                                "Раунд завершено"
+                                if (isFinalMixMode) "Завершено" else "Раунд завершено"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -177,7 +188,11 @@ fun MixedReviewSessionScreen(
                             modifier = Modifier.padding(end = 14.dp)
                         ) {
                             Text(
-                                text = "Повтор ${currentItem.srsStep}/${SpacedRepetition.TARGET_REPETITIONS}",
+                                text = if (isFinalMixMode) {
+                                    "Gesamttest"
+                                } else {
+                                    "Повтор ${currentItem.srsStep}/${SpacedRepetition.TARGET_REPETITIONS}"
+                                },
                                 fontFamily = MonoFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
@@ -220,18 +235,33 @@ fun MixedReviewSessionScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 if (isFinished || currentItem == null) {
-                    val uniqueTotal = items.count { !it.isRetry }.coerceAtLeast(1)
-                    Spacer(modifier = Modifier.weight(0.25f))
-                    MixedReviewCompletedCard(
-                        score = minOf(score, uniqueTotal),
-                        total = uniqueTotal,
-                        reviewsDoneToday = dashboard.reviewsDoneToday,
-                        dailyLimit = dashboard.dailyLimit,
-                        canStartAnotherRound = dashboard.remainingDailyQuota > 0 && dashboard.dueCount > 0,
-                        onNextRound = { viewModel.startMixedReviewSession(earlyPractice = false) },
-                        onDone = { viewModel.navigateBack() }
-                    )
-                    Spacer(modifier = Modifier.weight(0.75f))
+                    if (isFinalMixMode) {
+                        StageCompletedSuccessCard(
+                            stageNumber = 8,
+                            nextStageNumber = null,
+                            title = if (unlockedSrs) "Підтему завершено на 100%!" else "Етап 8 пройдено!",
+                            subtitle = if (unlockedSrs) {
+                                "Вітаємо! Ви успішно склали фінальний мікс і завершили всі 8 етапів підтеми на 100%. Слова додано у вкладку «Повторення» (перше повторення через 6 годин)."
+                            } else {
+                                "Фінальний мікс пройдено на 100%! Щоб слова потрапили в цикл «Повторення», завершіть усі 8 етапів цієї підтеми."
+                            },
+                            onNextStage = { viewModel.navigateBack() },
+                            onBackToHub = { viewModel.navigateBack() }
+                        )
+                    } else {
+                        val uniqueTotal = items.count { !it.isRetry }.coerceAtLeast(1)
+                        Spacer(modifier = Modifier.weight(0.25f))
+                        MixedReviewCompletedCard(
+                            score = minOf(score, uniqueTotal),
+                            total = uniqueTotal,
+                            reviewsDoneToday = dashboard.reviewsDoneToday,
+                            dailyLimit = dashboard.dailyLimit,
+                            canStartAnotherRound = dashboard.remainingDailyQuota > 0 && dashboard.dueCount > 0,
+                            onNextRound = { viewModel.startMixedReviewSession(earlyPractice = false) },
+                            onDone = { viewModel.navigateBack() }
+                        )
+                        Spacer(modifier = Modifier.weight(0.75f))
+                    }
                 } else {
                     if (currentItem.isRetry) {
                         RetryMistakeBadge()
@@ -502,6 +532,18 @@ fun MixedReviewSessionScreen(
                                     showResult = selectedString != null,
                                     onClick = { viewModel.answerMixedArticle("das") }
                                 )
+
+                                if (selectedString != null) {
+                                    val articleHint = remember(currentItem.word.id, currentItem.word.article) {
+                                        GrammarRuleExplainer.explainArticle(currentItem.word)
+                                    }
+                                    if (articleHint != null) {
+                                        InlineGrammarHintCard(
+                                            hint = articleHint,
+                                            onOpenGrammar = { viewModel.navigateTo(Screen.GrammarGuide(it)) }
+                                        )
+                                    }
+                                }
                             }
 
                             MixedNextFooter(
@@ -614,6 +656,18 @@ fun MixedReviewSessionScreen(
                                         }
                                     }
                                 }
+
+                                if (selectedString != null) {
+                                    val pluralHint = remember(currentItem.word.id, currentItem.word.plural) {
+                                        GrammarRuleExplainer.explainPlural(currentItem.word)
+                                    }
+                                    if (pluralHint != null) {
+                                        InlineGrammarHintCard(
+                                            hint = pluralHint,
+                                            onOpenGrammar = { viewModel.navigateTo(Screen.GrammarGuide(it)) }
+                                        )
+                                    }
+                                }
                             }
 
                             MixedNextFooter(
@@ -717,6 +771,7 @@ fun MixedReviewSessionScreen(
 
                         is MixedReviewItem.SpellingReview -> {
                             val isResolved = spellingStatus.isResolved
+                            val requiresArticle = LearningViewModel.requiresArticleInSpelling(currentItem.word)
                             Column(
                                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -738,8 +793,22 @@ fun MixedReviewSessionScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            if (currentItem.word.article.isNotBlank()) {
+                                            if (isResolved && currentItem.word.article.isNotBlank()) {
                                                 GenderBadge(article = currentItem.word.article)
+                                            } else if (requiresArticle) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = MaterialTheme.colorScheme.primaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = "der / die / das + слово",
+                                                        fontFamily = MonoFontFamily,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
                                             } else {
                                                 Spacer(modifier = Modifier.width(1.dp))
                                             }
@@ -776,7 +845,14 @@ fun MixedReviewSessionScreen(
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         SpeakerButton(
-                                            onSpeak = { slow -> viewModel.speak(currentItem.word.displayWithArticle, slow) },
+                                            onSpeak = { slow ->
+                                                val spoken = if (requiresArticle && !isResolved) {
+                                                    currentItem.word.german
+                                                } else {
+                                                    currentItem.word.displayWithArticle
+                                                }
+                                                viewModel.speak(spoken, slow)
+                                            },
                                             size = 44.dp
                                         )
                                     }
@@ -796,28 +872,15 @@ fun MixedReviewSessionScreen(
                                         enabled = !isResolved,
                                         singleLine = true,
                                         placeholder = {
-                                            Text("Введіть слово...", fontFamily = MonoFontFamily, fontSize = 16.sp)
-                                        },
-                                        leadingIcon = if (currentItem.word.article.isNotBlank()) {
-                                            {
-                                                val genderColor = getGenderColor(currentItem.word.article)
-                                                Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = genderColor.copy(alpha = 0.14f),
-                                                    modifier = Modifier.padding(start = 10.dp)
-                                                ) {
-                                                    Text(
-                                                        text = currentItem.word.article.lowercase(),
-                                                        fontFamily = MonoFontFamily,
-                                                        fontSize = 15.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = genderColor,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            null
+                                            Text(
+                                                text = if (requiresArticle) {
+                                                    "Введіть з артиклем (der / die / das)..."
+                                                } else {
+                                                    "Введіть слово..."
+                                                },
+                                                fontFamily = MonoFontFamily,
+                                                fontSize = 15.sp
+                                            )
                                         },
                                         textStyle = TextStyle(
                                             fontFamily = MonoFontFamily,
@@ -878,18 +941,31 @@ fun MixedReviewSessionScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (currentItem.word.article.isNotBlank()) {
-                                                val genderColor = getGenderColor(currentItem.word.article)
+                                            if (requiresArticle) {
+                                                val shownArticle = when {
+                                                    spellingStatus == Stage6WordStatus.CORRECT || spellingStatus == Stage6WordStatus.OUT_OF_ATTEMPTS ->
+                                                        currentItem.word.article.lowercase()
+                                                    else -> spellingSelectedArticle
+                                                }
+                                                val badgeColor = if (shownArticle != null) {
+                                                    getGenderColor(shownArticle)
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                }
                                                 Surface(
                                                     shape = RoundedCornerShape(8.dp),
-                                                    color = genderColor.copy(alpha = 0.14f)
+                                                    color = if (shownArticle != null) {
+                                                        badgeColor.copy(alpha = 0.16f)
+                                                    } else {
+                                                        extended.subtleFill
+                                                    }
                                                 ) {
                                                     Text(
-                                                        text = currentItem.word.article.lowercase(),
+                                                        text = shownArticle ?: "___",
                                                         fontFamily = MonoFontFamily,
                                                         fontSize = 15.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = genderColor,
+                                                        color = badgeColor,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                                     )
                                                 }
@@ -914,12 +990,14 @@ fun MixedReviewSessionScreen(
                                 if (spellingStatus == Stage6WordStatus.CORRECT_UMLAUT_WARNING) {
                                     UmlautCorrectedFeedbackCard(word = currentItem.word)
                                 } else if (spellingStatus == Stage6WordStatus.WRONG_TRY) {
-                                    Text(
-                                        text = if (spellingInput.isNotEmpty()) {
+                                    val msg = spellingErrorHint?.let { "$it (спроб: $spellingAttemptsLeft)" }
+                                        ?: if (spellingInput.isNotEmpty()) {
                                             "Невірно · правильний початок збережено, продовжуйте далі (спроб: $spellingAttemptsLeft)"
                                         } else {
                                             "Невірно · спробуйте з початку (спроб: $spellingAttemptsLeft)"
-                                        },
+                                        }
+                                    Text(
+                                        text = msg,
                                         color = ErrorRed,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
@@ -933,9 +1011,24 @@ fun MixedReviewSessionScreen(
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center
                                     )
+                                } else if (!spellingErrorHint.isNullOrBlank()) {
+                                    Text(
+                                        text = spellingErrorHint!!,
+                                        color = StreakAmber,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
 
                                 if (!isResolved) {
+                                    if (spellingInputMode == Stage6InputMode.LETTER_TILES && requiresArticle) {
+                                        ArticleTileSelectorRow(
+                                            selectedArticle = spellingSelectedArticle,
+                                            onSelect = { viewModel.selectMixedSpellingArticle(it) }
+                                        )
+                                    }
+
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.Center
@@ -1047,267 +1140,6 @@ fun MixedReviewSessionScreen(
                                     }
                                     Button(
                                         onClick = { viewModel.useMixedSpellingHint() },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = StreakAmber.copy(alpha = 0.20f),
-                                            contentColor = StreakAmber
-                                        ),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(1.25f).height(48.dp)
-                                    ) {
-                                        Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Підказка", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        is MixedReviewItem.MissingLettersReview -> {
-                            val isResolved = spellingStatus.isResolved
-                            Column(
-                                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Card(
-                                    shape = RoundedCornerShape(20.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .border(1.dp, extended.cardBorder, RoundedCornerShape(20.dp))
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            if (currentItem.word.article.isNotBlank()) {
-                                                GenderBadge(article = currentItem.word.article)
-                                            } else {
-                                                Spacer(modifier = Modifier.width(1.dp))
-                                            }
-                                            Text(
-                                                text = "Спроби: $spellingAttemptsLeft / ${LearningViewModel.MAX_STAGE6_ATTEMPTS}",
-                                                fontFamily = MonoFontFamily,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (spellingAttemptsLeft == 1) ErrorRed else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(
-                                            text = currentItem.word.translationUk,
-                                            fontFamily = LoraFontFamily,
-                                            fontSize = 22.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            textAlign = TextAlign.Center
-                                        )
-                                        Text(
-                                            text = currentItem.word.translationEn,
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        SpeakerButton(
-                                            onSpeak = { slow -> viewModel.speak(currentItem.word.displayWithArticle, slow) },
-                                            size = 44.dp
-                                        )
-                                    }
-                                }
-
-                                MissingLettersWordDisplay(
-                                    word = currentItem.word.german.trim(),
-                                    blankIndices = currentItem.blankIndices,
-                                    userInput = spellingInput,
-                                    status = spellingStatus
-                                )
-
-                                if (spellingInputMode == Stage6InputMode.KEYBOARD) {
-                                    val boxBorder = when (spellingStatus) {
-                                        Stage6WordStatus.CORRECT -> SuccessGreen
-                                        Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
-                                        Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
-                                        Stage6WordStatus.TYPING -> extended.cardBorder
-                                    }
-                                    OutlinedTextField(
-                                        value = spellingInput,
-                                        onValueChange = { viewModel.updateMixedMissingTypedText(it) },
-                                        enabled = !isResolved,
-                                        singleLine = true,
-                                        placeholder = {
-                                            Text("Введіть пропущені літери або слово...", fontFamily = MonoFontFamily, fontSize = 14.sp)
-                                        },
-                                        textStyle = TextStyle(
-                                            fontFamily = MonoFontFamily,
-                                            fontSize = 19.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = when (spellingStatus) {
-                                                Stage6WordStatus.CORRECT -> SuccessGreen
-                                                Stage6WordStatus.CORRECT_UMLAUT_WARNING -> extended.warningYellow
-                                                Stage6WordStatus.WRONG_TRY, Stage6WordStatus.OUT_OF_ATTEMPTS -> ErrorRed
-                                                Stage6WordStatus.TYPING -> MaterialTheme.colorScheme.onSurface
-                                            }
-                                        ),
-                                        keyboardOptions = KeyboardOptions(
-                                            imeAction = ImeAction.Done,
-                                            autoCorrectEnabled = false
-                                        ),
-                                        keyboardActions = KeyboardActions(
-                                            onDone = { viewModel.submitMixedMissingTypedAnswer() }
-                                        ),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = if (spellingStatus == Stage6WordStatus.TYPING) MaterialTheme.colorScheme.primary else boxBorder,
-                                            unfocusedBorderColor = boxBorder,
-                                            disabledBorderColor = boxBorder,
-                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                            unfocusedContainerColor = if (spellingStatus == Stage6WordStatus.WRONG_TRY) ErrorRed.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-
-                                if (spellingStatus == Stage6WordStatus.CORRECT_UMLAUT_WARNING) {
-                                    UmlautCorrectedFeedbackCard(word = currentItem.word)
-                                } else if (spellingStatus == Stage6WordStatus.WRONG_TRY) {
-                                    Text(
-                                        text = if (spellingInput.isNotEmpty()) {
-                                            "Невірно · вірні літери збережено, продовжуйте далі (спроб: $spellingAttemptsLeft)"
-                                        } else {
-                                            "Невірно · спробуйте ще (спроб: $spellingAttemptsLeft)"
-                                        },
-                                        color = ErrorRed,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        textAlign = TextAlign.Center
-                                    )
-                                } else if (spellingStatus == Stage6WordStatus.OUT_OF_ATTEMPTS) {
-                                    Text(
-                                        text = "Правильно: ${currentItem.word.displayWithArticle}",
-                                        color = ErrorRed,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-
-                                if (!isResolved) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        listOf('ä', 'ö', 'ü', 'ß').forEach { umlaut ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .padding(horizontal = 4.dp)
-                                                    .size(44.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                                    .clickable { viewModel.insertMixedMissingUmlaut(umlaut) },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    umlaut.toString(),
-                                                    fontFamily = LoraFontFamily,
-                                                    fontSize = 17.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    if (spellingInputMode == Stage6InputMode.LETTER_TILES) {
-                                        FlowRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            currentItem.letterPool.forEach { char ->
-                                                Box(
-                                                    modifier = Modifier
-                                                        .padding(horizontal = 3.dp)
-                                                        .size(46.dp)
-                                                        .clip(RoundedCornerShape(10.dp))
-                                                        .background(MaterialTheme.colorScheme.surface)
-                                                        .border(1.dp, extended.cardBorder, RoundedCornerShape(10.dp))
-                                                        .clickable { viewModel.addMixedMissingLetter(char) },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(char.toString(), fontFamily = LoraFontFamily, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (isResolved) {
-                                MixedNextFooter(
-                                    isAnswered = true,
-                                    feedback = lastFeedback,
-                                    isLast = currentIndex + 1 >= items.size,
-                                    onNext = { viewModel.nextMixedReviewItem() }
-                                )
-                            } else if (spellingInputMode == Stage6InputMode.KEYBOARD) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = { viewModel.submitMixedMissingTypedAnswer() },
-                                        enabled = spellingInput.isNotBlank(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(1.35f).height(48.dp)
-                                    ) {
-                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Перевірити", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Button(
-                                        onClick = { viewModel.useMixedMissingHint() },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = StreakAmber.copy(alpha = 0.20f),
-                                            contentColor = StreakAmber
-                                        ),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(1f).height(48.dp)
-                                    ) {
-                                        Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Підказка", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = { viewModel.removeMixedMissingLetter() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = extended.subtleFill),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(0.8f).height(48.dp)
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Видалити", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Button(
-                                        onClick = { viewModel.clearMixedMissing() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = extended.subtleFill),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(1f).height(48.dp)
-                                    ) {
-                                        Text("Очистити", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                    Button(
-                                        onClick = { viewModel.useMixedMissingHint() },
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = StreakAmber.copy(alpha = 0.20f),
                                             contentColor = StreakAmber

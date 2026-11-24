@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.MainTopic
 import com.example.data.model.TopicCatalog
+import com.example.data.repository.VocabularyRepository
 import com.example.ui.LearningViewModel
 import com.example.ui.MainTab
 import com.example.ui.Screen
@@ -104,8 +106,8 @@ fun MainTopicsScreen(
             val completedStages = topic.subtopics.sumOf { sub ->
                 progressBySubtopic[sub.id]?.completedStages ?: 0
             }
-            val totalPossibleStages = subtopicsCount * 6
-            val ratio = if (totalPossibleStages > 0) completedStages.toFloat() / totalPossibleStages else 0f
+            val totalPossibleStages = subtopicsCount * VocabularyRepository.TOTAL_STAGES
+            val ratio = if (totalPossibleStages > 0) (completedStages.toFloat() / totalPossibleStages).coerceIn(0f, 1f) else 0f
             topic.id to ratio
         }
     }
@@ -240,6 +242,24 @@ fun MainTopicsScreen(
                 )
 
                 NavigationBarItem(
+                    selected = selectedTab == MainTab.GRAMMAR,
+                    onClick = { viewModel.selectMainTab(MainTab.GRAMMAR) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.School,
+                            contentDescription = "Граматика"
+                        )
+                    },
+                    label = { Text("Граматика", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    modifier = Modifier.testTag("nav_tab_grammar")
+                )
+
+                NavigationBarItem(
                     selected = selectedTab == MainTab.FAVORITES,
                     onClick = { viewModel.selectMainTab(MainTab.FAVORITES) },
                     icon = {
@@ -248,7 +268,7 @@ fun MainTopicsScreen(
                             contentDescription = "Обране"
                         )
                     },
-                    label = { Text("Обране", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
+                    label = { Text("Обране", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = extended.genderDie,
                         selectedTextColor = extended.genderDie,
@@ -262,6 +282,11 @@ fun MainTopicsScreen(
     ) { innerPadding ->
         if (selectedTab == MainTab.REVIEW) {
             ReviewTabContent(
+                viewModel = viewModel,
+                contentPadding = innerPadding
+            )
+        } else if (selectedTab == MainTab.GRAMMAR) {
+            GrammarGuideContent(
                 viewModel = viewModel,
                 contentPadding = innerPadding
             )

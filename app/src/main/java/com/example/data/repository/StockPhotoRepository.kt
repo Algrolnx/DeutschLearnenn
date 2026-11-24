@@ -10,6 +10,7 @@ import com.example.BuildConfig
 import com.example.data.model.WordEntity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -413,8 +414,9 @@ class StockPhotoRepository private constructor(context: Context) {
         }
 
         val guard = if (highPriority) foregroundApiGuard else prefetchApiGuard
+        var createdTask: Deferred<CachedStockPhoto?>? = null
         val deferred = inFlight.computeIfAbsent(key) {
-            repoScope.async {
+            val task = repoScope.async(start = CoroutineStart.LAZY) {
                 try {
                     val outcome = guard.withPermit {
                         val usedSnapshot = synchronized(subtopicSelectionLock) {
@@ -444,18 +446,31 @@ class StockPhotoRepository private constructor(context: Context) {
                     }
                 } catch (ce: CancellationException) {
                     throw ce
-                } catch (e: Exception) {
-                    Log.w(TAG, "Stock photo lookup failed for '${word.german}': ${e.message}")
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Stock photo lookup failed for '${word.german}': ${t.message}")
                     null
                 }
-            }.also { task ->
-                task.invokeOnCompletion {
-                    inFlight.remove(key, task)
-                }
             }
+            createdTask = task
+            task
+        }
+        // Attach completion cleanup and start strictly AFTER computeIfAbsent releases its bin lock
+        // to avoid ConcurrentHashMap "IllegalStateException: Recursive update" crashes on Android.
+        createdTask?.let { task ->
+            task.invokeOnCompletion {
+                inFlight.remove(key, task)
+            }
+            task.start()
         }
 
-        return deferred.await()
+        return try {
+            deferred.await()
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            Log.w(TAG, "Stock photo await failed for '${word.german}': ${t.message}")
+            null
+        }
     }
 
     private suspend fun fetchFromPixabay(

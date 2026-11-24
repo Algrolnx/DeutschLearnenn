@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.LearningViewModel
 import com.example.ui.Screen
+import com.example.ui.screens.GrammarGuideScreen
 import com.example.ui.screens.MainTopicsScreen
 import com.example.ui.screens.MixedReviewSessionScreen
 import com.example.ui.screens.ProgressScreen
@@ -23,7 +24,6 @@ import com.example.ui.screens.StageArticleScreen
 import com.example.ui.screens.StageFillBlankScreen
 import com.example.ui.screens.StageFlashcardsScreen
 import com.example.ui.screens.StageListeningScreen
-import com.example.ui.screens.StageMissingLettersScreen
 import com.example.ui.screens.StageMultipleChoiceScreen
 import com.example.ui.screens.StagePluralScreen
 import com.example.ui.screens.StageSpellingScreen
@@ -85,12 +85,16 @@ class MainActivity : ComponentActivity() {
                                 subtopicId = screen.subtopicId,
                                 viewModel = viewModel
                             )
-                            is Screen.Stage8MissingLetters -> StageMissingLettersScreen(
-                                subtopicId = screen.subtopicId,
-                                viewModel = viewModel
+                            is Screen.Stage8FinalMix -> MixedReviewSessionScreen(
+                                viewModel = viewModel,
+                                finalMixSubtopicId = screen.subtopicId
                             )
                             is Screen.MixedReview -> MixedReviewSessionScreen(viewModel = viewModel)
                             is Screen.Progress -> ProgressScreen(viewModel = viewModel)
+                            is Screen.GrammarGuide -> GrammarGuideScreen(
+                                viewModel = viewModel,
+                                initialTopicId = screen.initialTopicId
+                            )
                         }
                     }
                 }

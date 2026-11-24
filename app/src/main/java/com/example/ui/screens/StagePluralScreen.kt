@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.LearningViewModel
+import com.example.ui.Screen
 import com.example.ui.components.GenderBadge
 import com.example.ui.components.SpeakerButton
 import com.example.ui.components.WordIllustrationView
@@ -62,6 +63,7 @@ import com.example.ui.theme.LocalAppExtendedColors
 import com.example.ui.theme.LoraFontFamily
 import com.example.ui.theme.MonoFontFamily
 import com.example.ui.theme.SuccessGreen
+import com.example.util.GrammarRuleExplainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -378,6 +380,20 @@ fun StagePluralScreen(
                                         else if (isSelected) Icon(Icons.Default.Close, contentDescription = null, tint = ErrorRed)
                                     }
                                 }
+                            }
+                        }
+
+                        if (selectedPlural != null) {
+                            val pluralHint = remember(currentQ.word.id, currentQ.word.german, currentQ.word.plural) {
+                                GrammarRuleExplainer.explainPlural(currentQ.word)
+                            }
+                            if (pluralHint != null) {
+                                InlineGrammarHintCard(
+                                    hint = pluralHint,
+                                    onOpenGrammar = { topicId ->
+                                        viewModel.navigateTo(Screen.GrammarGuide(topicId))
+                                    }
+                                )
                             }
                         }
                     }

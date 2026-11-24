@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -7,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -62,6 +66,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,8 +76,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.LearningViewModel
 import com.example.ui.Stage6InputMode
@@ -140,12 +143,23 @@ fun SettingsDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    BackHandler(onBack = onDismiss)
+
+    val backdropInteraction = remember { MutableInteractionSource() }
+    val cardInteraction = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.62f))
+            .clickable(
+                interactionSource = backdropInteraction,
+                indication = null,
+                onClick = onDismiss
+            )
+            .safeDrawingPadding()
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center
     ) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -153,13 +167,17 @@ fun SettingsDialog(
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             border = BorderStroke(1.dp, extended.cardBorder),
             modifier = Modifier
-                .fillMaxWidth(0.94f)
+                .fillMaxWidth()
                 .widthIn(max = 520.dp)
-                .safeDrawingPadding()
-                .padding(vertical = 12.dp)
+                .fillMaxHeight(0.90f)
+                .clickable(
+                    interactionSource = cardInteraction,
+                    indication = null,
+                    onClick = {}
+                )
                 .testTag("settings_dialog")
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 // Pinned Header
                 Row(
                     modifier = Modifier
@@ -214,7 +232,7 @@ fun SettingsDialog(
                 // Scrollable Settings Body
                 Column(
                     modifier = Modifier
-                        .weight(1f, fill = false)
+                        .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp, vertical = 14.dp)
@@ -692,7 +710,7 @@ fun SettingsDialog(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Поєднання карток, слухання, тестів, артиклів, множини, контексту, правопису й пропущених літер активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. Слова потрапляють у цикл «Повторення» лише після проходження всіх 8 етапів підтеми на 100%.",
+                                text = "Поєднання карток, слухання, тестів, артиклів, множини, контексту, правопису з артиклем та фінального міксу активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. Слова потрапляють у цикл «Повторення» лише після проходження всіх 8 етапів підтеми на 100%.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 17.sp
@@ -710,8 +728,8 @@ fun SettingsDialog(
                     Triple(4, "Етап 4 · Артиклі (der / die / das)", "Тренажер граматичного роду іменників"),
                     Triple(5, "Етап 5 · Множина (Plural-Trainer)", "Форми множини іменників (die ...)"),
                     Triple(6, "Етап 6 · Пропуски (Lückentext)", "Підстановка слова в живе речення"),
-                    Triple(7, "Етап 7 · Правопис (Schreiben)", "Повне написання слова (літери або клавіатура · 3 спроби)"),
-                    Triple(8, "Етап 8 · Пропущені літери (Lückenwort)", "Вставка пропущених літер у слові (3 спроби)")
+                    Triple(7, "Етап 7 · Правопис (Schreiben)", "Написання слова з артиклем (літери або клавіатура · 3 спроби)"),
+                    Triple(8, "Етап 8 · Фінальний мікс (Gesamttest)", "Підсумкова перевірка усіх етапів разом для всіх слів підтеми")
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -774,7 +792,7 @@ fun SettingsDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Введення на Етапах 7 і 8",
+                        text = "Введення на Етапі 7 (Правопис)",
                         fontFamily = LoraFontFamily,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
@@ -782,7 +800,7 @@ fun SettingsDialog(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Оберіть зручний спосіб написання слів на Етапах 7–8 та в повторенні.",
+                    text = "Оберіть зручний спосіб написання слів з артиклем на Етапі 7, у Фінальному міксі та в повторенні.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

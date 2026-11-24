@@ -92,6 +92,8 @@ fun StageSpellingScreen(
     val currentIndex by viewModel.stage6Index.collectAsStateWithLifecycle()
     val letterPool by viewModel.stage6LetterPool.collectAsStateWithLifecycle()
     val currentInput by viewModel.stage6Input.collectAsStateWithLifecycle()
+    val selectedArticle by viewModel.stage6SelectedArticle.collectAsStateWithLifecycle()
+    val errorHint by viewModel.stage6ErrorHint.collectAsStateWithLifecycle()
     val status by viewModel.stage6Status.collectAsStateWithLifecycle()
     val attemptsLeft by viewModel.stage6AttemptsLeft.collectAsStateWithLifecycle()
     val isFinished by viewModel.stage6Finished.collectAsStateWithLifecycle()
@@ -223,6 +225,7 @@ fun StageSpellingScreen(
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {
+                    val requiresArticle = LearningViewModel.requiresArticleInSpelling(currentWord)
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -249,8 +252,23 @@ fun StageSpellingScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                 }
 
-                                if (currentWord.article.isNotBlank()) {
+                                if (isWordResolved && currentWord.article.isNotBlank()) {
                                     GenderBadge(article = currentWord.article)
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                } else if (requiresArticle) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            text = "Потрібен артикль: der / die / das",
+                                            fontFamily = MonoFontFamily,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(6.dp))
                                 }
 
@@ -283,7 +301,14 @@ fun StageSpellingScreen(
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 SpeakerButton(
-                                    onSpeak = { slow -> viewModel.speak(currentWord.displayWithArticle, slow) },
+                                    onSpeak = { slow ->
+                                        val spoken = if (requiresArticle && !isWordResolved) {
+                                            currentWord.german
+                                        } else {
+                                            currentWord.displayWithArticle
+                                        }
+                                        viewModel.speak(spoken, slow)
+                                    },
                                     size = 46.dp
                                 )
                             }
@@ -308,31 +333,14 @@ fun StageSpellingScreen(
                                     singleLine = true,
                                     placeholder = {
                                         Text(
-                                            text = "Введіть слово...",
+                                            text = if (requiresArticle) {
+                                                "Введіть з артиклем (der / die / das)..."
+                                            } else {
+                                                "Введіть слово..."
+                                            },
                                             fontFamily = MonoFontFamily,
-                                            fontSize = 16.sp
+                                            fontSize = 15.sp
                                         )
-                                    },
-                                    leadingIcon = if (currentWord.article.isNotBlank()) {
-                                        {
-                                            val genderColor = getGenderColor(currentWord.article)
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = genderColor.copy(alpha = 0.14f),
-                                                modifier = Modifier.padding(start = 10.dp)
-                                            ) {
-                                                Text(
-                                                    text = currentWord.article.lowercase(),
-                                                    fontFamily = MonoFontFamily,
-                                                    fontSize = 15.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = genderColor,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        null
                                     },
                                     textStyle = TextStyle(
                                         fontFamily = MonoFontFamily,
@@ -401,19 +409,32 @@ fun StageSpellingScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        if (currentWord.article.isNotBlank()) {
-                                            val genderColor = getGenderColor(currentWord.article)
+                                        if (requiresArticle) {
+                                            val shownArticle = when {
+                                                status == Stage6WordStatus.CORRECT || status == Stage6WordStatus.OUT_OF_ATTEMPTS ->
+                                                    currentWord.article.lowercase()
+                                                else -> selectedArticle
+                                            }
+                                            val badgeColor = if (shownArticle != null) {
+                                                getGenderColor(shownArticle)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
                                             Surface(
                                                 shape = RoundedCornerShape(8.dp),
-                                                color = genderColor.copy(alpha = 0.14f)
+                                                color = if (shownArticle != null) {
+                                                    badgeColor.copy(alpha = 0.16f)
+                                                } else {
+                                                    extended.subtleFill
+                                                }
                                             ) {
                                                 Text(
-                                                    text = currentWord.article.lowercase(),
+                                                    text = shownArticle ?: "___",
                                                     fontFamily = MonoFontFamily,
                                                     fontSize = 16.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = genderColor,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    color = badgeColor,
+                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
                                                 )
                                             }
                                             Spacer(modifier = Modifier.width(10.dp))
@@ -444,7 +465,7 @@ fun StageSpellingScreen(
                                 Stage6WordStatus.CORRECT -> {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Richtig! Чудово!",
+                                        text = "Richtig! ${currentWord.displayWithArticle}",
                                         color = SuccessGreen,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
@@ -456,12 +477,14 @@ fun StageSpellingScreen(
                                 }
                                 Stage6WordStatus.WRONG_TRY -> {
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = if (currentInput.isNotEmpty()) {
+                                    val msg = errorHint?.let { "$it (спроб: $attemptsLeft)" }
+                                        ?: if (currentInput.isNotEmpty()) {
                                             "Невірно · правильний початок збережено, продовжуйте далі (спроб: $attemptsLeft)"
                                         } else {
                                             "Невірно · спробуйте з початку або натисніть «Підказка» (спроб: $attemptsLeft)"
-                                        },
+                                        }
+                                    Text(
+                                        text = msg,
                                         color = ErrorRed,
                                         fontWeight = FontWeight.Medium,
                                         fontSize = 13.sp,
@@ -478,12 +501,31 @@ fun StageSpellingScreen(
                                         textAlign = TextAlign.Center
                                     )
                                 }
-                                Stage6WordStatus.TYPING -> Unit
+                                Stage6WordStatus.TYPING -> {
+                                    if (!errorHint.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = errorHint!!,
+                                            color = StreakAmber,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
                             }
                         }
 
                         if (!isWordResolved) {
                             Column(modifier = Modifier.fillMaxWidth()) {
+                                if (inputMode == Stage6InputMode.LETTER_TILES && requiresArticle) {
+                                    ArticleTileSelectorRow(
+                                        selectedArticle = selectedArticle,
+                                        onSelect = { viewModel.selectStage6Article(it) },
+                                        modifier = Modifier.padding(bottom = 10.dp)
+                                    )
+                                }
+
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -740,6 +782,50 @@ internal fun UmlautCorrectedFeedbackCard(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+@Composable
+internal fun ArticleTileSelectorRow(
+    selectedArticle: String?,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val extended = LocalAppExtendedColors.current
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(
+            "der" to extended.genderDer,
+            "die" to extended.genderDie,
+            "das" to extended.genderDas
+        ).forEach { (article, color) ->
+            val isSelected = selectedArticle.equals(article, ignoreCase = true)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isSelected) color.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surface)
+                    .border(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) color else extended.cardBorder,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .clickable { onSelect(article) }
+                    .testTag("spelling_article_chip_$article"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = article,
+                    fontFamily = MonoFontFamily,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }

@@ -370,8 +370,8 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
                 val speed = if (slow) 0.78f else 1.0f
                 try {
                     mp.playbackParams = PlaybackParams().setSpeed(speed)
-                } catch (_: Exception) {
-                    // Some emulators don't support PlaybackParams pitch/speed adjustment gracefully
+                } catch (_: Throwable) {
+                    // Some devices/emulators reject PlaybackParams pitch/speed adjustments
                 }
             }
             mp.setOnCompletionListener { player ->
@@ -379,7 +379,7 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
                 if (mediaPlayer === player) mediaPlayer = null
                 try {
                     player.release()
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                 }
             }
             mp.setOnErrorListener { player, _, _ ->
@@ -387,15 +387,15 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
                 if (mediaPlayer === player) mediaPlayer = null
                 try {
                     player.release()
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                 }
                 true
             }
             _isSpeaking.value = true
             mp.start()
             true
-        } catch (e: Exception) {
-            Log.w("TtsManager", "MediaPlayer failed on cached audio: ${e.message}")
+        } catch (t: Throwable) {
+            Log.w("TtsManager", "MediaPlayer failed on cached audio: ${t.message}")
             releaseMediaPlayer()
             false
         }

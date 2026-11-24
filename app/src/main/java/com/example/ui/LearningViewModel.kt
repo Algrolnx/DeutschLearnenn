@@ -59,15 +59,17 @@ sealed class Screen {
     data class Stage5PluralTrainer(val subtopicId: String) : Screen()
     data class Stage6FillBlank(val subtopicId: String) : Screen()
     data class Stage7Spelling(val subtopicId: String) : Screen()
-    data class Stage8MissingLetters(val subtopicId: String) : Screen()
+    data class Stage8FinalMix(val subtopicId: String) : Screen()
 
     object MixedReview : Screen()
     object Progress : Screen()
+    data class GrammarGuide(val initialTopicId: String? = null) : Screen()
 }
 
 enum class MainTab {
     TOPICS,
     REVIEW,
+    GRAMMAR,
     FAVORITES
 }
 
@@ -158,16 +160,6 @@ sealed class MixedReviewItem {
     ) : MixedReviewItem() {
         override val stageType: Int = 7
     }
-
-    data class MissingLettersReview(
-        override val word: WordEntity,
-        override val srsStep: Int,
-        val blankIndices: List<Int>,
-        val letterPool: List<Char>,
-        override val isRetry: Boolean = false
-    ) : MixedReviewItem() {
-        override val stageType: Int = 8
-    }
 }
 
 data class MultipleChoiceQ(
@@ -207,12 +199,13 @@ data class FillBlankQ(
     val isRetry: Boolean = false
 )
 
-data class MissingLettersQ(
-    val word: WordEntity,
-    val blankIndices: List<Int>,
-    val letterPool: List<Char>,
-    val isRetry: Boolean = false
-)
+sealed class KeyboardSpellingEvaluation {
+    data class ExactMatch(val canonical: String) : KeyboardSpellingEvaluation()
+    data class LenientUmlautMatch(val cleanedInput: String) : KeyboardSpellingEvaluation()
+    data class MissingArticle(val preservedText: String) : KeyboardSpellingEvaluation()
+    data class WrongArticle(val typedArticle: String, val remainder: String) : KeyboardSpellingEvaluation()
+    data class WrongSpelling(val keptPrefix: String, val articleWasCorrect: Boolean) : KeyboardSpellingEvaluation()
+}
 
 data class IoStatusMessage(
     val text: String,
@@ -671,7 +664,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             5 -> startStage5Plural(subtopicId)
             6 -> startStage5(subtopicId)
             7 -> startStage6(subtopicId)
-            8 -> startStage8MissingLetters(subtopicId)
+            8 -> startStage8FinalMix(subtopicId)
         }
     }
 
@@ -754,7 +747,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // === Mixed-Stage Spaced Repetition Session State ===
+    // === Mixed-Stage Session State (Spaced Repetition Review OR Stage 8 Final Mix) ===
+    private val _mixedSessionSubtopicId = MutableStateFlow<String?>(null)
+    val mixedSessionSubtopicId: StateFlow<String?> = _mixedSessionSubtopicId.asStateFlow()
     private val _mixedReviewItems = MutableStateFlow<List<MixedReviewItem>>(emptyList())
     val mixedReviewItems: StateFlow<List<MixedReviewItem>> = _mixedReviewItems.asStateFlow()
     private val _mixedReviewIndex = MutableStateFlow(0)
@@ -773,6 +768,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val mixedSelectedString: StateFlow<String?> = _mixedSelectedString.asStateFlow()
     private val _mixedSpellingInput = MutableStateFlow("")
     val mixedSpellingInput: StateFlow<String> = _mixedSpellingInput.asStateFlow()
+    private val _mixedSpellingSelectedArticle = MutableStateFlow<String?>(null)
+    val mixedSpellingSelectedArticle: StateFlow<String?> = _mixedSpellingSelectedArticle.asStateFlow()
+    private val _mixedSpellingErrorHint = MutableStateFlow<String?>(null)
+    val mixedSpellingErrorHint: StateFlow<String?> = _mixedSpellingErrorHint.asStateFlow()
     private val _mixedSpellingStatus = MutableStateFlow(Stage6WordStatus.TYPING)
     val mixedSpellingStatus: StateFlow<Stage6WordStatus> = _mixedSpellingStatus.asStateFlow()
     private val _mixedSpellingAttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
@@ -932,7 +931,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val _stage5Finished = MutableStateFlow(false)
     val stage5Finished: StateFlow<Boolean> = _stage5Finished.asStateFlow()
 
-    // === Stage 7: Spelling & Writing State ===
+    // === Stage 7: Spelling & Writing (with required article) State ===
     private val _stage6Words = MutableStateFlow<List<WordEntity>>(emptyList())
     val stage6Words: StateFlow<List<WordEntity>> = _stage6Words.asStateFlow()
     private val _stage6Index = MutableStateFlow(0)
@@ -941,6 +940,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val stage6LetterPool: StateFlow<List<Char>> = _stage6LetterPool.asStateFlow()
     private val _stage6Input = MutableStateFlow("")
     val stage6Input: StateFlow<String> = _stage6Input.asStateFlow()
+    private val _stage6SelectedArticle = MutableStateFlow<String?>(null)
+    val stage6SelectedArticle: StateFlow<String?> = _stage6SelectedArticle.asStateFlow()
+    private val _stage6ErrorHint = MutableStateFlow<String?>(null)
+    val stage6ErrorHint: StateFlow<String?> = _stage6ErrorHint.asStateFlow()
     private val _stage6Status = MutableStateFlow(Stage6WordStatus.TYPING)
     val stage6Status: StateFlow<Stage6WordStatus> = _stage6Status.asStateFlow()
     private val _stage6AttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
@@ -953,22 +956,6 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val stage6Finished: StateFlow<Boolean> = _stage6Finished.asStateFlow()
     private val _stage6RetryIndices = MutableStateFlow<Set<Int>>(emptySet())
     val stage6RetryIndices: StateFlow<Set<Int>> = _stage6RetryIndices.asStateFlow()
-
-    // === Stage 8: Missing Letters in Word (Lückenwort) State ===
-    private val _stage8Questions = MutableStateFlow<List<MissingLettersQ>>(emptyList())
-    val stage8Questions: StateFlow<List<MissingLettersQ>> = _stage8Questions.asStateFlow()
-    private val _stage8Index = MutableStateFlow(0)
-    val stage8Index: StateFlow<Int> = _stage8Index.asStateFlow()
-    private val _stage8Input = MutableStateFlow("")
-    val stage8Input: StateFlow<String> = _stage8Input.asStateFlow()
-    private val _stage8Status = MutableStateFlow(Stage6WordStatus.TYPING)
-    val stage8Status: StateFlow<Stage6WordStatus> = _stage8Status.asStateFlow()
-    private val _stage8AttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
-    val stage8AttemptsLeft: StateFlow<Int> = _stage8AttemptsLeft.asStateFlow()
-    private val _stage8Score = MutableStateFlow(0)
-    val stage8Score: StateFlow<Int> = _stage8Score.asStateFlow()
-    private val _stage8Finished = MutableStateFlow(false)
-    val stage8Finished: StateFlow<Boolean> = _stage8Finished.asStateFlow()
 
     // True when the most recently completed stage brought the subtopic to 8/8 stages at 100% (unlocking SRS)
     private val _lastCompletedUnlockedSrs = MutableStateFlow(false)
@@ -1052,7 +1039,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         is Screen.Stage5PluralTrainer,
         is Screen.Stage6FillBlank,
         is Screen.Stage7Spelling,
-        is Screen.Stage8MissingLetters,
+        is Screen.Stage8FinalMix,
         is Screen.MixedReview -> true
         else -> false
     }
@@ -1348,8 +1335,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _lastCompletedUnlockedSrs.value = false
             stockPhotoRepository.prefetchWordsAsync(questions.take(4).map { it.word })
             navigateToStage(Screen.Stage4ArticleTrainer(subtopicId))
-            if (questions.isNotEmpty()) {
-                speak(questions.first().word.german)
+            val firstQuestion = questions.firstOrNull()
+            if (firstQuestion != null) {
+                speak(firstQuestion.word.german)
             } else {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1578,7 +1566,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ==========================================
-    // === STAGE 7: SPELLING & WRITING ===
+    // === STAGE 7: SPELLING & WRITING (WITH ARTICLE) ===
     // ==========================================
     fun startStage6(subtopicId: String) {
         viewModelScope.launch {
@@ -1586,7 +1574,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage6Words.value = words
             _stage6Index.value = 0
             _stage6Score.value = 0
-            _stage6Finished.value = false
+            _stage6Finished.value = words.isEmpty()
             _stage6RetryIndices.value = emptySet()
             _lastCompletedUnlockedSrs.value = false
             prepareStage6Word(0)
@@ -1597,6 +1585,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private fun prepareStage6Word(index: Int) {
         val target = _stage6Words.value.getOrNull(index) ?: return
         _stage6Input.value = ""
+        _stage6SelectedArticle.value = null
+        _stage6ErrorHint.value = null
         _stage6Status.value = Stage6WordStatus.TYPING
         _stage6AttemptsLeft.value = MAX_STAGE6_ATTEMPTS
         _stage6HintsUsed.value = 0
@@ -1604,28 +1594,69 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val targetLetters = target.german.trim().filter { it != ' ' && it != '-' }.toList()
         val extraLetters = listOf('e', 'a', 'i', 'r', 's', 't', 'n', 'l', 'ä', 'ö', 'ü').shuffled().take(3)
         _stage6LetterPool.value = (targetLetters + extraLetters).shuffled()
-        speak(target.displayWithArticle)
+        // Speak only the bare word before solving so audio doesn't spoil der/die/das
+        speak(if (requiresArticleInSpelling(target)) target.german else target.displayWithArticle)
     }
 
     private fun handleStage6WrongAttempt(
         word: WordEntity,
-        submitted: String,
-        target: String,
-        allowLenientUmlauts: Boolean = false
+        keptInput: String,
+        errorMessage: String? = null,
+        resetArticle: Boolean = false
     ) {
         val remaining = (_stage6AttemptsLeft.value - 1).coerceAtLeast(0)
         _stage6AttemptsLeft.value = remaining
         if (remaining > 0) {
-            // Keep the matching prefix from the start; erase only the wrong tail (or everything if char 0 is wrong)
-            _stage6Input.value = keepCorrectPrefix(submitted, target, allowLenientUmlauts)
+            _stage6Input.value = keptInput
+            if (resetArticle) _stage6SelectedArticle.value = null
+            _stage6ErrorHint.value = errorMessage
             _stage6Status.value = Stage6WordStatus.WRONG_TRY
         } else {
+            _stage6ErrorHint.value = null
             _stage6Status.value = Stage6WordStatus.OUT_OF_ATTEMPTS
             val newIdx = _stage6Words.value.size
             _stage6Words.value = _stage6Words.value + word
             _stage6RetryIndices.value = _stage6RetryIndices.value + newIdx
             speak(word.displayWithArticle)
             viewModelScope.launch { repository.recordReview(word.id, ReviewRating.AGAIN) }
+        }
+    }
+
+    private fun completeStage6WordCorrect(
+        word: WordEntity,
+        status: Stage6WordStatus = Stage6WordStatus.CORRECT
+    ) {
+        _stage6ErrorHint.value = null
+        _stage6Status.value = status
+        _stage6Score.value += 1
+        speak(word.displayWithArticle)
+        viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+    }
+
+    fun selectStage6Article(article: String) {
+        if (_stage6Status.value.isResolved) return
+        val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
+        if (!requiresArticleInSpelling(word)) return
+
+        val normalized = article.lowercase().trim()
+        _stage6SelectedArticle.value = normalized
+        _stage6ErrorHint.value = null
+
+        val targetNoun = word.german.trim()
+        if (_stage6Input.value.equals(targetNoun, ignoreCase = true)) {
+            if (normalized.equals(word.article.trim(), ignoreCase = true)) {
+                _stage6Input.value = targetNoun
+                completeStage6WordCorrect(word)
+            } else {
+                handleStage6WrongAttempt(
+                    word = word,
+                    keptInput = targetNoun,
+                    errorMessage = "Слово вірне, але артикль інший! Оберіть правильний (der / die / das)",
+                    resetArticle = true
+                )
+            }
+        } else {
+            _stage6Status.value = Stage6WordStatus.TYPING
         }
     }
 
@@ -1641,14 +1672,37 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val raw = if (withLeadingSep.length < target.length) withLeadingSep + char else withLeadingSep
         val newText = autoAdvanceSeparators(raw, target)
         _stage6Input.value = newText
+        _stage6ErrorHint.value = null
 
         if (newText.equals(target, ignoreCase = true)) {
-            _stage6Status.value = Stage6WordStatus.CORRECT
-            _stage6Score.value += 1
-            speak(word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+            _stage6Input.value = target
+            if (!requiresArticleInSpelling(word)) {
+                completeStage6WordCorrect(word)
+            } else {
+                val chosenArt = _stage6SelectedArticle.value
+                when {
+                    chosenArt == null -> {
+                        _stage6Status.value = Stage6WordStatus.TYPING
+                        _stage6ErrorHint.value = "Слово зібрано! Тепер оберіть артикль: der, die або das"
+                    }
+                    chosenArt.equals(word.article.trim(), ignoreCase = true) -> {
+                        completeStage6WordCorrect(word)
+                    }
+                    else -> {
+                        handleStage6WrongAttempt(
+                            word = word,
+                            keptInput = target,
+                            errorMessage = "Слово вірне, але артикль інший! Оберіть правильний (der / die / das)",
+                            resetArticle = true
+                        )
+                    }
+                }
+            }
         } else if (newText.length >= target.length) {
-            handleStage6WrongAttempt(word, newText, target)
+            handleStage6WrongAttempt(
+                word = word,
+                keptInput = keepCorrectPrefix(newText, target, allowLenientUmlauts = false)
+            )
         } else {
             _stage6Status.value = Stage6WordStatus.TYPING
         }
@@ -1658,15 +1712,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
             if (_stage6Status.value.isResolved) return
             val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
-            val target = word.german.trim()
+            val fullTarget = spellingTargetFor(word)
             val updated = _stage6Input.value + char
             _stage6Input.value = updated
-            if (updated.trim().equals(target, ignoreCase = true)) {
-                _stage6Input.value = target
-                _stage6Status.value = Stage6WordStatus.CORRECT
-                _stage6Score.value += 1
-                speak(word.displayWithArticle)
-                viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+            _stage6ErrorHint.value = null
+            if (normalizeSpellingSpaces(updated).equals(fullTarget, ignoreCase = true)) {
+                _stage6Input.value = fullTarget
+                completeStage6WordCorrect(word)
             } else {
                 _stage6Status.value = Stage6WordStatus.TYPING
             }
@@ -1677,55 +1729,99 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun updateStage6TypedText(raw: String) {
         if (_stage6Status.value.isResolved) return
-        val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
-        val cleaned = stripOptionalArticlePrefix(raw, word.article)
-        _stage6Input.value = cleaned
+        _stage6Input.value = raw
+        _stage6ErrorHint.value = null
         _stage6Status.value = Stage6WordStatus.TYPING
     }
 
     fun submitStage6TypedAnswer() {
         if (_stage6Status.value.isResolved) return
         val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
-        val target = word.german.trim()
-        val cleaned = stripOptionalArticlePrefix(_stage6Input.value, word.article).trim()
-        if (cleaned.isEmpty()) return
+        val raw = _stage6Input.value.trim()
+        if (raw.isEmpty()) return
 
-        if (cleaned.equals(target, ignoreCase = true)) {
-            _stage6Input.value = target
-            _stage6Status.value = Stage6WordStatus.CORRECT
-            _stage6Score.value += 1
-            speak(word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
-        } else if (matchesWithLenientUmlauts(cleaned, target)) {
-            _stage6Input.value = cleaned
-            _stage6Status.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
-            _stage6Score.value += 1
-            speak(word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
-        } else {
-            handleStage6WrongAttempt(word, cleaned, target, allowLenientUmlauts = true)
+        when (val eval = evaluateKeyboardSpelling(raw, word)) {
+            is KeyboardSpellingEvaluation.ExactMatch -> {
+                _stage6Input.value = eval.canonical
+                completeStage6WordCorrect(word, Stage6WordStatus.CORRECT)
+            }
+            is KeyboardSpellingEvaluation.LenientUmlautMatch -> {
+                _stage6Input.value = eval.cleanedInput
+                completeStage6WordCorrect(word, Stage6WordStatus.CORRECT_UMLAUT_WARNING)
+            }
+            is KeyboardSpellingEvaluation.MissingArticle -> {
+                handleStage6WrongAttempt(
+                    word = word,
+                    keptInput = eval.preservedText,
+                    errorMessage = "Не забудьте написати артикль (der / die / das) перед словом!"
+                )
+            }
+            is KeyboardSpellingEvaluation.WrongArticle -> {
+                handleStage6WrongAttempt(
+                    word = word,
+                    keptInput = eval.remainder,
+                    errorMessage = "Невірний артикль «${eval.typedArticle}» · спробуйте інший (der / die / das)"
+                )
+            }
+            is KeyboardSpellingEvaluation.WrongSpelling -> {
+                val msg = if (eval.articleWasCorrect && requiresArticleInSpelling(word)) {
+                    "Артикль вірний! Перевірте написання слова"
+                } else {
+                    null
+                }
+                handleStage6WrongAttempt(
+                    word = word,
+                    keptInput = eval.keptPrefix,
+                    errorMessage = msg
+                )
+            }
         }
     }
 
     /**
-     * Reveals exactly one next correct letter in the input field (fixing any mismatched suffix
-     * and automatically inserting spaces/hyphens where needed).
+     * Reveals the article first (when missing/wrong for nouns), then reveals one next correct letter.
      */
     fun useStage6Hint() {
         if (_stage6Status.value.isResolved) return
         val word = _stage6Words.value.getOrNull(_stage6Index.value) ?: return
-        val target = word.german.trim()
-        val current = _stage6Input.value
-
-        val nextInput = computeNextHintInput(current, target)
         _stage6HintsUsed.value += 1
-        _stage6Input.value = nextInput
+        _stage6ErrorHint.value = null
 
-        if (nextInput.equals(target, ignoreCase = true)) {
-            _stage6Status.value = Stage6WordStatus.CORRECT
-            _stage6Score.value += 1
-            speak(word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(word.id, ReviewRating.GOOD) }
+        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
+            val fullTarget = spellingTargetFor(word)
+            val nextInput = computeKeyboardHintWithArticle(_stage6Input.value, word)
+            _stage6Input.value = nextInput
+            if (normalizeSpellingSpaces(nextInput).equals(fullTarget, ignoreCase = true)) {
+                _stage6Input.value = fullTarget
+                completeStage6WordCorrect(word)
+            } else {
+                _stage6Status.value = Stage6WordStatus.TYPING
+            }
+            return
+        }
+
+        // LETTER_TILES mode: reveal article first if noun needs it and it's not yet correct
+        val targetNoun = word.german.trim()
+        if (requiresArticleInSpelling(word) &&
+            !_stage6SelectedArticle.value.equals(word.article.trim(), ignoreCase = true)
+        ) {
+            _stage6SelectedArticle.value = word.article.lowercase().trim()
+            if (_stage6Input.value.equals(targetNoun, ignoreCase = true)) {
+                _stage6Input.value = targetNoun
+                completeStage6WordCorrect(word)
+            } else {
+                _stage6Status.value = Stage6WordStatus.TYPING
+            }
+            return
+        }
+
+        val nextInput = computeNextHintInput(_stage6Input.value, targetNoun)
+        _stage6Input.value = nextInput
+        if (nextInput.equals(targetNoun, ignoreCase = true) &&
+            (!requiresArticleInSpelling(word) ||
+                _stage6SelectedArticle.value.equals(word.article.trim(), ignoreCase = true))
+        ) {
+            completeStage6WordCorrect(word)
         } else {
             _stage6Status.value = Stage6WordStatus.TYPING
         }
@@ -1735,6 +1831,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         if (_stage6Status.value.isResolved) return
         if (_stage6Input.value.isNotEmpty()) {
             _stage6Input.value = backspaceOverSeparators(_stage6Input.value)
+            _stage6ErrorHint.value = null
             _stage6Status.value = Stage6WordStatus.TYPING
         }
     }
@@ -1742,6 +1839,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun clearStage6() {
         if (_stage6Status.value.isResolved) return
         _stage6Input.value = ""
+        _stage6SelectedArticle.value = null
+        _stage6ErrorHint.value = null
         _stage6Status.value = Stage6WordStatus.TYPING
     }
 
@@ -1768,207 +1867,58 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ==========================================
-    // === STAGE 8: MISSING LETTERS (LÜCKENWORT) ===
+    // === STAGE 8: FINAL MIX (GESAMTTEST — ALL STAGES COMBINED) ===
     // ==========================================
-    fun startStage8MissingLetters(subtopicId: String) {
+    fun startStage8FinalMix(subtopicId: String) {
         viewModelScope.launch {
-            val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12)
-                .filter { it.german.trim().count { ch -> ch.isLetter() } >= 2 }
-                .shuffled()
-            val questions = words.map { word ->
-                val target = word.german.trim()
-                val blanks = buildMissingLettersIndices(target)
-                val pool = buildMissingLettersPool(target, blanks)
-                MissingLettersQ(
+            val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15).shuffled()
+            val activeStages = (_enabledStages.value intersect setOf(2, 3, 4, 5, 6, 7))
+                .ifEmpty { setOf(2, 3, 4, 5, 6, 7) }
+
+            val builtItems = mutableListOf<MixedReviewItem>()
+            val stageUsageCounts = mutableMapOf<Int, Int>()
+            var lastStageType: Int? = null
+
+            for (word in words) {
+                val chosenStage = pickFinalMixStageForWord(
                     word = word,
-                    blankIndices = blanks,
-                    letterPool = pool
+                    enabledPracticeStages = activeStages,
+                    stageUsageCounts = stageUsageCounts,
+                    previousStageType = lastStageType
                 )
+                lastStageType = chosenStage
+                stageUsageCounts[chosenStage] = (stageUsageCounts[chosenStage] ?: 0) + 1
+                val item = buildMixedReviewItem(word = word, srsStep = 0, stageType = chosenStage)
+                builtItems.add(item)
             }
-            _stage8Questions.value = questions
-            _stage8Index.value = 0
-            _stage8Score.value = 0
-            _stage8Finished.value = questions.isEmpty()
+
+            _mixedSessionSubtopicId.value = subtopicId
+            _mixedReviewItems.value = builtItems
+            _mixedReviewIndex.value = 0
+            _mixedReviewScore.value = 0
+            _mixedReviewFinished.value = builtItems.isEmpty()
+            _mixedReviewIsEarlyPractice.value = false
             _lastCompletedUnlockedSrs.value = false
-            prepareStage8Question(0)
-            navigateToStage(Screen.Stage8MissingLetters(subtopicId))
-            if (questions.isEmpty()) {
+            resetMixedItemState()
+
+            stockPhotoRepository.prefetchWordsAsync(
+                builtItems.filter {
+                    it is MixedReviewItem.FlashcardReview ||
+                        it is MixedReviewItem.MultipleChoiceReview ||
+                        it is MixedReviewItem.ArticleReview ||
+                        it is MixedReviewItem.PluralReview
+                }.take(4).map { it.word }
+            )
+            navigateToStage(Screen.Stage8FinalMix(subtopicId))
+
+            val firstItem = builtItems.firstOrNull()
+            if (firstItem != null) {
+                speakForMixedItem(firstItem)
+            } else {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
                     stage = 8,
                     score = 0,
-                    enabledStages = _enabledStages.value,
-                    level = _selectedLevel.value,
-                    achieved100Percent = true
-                )
-                _lastCompletedUnlockedSrs.value = unlocked
-                refreshReviewDashboard()
-            }
-        }
-    }
-
-    private fun prepareStage8Question(index: Int) {
-        val q = _stage8Questions.value.getOrNull(index) ?: return
-        _stage8Input.value = ""
-        _stage8Status.value = Stage6WordStatus.TYPING
-        _stage8AttemptsLeft.value = MAX_STAGE6_ATTEMPTS
-        speak(q.word.displayWithArticle)
-    }
-
-    private fun expectedMissingString(q: MissingLettersQ): String {
-        val target = q.word.german.trim()
-        return buildString {
-            q.blankIndices.forEach { idx ->
-                if (idx in target.indices) append(target[idx])
-            }
-        }
-    }
-
-    private fun handleStage8WrongAttempt(
-        q: MissingLettersQ,
-        submitted: String,
-        expectedMissing: String,
-        allowLenientUmlauts: Boolean = false
-    ) {
-        val remaining = (_stage8AttemptsLeft.value - 1).coerceAtLeast(0)
-        _stage8AttemptsLeft.value = remaining
-        if (remaining > 0) {
-            _stage8Input.value = keepCorrectMissingPrefix(submitted, expectedMissing, allowLenientUmlauts)
-            _stage8Status.value = Stage6WordStatus.WRONG_TRY
-        } else {
-            _stage8Status.value = Stage6WordStatus.OUT_OF_ATTEMPTS
-            _stage8Questions.value = _stage8Questions.value + q.copy(
-                letterPool = q.letterPool.shuffled(),
-                isRetry = true
-            )
-            speak(q.word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.AGAIN) }
-        }
-    }
-
-    fun addStage8Letter(char: Char) {
-        if (_stage8Status.value.isResolved) return
-        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
-        val expected = expectedMissingString(q)
-        if (_stage8Input.value.length >= expected.length) return
-
-        val updated = _stage8Input.value + char
-        _stage8Input.value = updated
-
-        if (updated.equals(expected, ignoreCase = true)) {
-            _stage8Input.value = expected
-            _stage8Status.value = Stage6WordStatus.CORRECT
-            _stage8Score.value += 1
-            speak(q.word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
-        } else if (updated.length >= expected.length) {
-            handleStage8WrongAttempt(q, updated, expected)
-        } else {
-            _stage8Status.value = Stage6WordStatus.TYPING
-        }
-    }
-
-    fun insertStage8Umlaut(char: Char) {
-        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
-            if (_stage8Status.value.isResolved) return
-            val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
-            val expected = expectedMissingString(q)
-            val updated = _stage8Input.value + char
-            _stage8Input.value = updated
-            if (updated.trim().equals(expected, ignoreCase = true) ||
-                updated.trim().equals(q.word.german.trim(), ignoreCase = true)
-            ) {
-                _stage8Input.value = expected
-                _stage8Status.value = Stage6WordStatus.CORRECT
-                _stage8Score.value += 1
-                speak(q.word.displayWithArticle)
-                viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
-            } else {
-                _stage8Status.value = Stage6WordStatus.TYPING
-            }
-        } else {
-            addStage8Letter(char)
-        }
-    }
-
-    fun updateStage8TypedText(raw: String) {
-        if (_stage8Status.value.isResolved) return
-        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
-        _stage8Input.value = stripOptionalArticlePrefix(raw, q.word.article)
-        _stage8Status.value = Stage6WordStatus.TYPING
-    }
-
-    fun submitStage8TypedAnswer() {
-        if (_stage8Status.value.isResolved) return
-        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
-        val target = q.word.german.trim()
-        val expected = expectedMissingString(q)
-        val cleaned = stripOptionalArticlePrefix(_stage8Input.value, q.word.article).trim()
-        if (cleaned.isEmpty()) return
-
-        when {
-            cleaned.equals(expected, ignoreCase = true) || cleaned.equals(target, ignoreCase = true) -> {
-                _stage8Input.value = expected
-                _stage8Status.value = Stage6WordStatus.CORRECT
-                _stage8Score.value += 1
-                speak(q.word.displayWithArticle)
-                viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
-            }
-            matchesMissingLettersLenient(cleaned, expected, target) -> {
-                _stage8Input.value = expected
-                _stage8Status.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
-                _stage8Score.value += 1
-                speak(q.word.displayWithArticle)
-                viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
-            }
-            else -> {
-                handleStage8WrongAttempt(q, cleaned, expected, allowLenientUmlauts = true)
-            }
-        }
-    }
-
-    fun useStage8Hint() {
-        if (_stage8Status.value.isResolved) return
-        val q = _stage8Questions.value.getOrNull(_stage8Index.value) ?: return
-        val expected = expectedMissingString(q)
-        val nextInput = computeNextMissingHint(_stage8Input.value, expected)
-        _stage8Input.value = nextInput
-        if (nextInput.equals(expected, ignoreCase = true)) {
-            _stage8Status.value = Stage6WordStatus.CORRECT
-            _stage8Score.value += 1
-            speak(q.word.displayWithArticle)
-            viewModelScope.launch { repository.recordReview(q.word.id, ReviewRating.GOOD) }
-        } else {
-            _stage8Status.value = Stage6WordStatus.TYPING
-        }
-    }
-
-    fun removeStage8Letter() {
-        if (_stage8Status.value.isResolved) return
-        if (_stage8Input.value.isNotEmpty()) {
-            _stage8Input.value = _stage8Input.value.dropLast(1)
-            _stage8Status.value = Stage6WordStatus.TYPING
-        }
-    }
-
-    fun clearStage8() {
-        if (_stage8Status.value.isResolved) return
-        _stage8Input.value = ""
-        _stage8Status.value = Stage6WordStatus.TYPING
-    }
-
-    fun nextStage8MissingLetters(subtopicId: String) {
-        val nextIdx = _stage8Index.value + 1
-        if (nextIdx < _stage8Questions.value.size) {
-            _stage8Index.value = nextIdx
-            prepareStage8Question(nextIdx)
-        } else {
-            _stage8Finished.value = true
-            viewModelScope.launch {
-                val unlocked = repository.completeStage(
-                    subtopicId = subtopicId,
-                    stage = 8,
-                    score = _stage8Score.value,
                     enabledStages = _enabledStages.value,
                     level = _selectedLevel.value,
                     achieved100Percent = true
@@ -2016,6 +1966,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 builtItems.add(item)
             }
 
+            _mixedSessionSubtopicId.value = null
             _mixedReviewItems.value = builtItems
             _mixedReviewIndex.value = 0
             _mixedReviewScore.value = 0
@@ -2095,24 +2046,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     correctOption = word.german
                 )
             }
-            7 -> {
+            else -> {
                 val targetLetters = word.german.trim().filter { it != ' ' && it != '-' }.toList()
                 val extraLetters = listOf('e', 'a', 'i', 'r', 's', 't', 'n', 'l', 'ä', 'ö', 'ü').shuffled().take(3)
                 MixedReviewItem.SpellingReview(
                     word = word,
                     srsStep = srsStep,
                     letterPool = (targetLetters + extraLetters).shuffled()
-                )
-            }
-            else -> {
-                val target = word.german.trim()
-                val blanks = buildMissingLettersIndices(target)
-                val pool = buildMissingLettersPool(target, blanks)
-                MixedReviewItem.MissingLettersReview(
-                    word = word,
-                    srsStep = srsStep,
-                    blankIndices = blanks,
-                    letterPool = pool
                 )
             }
         }
@@ -2123,6 +2063,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _mixedSelectedOptionIndex.value = null
         _mixedSelectedString.value = null
         _mixedSpellingInput.value = ""
+        _mixedSpellingSelectedArticle.value = null
+        _mixedSpellingErrorHint.value = null
         _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         _mixedSpellingAttemptsLeft.value = MAX_STAGE6_ATTEMPTS
         _mixedLastFeedback.value = null
@@ -2136,8 +2078,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             is MixedReviewItem.ArticleReview -> speak(item.word.german)
             is MixedReviewItem.PluralReview -> speak(item.word.displayWithArticle)
             is MixedReviewItem.FillBlankReview -> Unit
-            is MixedReviewItem.SpellingReview -> speak(item.word.displayWithArticle)
-            is MixedReviewItem.MissingLettersReview -> speak(item.word.displayWithArticle)
+            is MixedReviewItem.SpellingReview ->
+                speak(if (requiresArticleInSpelling(item.word)) item.word.german else item.word.displayWithArticle)
         }
     }
 
@@ -2160,12 +2102,29 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             is MixedReviewItem.PluralReview -> item.copy(options = item.options.shuffled(), isRetry = true)
             is MixedReviewItem.FillBlankReview -> item.copy(options = item.options.shuffled(), isRetry = true)
             is MixedReviewItem.SpellingReview -> item.copy(letterPool = item.letterPool.shuffled(), isRetry = true)
-            is MixedReviewItem.MissingLettersReview -> item.copy(letterPool = item.letterPool.shuffled(), isRetry = true)
         }
         _mixedReviewItems.value = _mixedReviewItems.value + retryItem
     }
 
     private fun recordMixedOutcome(item: MixedReviewItem, isCorrect: Boolean) {
+        val isFinalMixStage = _mixedSessionSubtopicId.value != null
+        if (isFinalMixStage) {
+            if (isCorrect) {
+                _mixedReviewScore.value += 1
+                _mixedLastFeedback.value = if (item.isRetry) {
+                    "Виправлено! Слово закріплено у фінальному міксі"
+                } else {
+                    "Вірно! Рухаємося далі"
+                }
+                viewModelScope.launch { repository.recordReview(item.word.id, ReviewRating.GOOD) }
+            } else {
+                appendMixedRetry(item)
+                _mixedLastFeedback.value = "Помилка · слово повернеться в кінці фінального міксу для закріплення"
+                viewModelScope.launch { repository.recordReview(item.word.id, ReviewRating.AGAIN) }
+            }
+            return
+        }
+
         if (item.isRetry) {
             if (isCorrect) {
                 _mixedReviewScore.value += 1
@@ -2251,19 +2210,52 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     private fun handleMixedSpellingWrongAttempt(
         item: MixedReviewItem.SpellingReview,
-        submitted: String,
-        target: String,
-        allowLenientUmlauts: Boolean = false
+        keptInput: String,
+        errorMessage: String? = null,
+        resetArticle: Boolean = false
     ) {
         val remaining = (_mixedSpellingAttemptsLeft.value - 1).coerceAtLeast(0)
         _mixedSpellingAttemptsLeft.value = remaining
         if (remaining > 0) {
-            _mixedSpellingInput.value = keepCorrectPrefix(submitted, target, allowLenientUmlauts)
+            _mixedSpellingInput.value = keptInput
+            if (resetArticle) _mixedSpellingSelectedArticle.value = null
+            _mixedSpellingErrorHint.value = errorMessage
             _mixedSpellingStatus.value = Stage6WordStatus.WRONG_TRY
         } else {
+            _mixedSpellingErrorHint.value = null
             _mixedSpellingStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
             speak(item.word.displayWithArticle)
             recordMixedOutcome(item, isCorrect = false)
+        }
+    }
+
+    fun selectMixedSpellingArticle(article: String) {
+        if (_mixedSpellingStatus.value.isResolved) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
+            ?: return
+        if (!requiresArticleInSpelling(item.word)) return
+
+        val normalized = article.lowercase().trim()
+        _mixedSpellingSelectedArticle.value = normalized
+        _mixedSpellingErrorHint.value = null
+
+        val targetNoun = item.word.german.trim()
+        if (_mixedSpellingInput.value.equals(targetNoun, ignoreCase = true)) {
+            if (normalized.equals(item.word.article.trim(), ignoreCase = true)) {
+                _mixedSpellingInput.value = targetNoun
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            } else {
+                handleMixedSpellingWrongAttempt(
+                    item = item,
+                    keptInput = targetNoun,
+                    errorMessage = "Слово вірне, але артикль інший! Оберіть правильний (der / die / das)",
+                    resetArticle = true
+                )
+            }
+        } else {
+            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         }
     }
 
@@ -2280,13 +2272,41 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val raw = if (withLeadingSep.length < target.length) withLeadingSep + char else withLeadingSep
         val newText = autoAdvanceSeparators(raw, target)
         _mixedSpellingInput.value = newText
+        _mixedSpellingErrorHint.value = null
 
         if (newText.equals(target, ignoreCase = true)) {
-            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
-            speak(item.word.displayWithArticle)
-            recordMixedOutcome(item, isCorrect = true)
+            _mixedSpellingInput.value = target
+            if (!requiresArticleInSpelling(item.word)) {
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            } else {
+                val chosenArt = _mixedSpellingSelectedArticle.value
+                when {
+                    chosenArt == null -> {
+                        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+                        _mixedSpellingErrorHint.value = "Слово зібрано! Тепер оберіть артикль: der, die або das"
+                    }
+                    chosenArt.equals(item.word.article.trim(), ignoreCase = true) -> {
+                        _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                        speak(item.word.displayWithArticle)
+                        recordMixedOutcome(item, isCorrect = true)
+                    }
+                    else -> {
+                        handleMixedSpellingWrongAttempt(
+                            item = item,
+                            keptInput = target,
+                            errorMessage = "Слово вірне, але артикль інший! Оберіть правильний (der / die / das)",
+                            resetArticle = true
+                        )
+                    }
+                }
+            }
         } else if (newText.length >= target.length) {
-            handleMixedSpellingWrongAttempt(item, newText, target)
+            handleMixedSpellingWrongAttempt(
+                item = item,
+                keptInput = keepCorrectPrefix(newText, target, allowLenientUmlauts = false)
+            )
         } else {
             _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         }
@@ -2297,11 +2317,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (_mixedSpellingStatus.value.isResolved) return
             val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
                 ?: return
-            val target = item.word.german.trim()
+            val fullTarget = spellingTargetFor(item.word)
             val updated = _mixedSpellingInput.value + char
             _mixedSpellingInput.value = updated
-            if (updated.trim().equals(target, ignoreCase = true)) {
-                _mixedSpellingInput.value = target
+            _mixedSpellingErrorHint.value = null
+            if (normalizeSpellingSpaces(updated).equals(fullTarget, ignoreCase = true)) {
+                _mixedSpellingInput.value = fullTarget
                 _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
                 speak(item.word.displayWithArticle)
                 recordMixedOutcome(item, isCorrect = true)
@@ -2315,9 +2336,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun updateMixedSpellingTypedText(raw: String) {
         if (_mixedSpellingStatus.value.isResolved) return
-        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
-            ?: return
-        _mixedSpellingInput.value = stripOptionalArticlePrefix(raw, item.word.article)
+        _mixedSpellingInput.value = raw
+        _mixedSpellingErrorHint.value = null
         _mixedSpellingStatus.value = Stage6WordStatus.TYPING
     }
 
@@ -2325,22 +2345,50 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         if (_mixedSpellingStatus.value.isResolved) return
         val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
             ?: return
-        val target = item.word.german.trim()
-        val cleaned = stripOptionalArticlePrefix(_mixedSpellingInput.value, item.word.article).trim()
-        if (cleaned.isEmpty()) return
+        val raw = _mixedSpellingInput.value.trim()
+        if (raw.isEmpty()) return
 
-        if (cleaned.equals(target, ignoreCase = true)) {
-            _mixedSpellingInput.value = target
-            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
-            speak(item.word.displayWithArticle)
-            recordMixedOutcome(item, isCorrect = true)
-        } else if (matchesWithLenientUmlauts(cleaned, target)) {
-            _mixedSpellingInput.value = cleaned
-            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
-            speak(item.word.displayWithArticle)
-            recordMixedOutcome(item, isCorrect = true)
-        } else {
-            handleMixedSpellingWrongAttempt(item, cleaned, target, allowLenientUmlauts = true)
+        when (val eval = evaluateKeyboardSpelling(raw, item.word)) {
+            is KeyboardSpellingEvaluation.ExactMatch -> {
+                _mixedSpellingInput.value = eval.canonical
+                _mixedSpellingErrorHint.value = null
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            }
+            is KeyboardSpellingEvaluation.LenientUmlautMatch -> {
+                _mixedSpellingInput.value = eval.cleanedInput
+                _mixedSpellingErrorHint.value = null
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            }
+            is KeyboardSpellingEvaluation.MissingArticle -> {
+                handleMixedSpellingWrongAttempt(
+                    item = item,
+                    keptInput = eval.preservedText,
+                    errorMessage = "Не забудьте написати артикль (der / die / das) перед словом!"
+                )
+            }
+            is KeyboardSpellingEvaluation.WrongArticle -> {
+                handleMixedSpellingWrongAttempt(
+                    item = item,
+                    keptInput = eval.remainder,
+                    errorMessage = "Невірний артикль «${eval.typedArticle}» · спробуйте інший (der / die / das)"
+                )
+            }
+            is KeyboardSpellingEvaluation.WrongSpelling -> {
+                val msg = if (eval.articleWasCorrect && requiresArticleInSpelling(item.word)) {
+                    "Артикль вірний! Перевірте написання слова"
+                } else {
+                    null
+                }
+                handleMixedSpellingWrongAttempt(
+                    item = item,
+                    keptInput = eval.keptPrefix,
+                    errorMessage = msg
+                )
+            }
         }
     }
 
@@ -2348,12 +2396,45 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         if (_mixedSpellingStatus.value.isResolved) return
         val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.SpellingReview
             ?: return
-        val target = item.word.german.trim()
-        val current = _mixedSpellingInput.value
+        _mixedSpellingErrorHint.value = null
 
-        val nextInput = computeNextHintInput(current, target)
+        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
+            val fullTarget = spellingTargetFor(item.word)
+            val nextInput = computeKeyboardHintWithArticle(_mixedSpellingInput.value, item.word)
+            _mixedSpellingInput.value = nextInput
+            if (normalizeSpellingSpaces(nextInput).equals(fullTarget, ignoreCase = true)) {
+                _mixedSpellingInput.value = fullTarget
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            } else {
+                _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+            }
+            return
+        }
+
+        val targetNoun = item.word.german.trim()
+        if (requiresArticleInSpelling(item.word) &&
+            !_mixedSpellingSelectedArticle.value.equals(item.word.article.trim(), ignoreCase = true)
+        ) {
+            _mixedSpellingSelectedArticle.value = item.word.article.lowercase().trim()
+            if (_mixedSpellingInput.value.equals(targetNoun, ignoreCase = true)) {
+                _mixedSpellingInput.value = targetNoun
+                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
+                speak(item.word.displayWithArticle)
+                recordMixedOutcome(item, isCorrect = true)
+            } else {
+                _mixedSpellingStatus.value = Stage6WordStatus.TYPING
+            }
+            return
+        }
+
+        val nextInput = computeNextHintInput(_mixedSpellingInput.value, targetNoun)
         _mixedSpellingInput.value = nextInput
-        if (nextInput.equals(target, ignoreCase = true)) {
+        if (nextInput.equals(targetNoun, ignoreCase = true) &&
+            (!requiresArticleInSpelling(item.word) ||
+                _mixedSpellingSelectedArticle.value.equals(item.word.article.trim(), ignoreCase = true))
+        ) {
             _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
             speak(item.word.displayWithArticle)
             recordMixedOutcome(item, isCorrect = true)
@@ -2366,6 +2447,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         if (_mixedSpellingStatus.value.isResolved) return
         if (_mixedSpellingInput.value.isNotEmpty()) {
             _mixedSpellingInput.value = backspaceOverSeparators(_mixedSpellingInput.value)
+            _mixedSpellingErrorHint.value = null
             _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         }
     }
@@ -2373,145 +2455,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun clearMixedSpelling() {
         if (_mixedSpellingStatus.value.isResolved) return
         _mixedSpellingInput.value = ""
-        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
-    }
-
-    // --- Mixed Review: Stage 8 (Missing Letters) ---
-    private fun expectedMixedMissingString(item: MixedReviewItem.MissingLettersReview): String {
-        val target = item.word.german.trim()
-        return buildString {
-            item.blankIndices.forEach { idx ->
-                if (idx in target.indices) append(target[idx])
-            }
-        }
-    }
-
-    private fun handleMixedMissingWrongAttempt(
-        item: MixedReviewItem.MissingLettersReview,
-        submitted: String,
-        expectedMissing: String,
-        allowLenientUmlauts: Boolean = false
-    ) {
-        val remaining = (_mixedSpellingAttemptsLeft.value - 1).coerceAtLeast(0)
-        _mixedSpellingAttemptsLeft.value = remaining
-        if (remaining > 0) {
-            _mixedSpellingInput.value = keepCorrectMissingPrefix(submitted, expectedMissing, allowLenientUmlauts)
-            _mixedSpellingStatus.value = Stage6WordStatus.WRONG_TRY
-        } else {
-            _mixedSpellingStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
-            speak(item.word.displayWithArticle)
-            recordMixedOutcome(item, isCorrect = false)
-        }
-    }
-
-    fun addMixedMissingLetter(char: Char) {
-        if (_mixedSpellingStatus.value.isResolved) return
-        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
-            ?: return
-        val expected = expectedMixedMissingString(item)
-        if (_mixedSpellingInput.value.length >= expected.length) return
-
-        val updated = _mixedSpellingInput.value + char
-        _mixedSpellingInput.value = updated
-
-        if (updated.equals(expected, ignoreCase = true)) {
-            _mixedSpellingInput.value = expected
-            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
-            speak(item.word.displayWithArticle)
-            recordMixedOutcome(item, isCorrect = true)
-        } else if (updated.length >= expected.length) {
-            handleMixedMissingWrongAttempt(item, updated, expected)
-        } else {
-            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
-        }
-    }
-
-    fun insertMixedMissingUmlaut(char: Char) {
-        if (_stage6InputMode.value == Stage6InputMode.KEYBOARD) {
-            if (_mixedSpellingStatus.value.isResolved) return
-            val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
-                ?: return
-            val expected = expectedMixedMissingString(item)
-            val updated = _mixedSpellingInput.value + char
-            _mixedSpellingInput.value = updated
-            if (updated.trim().equals(expected, ignoreCase = true) ||
-                updated.trim().equals(item.word.german.trim(), ignoreCase = true)
-            ) {
-                _mixedSpellingInput.value = expected
-                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
-                speak(item.word.displayWithArticle)
-                recordMixedOutcome(item, isCorrect = true)
-            } else {
-                _mixedSpellingStatus.value = Stage6WordStatus.TYPING
-            }
-        } else {
-            addMixedMissingLetter(char)
-        }
-    }
-
-    fun updateMixedMissingTypedText(raw: String) {
-        if (_mixedSpellingStatus.value.isResolved) return
-        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
-            ?: return
-        _mixedSpellingInput.value = stripOptionalArticlePrefix(raw, item.word.article)
-        _mixedSpellingStatus.value = Stage6WordStatus.TYPING
-    }
-
-    fun submitMixedMissingTypedAnswer() {
-        if (_mixedSpellingStatus.value.isResolved) return
-        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
-            ?: return
-        val target = item.word.german.trim()
-        val expected = expectedMixedMissingString(item)
-        val cleaned = stripOptionalArticlePrefix(_mixedSpellingInput.value, item.word.article).trim()
-        if (cleaned.isEmpty()) return
-
-        when {
-            cleaned.equals(expected, ignoreCase = true) || cleaned.equals(target, ignoreCase = true) -> {
-                _mixedSpellingInput.value = expected
-                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
-                speak(item.word.displayWithArticle)
-                recordMixedOutcome(item, isCorrect = true)
-            }
-            matchesMissingLettersLenient(cleaned, expected, target) -> {
-                _mixedSpellingInput.value = expected
-                _mixedSpellingStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
-                speak(item.word.displayWithArticle)
-                recordMixedOutcome(item, isCorrect = true)
-            }
-            else -> {
-                handleMixedMissingWrongAttempt(item, cleaned, expected, allowLenientUmlauts = true)
-            }
-        }
-    }
-
-    fun useMixedMissingHint() {
-        if (_mixedSpellingStatus.value.isResolved) return
-        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.MissingLettersReview
-            ?: return
-        val expected = expectedMixedMissingString(item)
-        val nextInput = computeNextMissingHint(_mixedSpellingInput.value, expected)
-        _mixedSpellingInput.value = nextInput
-        if (nextInput.equals(expected, ignoreCase = true)) {
-            _mixedSpellingStatus.value = Stage6WordStatus.CORRECT
-            speak(item.word.displayWithArticle)
-            recordMixedOutcome(item, isCorrect = true)
-        } else {
-            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
-        }
-    }
-
-    fun removeMixedMissingLetter() {
-        if (_mixedSpellingStatus.value.isResolved) return
-        if (_mixedSpellingInput.value.isNotEmpty()) {
-            _mixedSpellingInput.value = _mixedSpellingInput.value.dropLast(1)
-            _mixedSpellingStatus.value = Stage6WordStatus.TYPING
-        }
-    }
-
-    fun clearMixedMissing() {
-        if (_mixedSpellingStatus.value.isResolved) return
-        _mixedSpellingInput.value = ""
+        _mixedSpellingSelectedArticle.value = null
+        _mixedSpellingErrorHint.value = null
         _mixedSpellingStatus.value = Stage6WordStatus.TYPING
     }
 
@@ -2534,7 +2479,23 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             )
         } else {
             _mixedReviewFinished.value = true
-            refreshReviewDashboard()
+            val finalMixSubId = _mixedSessionSubtopicId.value
+            if (finalMixSubId != null) {
+                viewModelScope.launch {
+                    val unlocked = repository.completeStage(
+                        subtopicId = finalMixSubId,
+                        stage = 8,
+                        score = _mixedReviewScore.value,
+                        enabledStages = _enabledStages.value,
+                        level = _selectedLevel.value,
+                        achieved100Percent = true
+                    )
+                    _lastCompletedUnlockedSrs.value = unlocked
+                    refreshReviewDashboard()
+                }
+            } else {
+                refreshReviewDashboard()
+            }
         }
     }
 
@@ -2636,83 +2597,110 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return word.substring(0, idx) + replacement + word.substring(idx + 1)
         }
 
-        /**
-         * Selects 1..5 non-adjacent-friendly letter indices to hide inside a German word for Stage 8.
-         * Keeps index 0 visible when the word has >= 4 letters so the word shape stays recognizable,
-         * and prioritizes umlauts/vowels so learners actively recall tricky spelling spots.
-         */
-        internal fun buildMissingLettersIndices(word: String): List<Int> {
-            val trimmed = word.trim()
-            val letterIndices = trimmed.indices.filter { trimmed[it].isLetter() }
-            if (letterIndices.isEmpty()) return emptyList()
-            if (letterIndices.size == 1) return letterIndices
+        internal fun requiresArticleInSpelling(word: WordEntity): Boolean {
+            return word.article.lowercase().trim() in listOf("der", "die", "das")
+        }
 
-            val targetCount = when (letterIndices.size) {
-                2, 3 -> 1
-                4, 5 -> 2
-                6, 7, 8 -> 3
-                9, 10, 11 -> 4
-                else -> 5
-            }
-
-            val candidateIndices = if (letterIndices.size >= 4) {
-                letterIndices.drop(1) // Keep first letter visible for anchor context
+        internal fun spellingTargetFor(word: WordEntity): String {
+            return if (requiresArticleInSpelling(word)) {
+                "${word.article.lowercase().trim()} ${word.german.trim()}"
             } else {
-                letterIndices
+                word.german.trim()
+            }
+        }
+
+        internal fun normalizeSpellingSpaces(raw: String): String {
+            return raw.trim().replace(Regex("\\s+"), " ")
+        }
+
+        internal fun evaluateKeyboardSpelling(
+            rawInput: String,
+            word: WordEntity
+        ): KeyboardSpellingEvaluation {
+            val cleaned = normalizeSpellingSpaces(rawInput)
+            val fullTarget = spellingTargetFor(word)
+
+            if (cleaned.equals(fullTarget, ignoreCase = true)) {
+                return KeyboardSpellingEvaluation.ExactMatch(fullTarget)
+            }
+            if (matchesWithLenientUmlauts(cleaned, fullTarget)) {
+                return KeyboardSpellingEvaluation.LenientUmlautMatch(cleaned)
             }
 
-            val prioritySet = setOf('ä', 'ö', 'ü', 'ß', 'a', 'e', 'i', 'o', 'u', 'Ä', 'Ö', 'Ü', 'A', 'E', 'I', 'O', 'U')
-            val prioritized = candidateIndices.filter { trimmed[it] in prioritySet }.shuffled()
-            val others = candidateIndices.filter { trimmed[it] !in prioritySet }.shuffled()
-            val ordered = prioritized + others
+            if (requiresArticleInSpelling(word)) {
+                val expectedArticle = word.article.lowercase().trim()
+                val firstSpace = cleaned.indexOf(' ')
+                if (firstSpace < 0) {
+                    // User entered only one word without any article
+                    return KeyboardSpellingEvaluation.MissingArticle(cleaned)
+                }
+                val firstToken = cleaned.substring(0, firstSpace).lowercase()
+                val remainder = cleaned.substring(firstSpace + 1).trim()
+                if (firstToken in listOf("der", "die", "das")) {
+                    if (firstToken != expectedArticle) {
+                        return KeyboardSpellingEvaluation.WrongArticle(
+                            typedArticle = firstToken,
+                            remainder = remainder
+                        )
+                    }
+                    // Correct article, check noun prefix
+                    val keptNoun = keepCorrectPrefix(remainder, word.german.trim(), allowLenientUmlauts = true)
+                    return KeyboardSpellingEvaluation.WrongSpelling(
+                        keptPrefix = "$expectedArticle $keptNoun",
+                        articleWasCorrect = true
+                    )
+                }
+                // First token wasn't even an article (e.g. multi-word noun typed without article)
+                return KeyboardSpellingEvaluation.MissingArticle(cleaned)
+            }
 
-            val chosen = mutableListOf<Int>()
-            // First pass: prefer non-adjacent blanks for visual readability
-            for (idx in ordered) {
-                if (chosen.size >= targetCount) break
-                if (chosen.none { kotlin.math.abs(it - idx) == 1 }) {
-                    chosen.add(idx)
+            val kept = keepCorrectPrefix(cleaned, fullTarget, allowLenientUmlauts = true)
+            return KeyboardSpellingEvaluation.WrongSpelling(
+                keptPrefix = kept,
+                articleWasCorrect = true
+            )
+        }
+
+        internal fun computeKeyboardHintWithArticle(current: String, word: WordEntity): String {
+            val fullTarget = spellingTargetFor(word)
+            if (requiresArticleInSpelling(word)) {
+                val expectedPrefix = "${word.article.lowercase().trim()} "
+                val normalized = current.trimStart()
+                if (!normalized.startsWith(expectedPrefix, ignoreCase = true)) {
+                    return expectedPrefix
                 }
             }
-            // Second pass: fill remaining slots if needed
-            for (idx in ordered) {
-                if (chosen.size >= targetCount) break
-                if (idx !in chosen) {
-                    chosen.add(idx)
-                }
+            return computeNextHintInput(normalizeSpellingSpaces(current), fullTarget)
+        }
+
+        /**
+         * Picks a balanced practice stage (2..7) for Stage 8 Final Mix so every word
+         * gets an eligible stage and all enabled stages appear evenly across the round.
+         */
+        internal fun pickFinalMixStageForWord(
+            word: WordEntity,
+            enabledPracticeStages: Set<Int>,
+            stageUsageCounts: Map<Int, Int>,
+            previousStageType: Int?
+        ): Int {
+            val eligible = mutableListOf<Int>()
+            if (2 in enabledPracticeStages) eligible.add(2)
+            if (3 in enabledPracticeStages) eligible.add(3)
+            if (4 in enabledPracticeStages && requiresArticleInSpelling(word)) eligible.add(4)
+            if (5 in enabledPracticeStages && isPluralizableNoun(word)) eligible.add(5)
+            if (6 in enabledPracticeStages &&
+                word.exampleDe.isNotBlank() &&
+                word.exampleDe.contains(word.german, ignoreCase = true)
+            ) {
+                eligible.add(6)
             }
-            return chosen.sorted()
-        }
+            if (7 in enabledPracticeStages && word.german.trim().length in 2..24) eligible.add(7)
 
-        internal fun buildMissingLettersPool(word: String, blankIndices: List<Int>): List<Char> {
-            val trimmed = word.trim()
-            val required = blankIndices.mapNotNull { idx -> trimmed.getOrNull(idx)?.lowercaseChar() }
-            val commonExtras = listOf('e', 'a', 'i', 'o', 'u', 'r', 's', 't', 'n', 'l', 'h', 'ä', 'ö', 'ü')
-                .filter { it !in required }
-                .shuffled()
-                .take(4)
-            return (required + commonExtras).shuffled()
-        }
-
-        internal fun matchesMissingLettersLenient(
-            input: String,
-            expectedMissing: String,
-            fullTarget: String
-        ): Boolean {
-            return matchesWithLenientUmlauts(input, expectedMissing) ||
-                matchesWithLenientUmlauts(input, fullTarget)
-        }
-
-        internal fun keepCorrectMissingPrefix(
-            input: String,
-            expectedMissing: String,
-            allowLenientUmlauts: Boolean = false
-        ): String {
-            return keepCorrectPrefix(input, expectedMissing, allowLenientUmlauts)
-        }
-
-        internal fun computeNextMissingHint(current: String, expectedMissing: String): String {
-            return computeNextHintInput(current, expectedMissing)
+            if (eligible.isEmpty()) return 3
+            val varied = eligible.filter { it != previousStageType }.ifEmpty { eligible }
+            val minUsage = varied.minOf { stageUsageCounts[it] ?: 0 }
+            val leastUsed = varied.filter { (stageUsageCounts[it] ?: 0) == minUsage }
+            return leastUsed.random()
         }
 
         internal fun pickMixedStageForWord(
@@ -2724,7 +2712,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (1 in enabledStages) eligible.add(1)
             if (2 in enabledStages) eligible.add(2)
             if (3 in enabledStages) eligible.add(3)
-            if (4 in enabledStages && word.article.lowercase().trim() in listOf("der", "die", "das")) {
+            if (4 in enabledStages && requiresArticleInSpelling(word)) {
                 eligible.add(4)
             }
             if (5 in enabledStages && isPluralizableNoun(word)) {
@@ -2739,10 +2727,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (7 in enabledStages && word.german.trim().length in 2..24) {
                 eligible.add(7)
             }
-            if (8 in enabledStages && word.german.trim().count { it.isLetter() } >= 3) {
-                eligible.add(8)
-            }
-            if (eligible.isEmpty()) return enabledStages.minOrNull() ?: 3
+            if (eligible.isEmpty()) return (enabledStages intersect setOf(1, 2, 3, 4, 5, 6, 7)).minOrNull() ?: 3
 
             val activeStages = eligible.filter { it != 1 }
             val preferredPool = if (activeStages.isNotEmpty() && eligible.size > 1) {
@@ -2896,22 +2881,6 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (j == 0) return ""
             val matched = target.substring(0, j)
             return autoAdvanceSeparators(matched, target)
-        }
-
-        /**
-         * Strips an optional leading article ("der ", "die ", "das ") when typing in keyboard mode,
-         * since the article badge is already displayed automatically before the input field.
-         */
-        internal fun stripOptionalArticlePrefix(input: String, article: String): String {
-            val trimmed = input.trimStart()
-            val cleanArticle = article.trim()
-            if (cleanArticle.isEmpty()) return trimmed
-            val prefix = "$cleanArticle "
-            return if (trimmed.startsWith(prefix, ignoreCase = true)) {
-                trimmed.substring(prefix.length).trimStart()
-            } else {
-                trimmed
-            }
         }
     }
 }

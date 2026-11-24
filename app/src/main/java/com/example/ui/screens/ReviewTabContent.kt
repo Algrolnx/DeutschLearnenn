@@ -559,6 +559,6 @@ fun shortStageNameUk(stage: Int): String = when (stage) {
     5 -> "5. Множина"
     6 -> "6. Речення"
     7 -> "7. Правопис"
-    8 -> "8. Літери"
+    8 -> "8. Фінальний мікс"
     else -> "Етап $stage"
 }

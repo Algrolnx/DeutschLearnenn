@@ -10,10 +10,13 @@ import com.example.data.repository.StockPhotoProvider
 import com.example.data.repository.StockPhotoQueryBuilder
 import com.example.data.repository.StockPhotoRepository
 import com.example.data.repository.VocabularyRepository
+import com.example.ui.KeyboardSpellingEvaluation
 import com.example.ui.LearningViewModel
 import com.example.ui.ReviewDashboardState
 import com.example.ui.components.illustrations.WordArtworkKey
 import com.example.ui.components.illustrations.WordArtworkResolver
+import com.example.util.GrammarGuideCatalog
+import com.example.util.GrammarRuleExplainer
 import com.example.util.SpacedRepetition
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
@@ -478,7 +481,7 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun stage6SmartPrefixRetentionAndArticleStrippingWorkCorrectly() {
+    fun stage7SmartPrefixRetentionAndRequiredArticleEvaluationWorkCorrectly() {
         // Keeps correct prefix when mistake happens mid-word
         assertEquals("Apfe", LearningViewModel.keepCorrectPrefix("Apfex", "Apfel"))
 
@@ -489,11 +492,55 @@ class ExampleUnitTest {
         assertEquals("guten Mo", LearningViewModel.keepCorrectPrefix("guten moxgen", "guten Morgen"))
         assertEquals("Rote ", LearningViewModel.keepCorrectPrefix("Rote X", "Rote Bete"))
 
-        // Keyboard input gracefully strips optional leading article matching word's article
-        assertEquals("Tomate", LearningViewModel.stripOptionalArticlePrefix("die Tomate", "die"))
-        assertEquals("Tomate", LearningViewModel.stripOptionalArticlePrefix("DIE  Tomate", "die"))
-        assertEquals("Tomate", LearningViewModel.stripOptionalArticlePrefix("Tomate", "die"))
-        assertEquals("Auto", LearningViewModel.stripOptionalArticlePrefix("Auto", ""))
+        // Nouns with der/die/das require the article in Stage 7 keyboard spelling
+        val tomato = WordEntity(
+            german = "Tomate",
+            article = "die",
+            plural = "die Tomaten",
+            translationUk = "помідор",
+            translationEn = "tomato",
+            categoryId = "food",
+            subtopicId = "food_vegetables"
+        )
+        val office = WordEntity(
+            german = "Büro",
+            article = "das",
+            plural = "die Büros",
+            translationUk = "офіс",
+            translationEn = "office",
+            categoryId = "work",
+            subtopicId = "work_office"
+        )
+        val verb = WordEntity(
+            german = "kochen",
+            article = "",
+            plural = "",
+            translationUk = "готувати",
+            translationEn = "to cook",
+            categoryId = "verbs",
+            subtopicId = "verbs_daily"
+        )
+
+        assertTrue(LearningViewModel.requiresArticleInSpelling(tomato))
+        assertFalse(LearningViewModel.requiresArticleInSpelling(verb))
+
+        assertTrue(LearningViewModel.evaluateKeyboardSpelling("die Tomate", tomato) is KeyboardSpellingEvaluation.ExactMatch)
+        assertTrue(LearningViewModel.evaluateKeyboardSpelling("DIE  tomate", tomato) is KeyboardSpellingEvaluation.ExactMatch)
+        assertTrue(LearningViewModel.evaluateKeyboardSpelling("das Buro", office) is KeyboardSpellingEvaluation.LenientUmlautMatch)
+        assertTrue(LearningViewModel.evaluateKeyboardSpelling("Tomate", tomato) is KeyboardSpellingEvaluation.MissingArticle)
+        assertTrue(LearningViewModel.evaluateKeyboardSpelling("der Tomate", tomato) is KeyboardSpellingEvaluation.WrongArticle)
+
+        val wrongSpell = LearningViewModel.evaluateKeyboardSpelling("die Tomxte", tomato)
+        assertTrue(wrongSpell is KeyboardSpellingEvaluation.WrongSpelling)
+        assertEquals("die Tom", (wrongSpell as KeyboardSpellingEvaluation.WrongSpelling).keptPrefix)
+
+        // Verbs without articles do not require an article
+        assertTrue(LearningViewModel.evaluateKeyboardSpelling("kochen", verb) is KeyboardSpellingEvaluation.ExactMatch)
+
+        // Hints reveal the article first for nouns, then letters one by one
+        assertEquals("die ", LearningViewModel.computeKeyboardHintWithArticle("", tomato))
+        assertEquals("die T", LearningViewModel.computeKeyboardHintWithArticle("die ", tomato))
+        assertEquals("die To", LearningViewModel.computeKeyboardHintWithArticle("die T", tomato))
     }
 
     @Test
@@ -584,29 +631,96 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun stage8MissingLettersIndicesLenientUmlautsAndHintsWorkCorrectly() {
-        val word = "Kühlschrank"
-        val blanks = LearningViewModel.buildMissingLettersIndices(word)
-        assertTrue("Should mask at least 2 letters", blanks.size >= 2)
-        assertTrue("Should leave visible context letters", blanks.size < word.length)
-        assertEquals("Blank indices must be sorted", blanks.sorted(), blanks)
-        assertFalse("First letter should remain visible as an anchor", blanks.contains(0))
+    fun stage8FinalMixDistributesAcrossPracticeStagesAndExcludesStage8() {
+        val richNoun = WordEntity(
+            german = "Apfel",
+            article = "der",
+            plural = "die Äpfel",
+            translationUk = "яблуко",
+            translationEn = "apple",
+            exampleDe = "Ich esse einen frischen Apfel.",
+            exampleUk = "Я їм свіже яблуко.",
+            categoryId = "food",
+            subtopicId = "food_fruits"
+        )
+        val plainVerb = WordEntity(
+            german = "lernen",
+            article = "",
+            plural = "",
+            translationUk = "вчити",
+            translationEn = "to learn",
+            exampleDe = "",
+            exampleUk = "",
+            categoryId = "verbs",
+            subtopicId = "verbs_daily"
+        )
 
-        val pool = LearningViewModel.buildMissingLettersPool(word, blanks)
-        val expectedMissing = buildString { blanks.forEach { append(word[it]) } }
-        assertTrue("Pool must be at least as large as missing letters", pool.size >= expectedMissing.length)
+        val allPractice = setOf(2, 3, 4, 5, 6, 7)
+        val usage = mutableMapOf<Int, Int>()
+        var prev: Int? = null
+        val pickedForRichNoun = mutableListOf<Int>()
+        repeat(12) {
+            val stage = LearningViewModel.pickFinalMixStageForWord(richNoun, allPractice, usage, prev)
+            assertTrue("Final mix must only pick stages 2..7, got $stage", stage in 2..7)
+            if (prev != null) {
+                assertTrue("Final mix should avoid back-to-back repeats when alternatives exist", stage != prev)
+            }
+            usage[stage] = (usage[stage] ?: 0) + 1
+            pickedForRichNoun.add(stage)
+            prev = stage
+        }
+        // Every stage 2..7 should be used evenly (2 times each across 12 picks)
+        for (stage in 2..7) {
+            assertEquals("Stage $stage should appear evenly in balanced Final Mix", 2, usage[stage])
+        }
 
-        // Lenient umlaut matching on missing-letter sequence and full word
-        assertTrue(LearningViewModel.matchesMissingLettersLenient("u", "ü", "Büro"))
-        assertTrue(LearningViewModel.matchesMissingLettersLenient("Buro", "ü", "Büro"))
-        assertTrue(LearningViewModel.matchesMissingLettersLenient("Strasse", "ß", "Straße"))
-        assertFalse(LearningViewModel.matchesMissingLettersLenient("x", "ü", "Büro"))
+        // Plain verb without article/plural/example should only pick eligible stages (2, 3, 7)
+        repeat(10) {
+            val stage = LearningViewModel.pickFinalMixStageForWord(plainVerb, allPractice, emptyMap(), null)
+            assertTrue("Verb should only get stage 2, 3, or 7, got $stage", stage in setOf(2, 3, 7))
+            val mixedStage = LearningViewModel.pickMixedStageForWord(plainVerb, (1..8).toSet(), null)
+            assertTrue("Mixed review must never return stage 8, got $mixedStage", mixedStage in setOf(2, 3, 7))
+        }
+    }
 
-        // Prefix retention and single-letter hints for missing slots
-        assertEquals("ü", LearningViewModel.keepCorrectMissingPrefix("ux", "üa", allowLenientUmlauts = true))
-        assertEquals("a", LearningViewModel.computeNextMissingHint("", "ae"))
-        assertEquals("ae", LearningViewModel.computeNextMissingHint("a", "ae"))
-        assertEquals("ae", LearningViewModel.computeNextMissingHint("ax", "ae"))
+    @Test
+    fun grammarRuleExplainerExplainsPluralEndingsAndArticlesAccurately() {
+        val teacherFem = WordEntity(
+            german = "Lehrerin", article = "die", plural = "die Lehrerinnen",
+            translationUk = "вчителька", translationEn = "teacher", categoryId = "work", subtopicId = "work_jobs"
+        )
+        val apple = WordEntity(
+            german = "Apfel", article = "der", plural = "die Äpfel",
+            translationUk = "яблуко", translationEn = "apple", categoryId = "food", subtopicId = "food_fruits"
+        )
+        val auto = WordEntity(
+            german = "Auto", article = "das", plural = "die Autos",
+            translationUk = "авто", translationEn = "car", categoryId = "transport", subtopicId = "transport_vehicles"
+        )
+        val book = WordEntity(
+            german = "Buch", article = "das", plural = "die Bücher",
+            translationUk = "книга", translationEn = "book", categoryId = "education", subtopicId = "edu_school"
+        )
+        val apartment = WordEntity(
+            german = "Wohnung", article = "die", plural = "die Wohnungen",
+            translationUk = "квартира", translationEn = "apartment", categoryId = "home", subtopicId = "home_rooms"
+        )
+        val girl = WordEntity(
+            german = "Mädchen", article = "das", plural = "die Mädchen",
+            translationUk = "дівчина", translationEn = "girl", categoryId = "people", subtopicId = "people_family"
+        )
+
+        assertEquals("-nen", GrammarRuleExplainer.explainPlural(teacherFem)?.badge)
+        assertTrue(GrammarRuleExplainer.explainPlural(apple)?.badge?.contains("умлаут") == true)
+        assertEquals("-s", GrammarRuleExplainer.explainPlural(auto)?.badge)
+        assertEquals("¨-er", GrammarRuleExplainer.explainPlural(book)?.badge)
+        assertEquals("-en", GrammarRuleExplainer.explainPlural(apartment)?.badge)
+        assertTrue(GrammarRuleExplainer.explainPlural(girl)?.badge?.startsWith("—") == true)
+
+        assertTrue(GrammarRuleExplainer.explainArticle(apartment)?.ruleTitle?.contains("-ung") == true)
+        assertTrue(GrammarRuleExplainer.explainArticle(girl)?.ruleTitle?.contains("-chen") == true)
+        assertEquals(7, GrammarGuideCatalog.topics.size)
+        assertTrue(GrammarGuideCatalog.topics.all { it.rules.isNotEmpty() && it.subtitleUk.isNotBlank() })
     }
 
     @Test

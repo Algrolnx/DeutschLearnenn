@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Edit
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.Button
@@ -376,8 +376,8 @@ fun SubtopicHubScreen(
                             4 -> Triple("Artikel-Trainer", "Рід іменників (der / die / das)", Icons.Default.Shield)
                             5 -> Triple("Plural-Trainer", "Форми множини іменників (die ...)", Icons.Default.DynamicFeed)
                             6 -> Triple("Lückentext", "Доповнення пропусків у реченнях", Icons.Default.Extension)
-                            7 -> Triple("Buchstabieren & Schreiben", "Правопис слова з літер або клавіатури", Icons.Default.Edit)
-                            else -> Triple("Lückenwort", "Вставте пропущені літери у слові", Icons.Default.Spellcheck)
+                            7 -> Triple("Buchstabieren & Schreiben", "Правопис слова з артиклем (літери або клавіатура)", Icons.Default.Edit)
+                            else -> Triple("Gesamttest · Фінальний мікс", "Проходження усіх етапів разом для закріплення", Icons.Default.AutoAwesome)
                         }
                         StageRoadmapNode(
                             stageNumber = stageNum,
@@ -660,7 +660,7 @@ fun getStageActionTitle(stage: Int): String = when (stage) {
     4 -> "Перейти до Етапу 4: Тренажер родів"
     5 -> "Перейти до Етапу 5: Множина"
     6 -> "Перейти до Етапу 6: Пропуски в реченні"
-    7 -> "Перейти до Етапу 7: Правопис"
-    8 -> "Перейти до Етапу 8: Пропущені літери"
+    7 -> "Перейти до Етапу 7: Правопис з артиклем"
+    8 -> "Перейти до Етапу 8: Фінальний мікс"
     else -> "Почати навчання"
 }
