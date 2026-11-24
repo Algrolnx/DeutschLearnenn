@@ -669,4 +669,64 @@ class ExampleUnitTest {
             StockPhotoRepository.pickBestLandscapeCandidate(bookCandidates, bookPlan.scoringProfile)?.url
         )
     }
+
+    @Test
+    fun abstractAdjectivesResolveToConcreteVisualScenesAndRejectStatuesOrSpas() {
+        val schlecht = WordEntity(
+            german = "schlecht",
+            article = "",
+            translationUk = "поганий",
+            translationEn = "bad",
+            categoryId = "adjectives",
+            subtopicId = "adj_qualities"
+        )
+        val schlechtPlan = StockPhotoQueryBuilder.build(schlecht)
+        assertEquals("thumbs down", schlechtPlan.steps.first().query)
+        val schlechtPick = StockPhotoRepository.pickBestLandscapeCandidate(
+            listOf(
+                PhotoCandidate("https://example.com/spa_bridge.jpg", 800, 600, "a", listOf("bridge", "forest", "spa", "bad"), likes = 80),
+                PhotoCandidate("https://example.com/thumbs_down.jpg", 800, 600, "b", listOf("thumbs down", "hand", "gesture", "bad"), likes = 60)
+            ),
+            schlechtPlan.scoringProfile
+        )
+        assertEquals("https://example.com/thumbs_down.jpg", schlechtPick?.url)
+
+        val schrecklich = WordEntity(
+            german = "schrecklich",
+            article = "",
+            translationUk = "жахливий",
+            translationEn = "terrible",
+            categoryId = "adjectives",
+            subtopicId = "adj_qualities"
+        )
+        val schrecklichPlan = StockPhotoQueryBuilder.build(schrecklich)
+        assertEquals("scared shocked face", schrecklichPlan.steps.first().query)
+        val schrecklichPick = StockPhotoRepository.pickBestLandscapeCandidate(
+            listOf(
+                PhotoCandidate("https://example.com/ivan_statue.jpg", 800, 600, "a", listOf("statue", "monument", "horse", "terrible"), likes = 120),
+                PhotoCandidate("https://example.com/shocked_face.jpg", 800, 600, "b", listOf("scared", "shocked", "face", "afraid"), likes = 45)
+            ),
+            schrecklichPlan.scoringProfile
+        )
+        assertEquals("https://example.com/shocked_face.jpg", schrecklichPick?.url)
+
+        assertEquals(
+            "thumbs up",
+            StockPhotoQueryBuilder.build(
+                WordEntity(german = "gut", article = "", translationUk = "добрий", translationEn = "good", categoryId = "adjectives", subtopicId = "adj_qualities")
+            ).steps.first().query
+        )
+        assertEquals(
+            "rubik cube",
+            StockPhotoQueryBuilder.build(
+                WordEntity(german = "schwierig", article = "", translationUk = "складний", translationEn = "difficult", categoryId = "adjectives", subtopicId = "adj_qualities")
+            ).steps.first().query
+        )
+        assertEquals(
+            "exclamation mark",
+            StockPhotoQueryBuilder.build(
+                WordEntity(german = "wichtig", article = "", translationUk = "важливий", translationEn = "important", categoryId = "adjectives", subtopicId = "adj_qualities")
+            ).steps.first().query
+        )
+    }
 }

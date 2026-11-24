@@ -141,6 +141,32 @@ class StockPhotoRepository private constructor(context: Context) {
     @Volatile
     private var pixabayCooldownUntilMs: Long = 0L
 
+    init {
+        migrateAdjectivePhotoCacheOnce()
+    }
+
+    /**
+     * One-time targeted cleanup of previously cached abstract-adjective photo URLs
+     * (e.g., "schlecht" -> spa bridge, "schrecklich" -> Ivan the Terrible statue)
+     * without touching any other subtopics or offline-downloaded noun/verb photos.
+     */
+    private fun migrateAdjectivePhotoCacheOnce() {
+        if (prefs.getBoolean(KEY_ADJ_CACHE_MIGRATED_V1, false)) return
+        val stalePrefixes = listOf(
+            "adj_qualities_",
+            "adj_size_time_",
+            "adj_sensory_",
+            "adj_personality_"
+        )
+        val editor = prefs.edit()
+        prefs.all.keys.forEach { key ->
+            if (stalePrefixes.any { prefix -> key.startsWith(prefix) }) {
+                editor.remove(key)
+            }
+        }
+        editor.putBoolean(KEY_ADJ_CACHE_MIGRATED_V1, true).apply()
+    }
+
     private val pixabayApiKey: String
         get() = sanitizeApiKey(BuildConfig.PIXABAY_API_KEY, "YOUR_PIXABAY_API_KEY")
 
@@ -585,6 +611,7 @@ class StockPhotoRepository private constructor(context: Context) {
     companion object {
         private const val TAG = "StockPhotoRepository"
         private const val PREFS_NAME = "deutschlern_stock_photo_cache_v4"
+        private const val KEY_ADJ_CACHE_MIGRATED_V1 = "__adj_photo_cache_migrated_v1"
         private const val DEFAULT_RATE_LIMIT_COOLDOWN_MS = 15_000L
         private const val TARGET_ASPECT_RATIO = 4f / 3f
         internal const val CARD_DECODE_WIDTH = 640
