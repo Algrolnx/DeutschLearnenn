@@ -11,24 +11,37 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.io.File
+import java.io.IOException
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 enum class VoiceToneProfile(
     val titleUk: String,
@@ -68,11 +81,17 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(2500, TimeUnit.MILLISECONDS)
-        .readTimeout(4000, TimeUnit.MILLISECONDS)
+        .dispatcher(Dispatcher().apply {
+            maxRequests = 32
+            maxRequestsPerHost = 16
+        })
+        .connectionPool(ConnectionPool(12, 5, TimeUnit.MINUTES))
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
     private val cacheDir = File(context.applicationContext.cacheDir, "tts_hd").apply { mkdirs() }
+    private val cachedAudioKeys = ConcurrentHashMap<String, Boolean>()
 
     private var tts: TextToSpeech? = try {
         TextToSpeech(context.applicationContext, this)
@@ -261,8 +280,11 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         val cleaned = text.trim()
         if (cleaned.isEmpty()) return true
         val key = sha256(cleaned.lowercase(Locale.GERMAN))
+        if (cachedAudioKeys.containsKey(key)) return true
         val targetFile = File(cacheDir, "$key.mp3")
-        return targetFile.exists() && targetFile.length() > 512L
+        val exists = targetFile.exists() && targetFile.length() > 512L
+        if (exists) cachedAudioKeys[key] = true
+        return exists
     }
 
     suspend fun prefetchHdAudio(text: String): Boolean {
@@ -272,14 +294,35 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         return resolveOrFetchHdAudio(cleaned) != null
     }
 
+    private suspend fun executeHttpCall(request: Request): Response =
+        suspendCancellableCoroutine { cont ->
+            val call = httpClient.newCall(request)
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (cont.isActive) {
+                        cont.resume(response)
+                    } else {
+                        response.close()
+                    }
+                }
+            })
+        }
+
     private suspend fun resolveOrFetchHdAudio(text: String): File? = withContext(Dispatchers.IO) {
+        coroutineContext.ensureActive()
         val key = sha256(text.lowercase(Locale.GERMAN))
         val targetFile = File(cacheDir, "$key.mp3")
         if (targetFile.exists() && targetFile.length() > 512L) {
+            cachedAudioKeys[key] = true
             return@withContext targetFile
         }
 
-        val tempFile = File(cacheDir, "$key.tmp")
+        val tempFile = File(cacheDir, "$key.${Thread.currentThread().id}.tmp")
         try {
             val encoded = URLEncoder.encode(text, "UTF-8")
             val url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=de&client=tw-ob&q=$encoded"
@@ -291,14 +334,19 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
                 )
                 .build()
 
-            httpClient.newCall(req).execute().use { resp ->
+            executeHttpCall(req).use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 val bytes = resp.body?.bytes() ?: return@withContext null
                 if (bytes.size < 512) return@withContext null
                 tempFile.writeBytes(bytes)
                 if (targetFile.exists()) targetFile.delete()
-                if (tempFile.renameTo(targetFile)) targetFile else tempFile
+                val saved = if (tempFile.renameTo(targetFile)) targetFile else tempFile
+                cachedAudioKeys[key] = true
+                saved
             }
+        } catch (ce: CancellationException) {
+            tempFile.delete()
+            throw ce
         } catch (e: Exception) {
             tempFile.delete()
             Log.d("TtsManager", "HD stream unavailable, falling back to offline TTS: ${e.message}")

@@ -427,10 +427,10 @@ fun SettingsDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 if (offlineState.isRunning) {
-                    val dlProgress = if (offlineState.totalWords > 0) {
-                        (offlineState.processedWords.toFloat() / offlineState.totalWords).coerceIn(0f, 1f)
-                    } else {
-                        0f
+                    val dlProgress = when {
+                        offlineState.progressFraction > 0f -> offlineState.progressFraction.coerceIn(0f, 1f)
+                        offlineState.totalWords > 0 -> (offlineState.processedWords.toFloat() / offlineState.totalWords).coerceIn(0f, 1f)
+                        else -> 0f
                     }
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -487,14 +487,14 @@ fun SettingsDialog(
                                 OutlinedButton(
                                     onClick = { viewModel.cancelOfflineLevelDownload() },
                                     shape = RoundedCornerShape(10.dp),
-                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.6f)),
+                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.7f)),
                                     modifier = Modifier
-                                        .height(36.dp)
+                                        .height(48.dp)
                                         .testTag("cancel_offline_download_button")
                                 ) {
-                                    Icon(Icons.Default.Stop, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Stop, contentDescription = "Зупинити завантаження", tint = ErrorRed, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Зупинити", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
+                                    Text("Зупинити", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
                                 }
                             }
                         }
@@ -597,20 +597,34 @@ fun SettingsDialog(
                                     }
                                 } else {
                                     Button(
-                                        onClick = { viewModel.startOfflineLevelDownload(lvl) },
-                                        enabled = !offlineState.isRunning,
+                                        onClick = {
+                                            if (isThisDownloading) {
+                                                viewModel.cancelOfflineLevelDownload()
+                                            } else {
+                                                viewModel.startOfflineLevelDownload(lvl)
+                                            }
+                                        },
+                                        enabled = isThisDownloading || !offlineState.isRunning,
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.primary
+                                            containerColor = if (isThisDownloading) {
+                                                ErrorRed.copy(alpha = 0.14f)
+                                            } else {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            },
+                                            contentColor = if (isThisDownloading) {
+                                                ErrorRed
+                                            } else {
+                                                MaterialTheme.colorScheme.primary
+                                            }
                                         ),
                                         modifier = Modifier
-                                            .height(40.dp)
+                                            .height(48.dp)
                                             .testTag("offline_download_${lvl.lowercase()}")
                                     ) {
                                         Text(
                                             text = when {
-                                                isThisDownloading -> "Йде..."
+                                                isThisDownloading -> "Зупинити"
                                                 cachedCount > 0 -> "Дозавантажити"
                                                 else -> "Завантажити"
                                             },

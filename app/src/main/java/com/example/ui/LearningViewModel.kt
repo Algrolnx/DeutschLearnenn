@@ -24,7 +24,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +43,8 @@ import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 sealed class Screen {
     object MainTopics : Screen()
@@ -244,6 +249,7 @@ data class OfflineDownloadState(
     val totalWords: Int = 0,
     val photosReady: Int = 0,
     val audioReady: Int = 0,
+    val progressFraction: Float = 0f,
     val isPausedForRateLimit: Boolean = false,
     val statusMessage: String? = null,
     val isRunning: Boolean = false,
@@ -331,6 +337,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     // === Offline Level Preload (Photos + HD Pronunciation) ===
     private var offlineDownloadJob: Job? = null
+    private val offlineDownloadSessionId = AtomicLong(0L)
     private val _offlineDownloadState = MutableStateFlow(OfflineDownloadState())
     val offlineDownloadState: StateFlow<OfflineDownloadState> = _offlineDownloadState.asStateFlow()
 
@@ -357,17 +364,20 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun startOfflineLevelDownload(level: String) {
         val normLevel = level.uppercase()
-        if (_offlineDownloadState.value.isRunning) {
-            offlineDownloadJob?.cancel()
-        }
+        val sessionId = offlineDownloadSessionId.incrementAndGet()
+        offlineDownloadJob?.cancel()
         offlineDownloadJob = viewModelScope.launch {
             val allLevelWords = repository.getWordsByLevelOnce(normLevel)
             if (allLevelWords.isEmpty()) {
-                _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                    isRunning = false,
-                    activeLevel = null,
-                    statusMessage = "Немає слів для рівня $normLevel"
-                )
+                if (offlineDownloadSessionId.get() == sessionId) {
+                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                        isRunning = false,
+                        isPausedForRateLimit = false,
+                        activeLevel = null,
+                        progressFraction = 0f,
+                        statusMessage = "Немає слів для рівня $normLevel"
+                    )
+                }
                 return@launch
             }
 
@@ -377,109 +387,212 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             val priorityIds = priorityBatch.mapTo(HashSet()) { it.id }
             val orderedWords = priorityBatch + allLevelWords.filter { it.id !in priorityIds }
 
+            val totalWords = orderedWords.size
             val hasPhotoApi = stockPhotoRepository.hasConfiguredApiKey()
-            var photosReady = 0
-            var audioReady = 0
+            val latchTarget = if (hasPhotoApi) 2 else 1
+            val totalSteps = (totalWords * latchTarget).coerceAtLeast(1)
+
+            val audioDoneCount = AtomicInteger(0)
+            val audioReadyCount = AtomicInteger(0)
+            val photoDoneCount = AtomicInteger(0)
+            val photosReadyCount = AtomicInteger(0)
+            val wordsCompletedCount = AtomicInteger(0)
+            val wordLatches = Array(totalWords) { AtomicInteger(0) }
+            val rateLimitWaitSec = AtomicInteger(0)
+            val lastUiPublishMs = AtomicLong(0L)
+
+            fun publishProgress(force: Boolean = false) {
+                if (offlineDownloadSessionId.get() != sessionId) return
+                val now = System.currentTimeMillis()
+                if (!force && now - lastUiPublishMs.get() < 120L) return
+                lastUiPublishMs.set(now)
+
+                val doneAudio = audioDoneCount.get()
+                val donePhotos = if (hasPhotoApi) photoDoneCount.get() else 0
+                val completedWords = wordsCompletedCount.get()
+                val fraction = ((doneAudio + donePhotos).toFloat() / totalSteps).coerceIn(0f, 1f)
+                val waitSec = rateLimitWaitSec.get()
+
+                val statusText = if (waitSec > 0) {
+                    if (doneAudio < totalWords) {
+                        "Рівень $normLevel: аудіо триває · пауза ліміту Pixabay (~$waitSec с)"
+                    } else {
+                        "Рівень $normLevel: пауза ліміту Pixabay (~$waitSec с)..."
+                    }
+                } else {
+                    "Рівень $normLevel: $completedWords / $totalWords слів"
+                }
+
+                _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                    processedWords = completedWords,
+                    totalWords = totalWords,
+                    photosReady = photosReadyCount.get(),
+                    audioReady = audioReadyCount.get(),
+                    progressFraction = fraction,
+                    isPausedForRateLimit = waitSec > 0,
+                    statusMessage = statusText
+                )
+            }
 
             _offlineDownloadState.value = _offlineDownloadState.value.copy(
                 activeLevel = normLevel,
                 processedWords = 0,
-                totalWords = orderedWords.size,
+                totalWords = totalWords,
                 photosReady = 0,
                 audioReady = 0,
+                progressFraction = 0f,
                 isPausedForRateLimit = false,
                 isRunning = true,
-                statusMessage = "Підготовка рівня $normLevel..."
+                statusMessage = "Завантаження рівня $normLevel..."
             )
 
             try {
-                for ((index, word) in orderedWords.withIndex()) {
-                    if (!isActive) break
-
-                    // 1. Preload HD German audio (with article, bare noun for Stage 4, and plural for Stage 5)
-                    val audioWithArt = ttsManager.prefetchHdAudio(word.displayWithArticle)
-                    if (word.article.isNotBlank() && !word.german.equals(word.displayWithArticle, ignoreCase = true)) {
-                        ttsManager.prefetchHdAudio(word.german)
-                    }
-                    if (isPluralizableNoun(word)) {
-                        ttsManager.prefetchHdAudio(word.plural.trim())
-                    }
-                    if (audioWithArt) audioReady++
-
-                    // 2. Preload photo URL + Coil JPEG bytes into disk cache with Pixabay 429 pacing
-                    if (hasPhotoApi) {
-                        val alreadyDiskCached = stockPhotoRepository.isPhotoDiskCached(word)
-                        if (alreadyDiskCached) {
-                            photosReady++
-                        } else {
-                            val hadUrl = stockPhotoRepository.getCachedSync(word) != null
-                            if (!hadUrl) {
-                                val waitMs = stockPhotoRepository.remainingCooldownMs()
-                                if (waitMs > 0L) {
-                                    val waitSec = ((waitMs + 999L) / 1000L).coerceAtLeast(1L)
-                                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                                        isPausedForRateLimit = true,
-                                        statusMessage = "Пауза через ліміт Pixabay (~$waitSec с)..."
-                                    )
-                                    delay(waitMs + 500L)
-                                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                                        isPausedForRateLimit = false,
-                                        statusMessage = "Завантаження рівня $normLevel..."
-                                    )
+                // Run HD audio pool (10 parallel workers) and photo pool (6 parallel workers) concurrently
+                // so audio never blocks photos and Pixabay rate-limit pauses never stall audio.
+                coroutineScope {
+                    val audioCursor = AtomicInteger(0)
+                    val audioWorkers = List(10) {
+                        launch(Dispatchers.IO) {
+                            while (isActive) {
+                                val idx = audioCursor.getAndIncrement()
+                                if (idx >= totalWords) break
+                                ensureActive()
+                                val word = orderedWords[idx]
+                                val audioWithArt = ttsManager.prefetchHdAudio(word.displayWithArticle)
+                                if (word.article.isNotBlank() &&
+                                    !word.german.equals(word.displayWithArticle, ignoreCase = true)
+                                ) {
+                                    ensureActive()
+                                    ttsManager.prefetchHdAudio(word.german)
                                 }
-                            }
-                            val ok = stockPhotoRepository.preloadWordForOffline(word)
-                            if (ok) photosReady++
-                            // Gentle pacing only when we had to hit the Pixabay API
-                            if (!hadUrl && stockPhotoRepository.remainingCooldownMs() == 0L) {
-                                delay(650L)
+                                if (isPluralizableNoun(word)) {
+                                    ensureActive()
+                                    ttsManager.prefetchHdAudio(word.plural.trim())
+                                }
+                                if (audioWithArt) audioReadyCount.incrementAndGet()
+                                audioDoneCount.incrementAndGet()
+                                if (wordLatches[idx].incrementAndGet() >= latchTarget) {
+                                    wordsCompletedCount.incrementAndGet()
+                                }
+                                publishProgress()
                             }
                         }
                     }
 
-                    val done = index + 1
-                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                        processedWords = done,
-                        photosReady = photosReady,
-                        audioReady = audioReady,
-                        isPausedForRateLimit = false,
-                        statusMessage = "Рівень $normLevel: $done / ${orderedWords.size} слів"
-                    )
+                    val photoWorkers = if (hasPhotoApi) {
+                        val photoCursor = AtomicInteger(0)
+                        List(6) {
+                            launch(Dispatchers.IO) {
+                                while (isActive) {
+                                    val idx = photoCursor.getAndIncrement()
+                                    if (idx >= totalWords) break
+                                    ensureActive()
+                                    val word = orderedWords[idx]
+
+                                    val photoOk = if (stockPhotoRepository.isPhotoDiskCached(word)) {
+                                        true
+                                    } else if (stockPhotoRepository.getCachedSync(word) != null) {
+                                        // URL is already resolved; download CDN bytes directly with zero API quota cost
+                                        stockPhotoRepository.preloadWordForOffline(word, fastBulk = true)
+                                    } else {
+                                        var loaded = false
+                                        for (attempt in 0 until 2) {
+                                            ensureActive()
+                                            var waitMs = stockPhotoRepository.remainingCooldownMs()
+                                            while (waitMs > 0L && isActive) {
+                                                val sec = ((waitMs + 999L) / 1000L).toInt().coerceAtLeast(1)
+                                                rateLimitWaitSec.set(sec)
+                                                publishProgress(force = true)
+                                                delay(minOf(1000L, waitMs))
+                                                waitMs = stockPhotoRepository.remainingCooldownMs()
+                                            }
+                                            ensureActive()
+                                            rateLimitWaitSec.set(0)
+                                            loaded = stockPhotoRepository.preloadWordForOffline(word, fastBulk = true)
+                                            if (loaded || stockPhotoRepository.remainingCooldownMs() == 0L) {
+                                                break
+                                            }
+                                        }
+                                        loaded
+                                    }
+
+                                    if (photoOk) photosReadyCount.incrementAndGet()
+                                    photoDoneCount.incrementAndGet()
+                                    if (wordLatches[idx].incrementAndGet() >= latchTarget) {
+                                        wordsCompletedCount.incrementAndGet()
+                                    }
+                                    publishProgress()
+                                }
+                            }
+                        }
+                    } else {
+                        emptyList()
+                    }
+
+                    audioWorkers.forEach { it.join() }
+                    photoWorkers.forEach { it.join() }
                 }
 
-                val refreshed = computeOfflineLevelSummaries()
-                _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                    isRunning = false,
-                    isPausedForRateLimit = false,
-                    activeLevel = null,
-                    levelSummaries = refreshed,
-                    statusMessage = "Рівень $normLevel збережено для офлайн-занять (фото: $photosReady, аудіо: $audioReady)"
-                )
+                if (offlineDownloadSessionId.get() == sessionId) {
+                    val refreshed = computeOfflineLevelSummaries()
+                    val finalPhotos = photosReadyCount.get()
+                    val finalAudio = audioReadyCount.get()
+                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                        isRunning = false,
+                        isPausedForRateLimit = false,
+                        activeLevel = null,
+                        processedWords = totalWords,
+                        photosReady = finalPhotos,
+                        audioReady = finalAudio,
+                        progressFraction = 1f,
+                        levelSummaries = refreshed,
+                        statusMessage = "Рівень $normLevel збережено для офлайн-занять (фото: $finalPhotos, аудіо: $finalAudio)"
+                    )
+                }
             } catch (_: CancellationException) {
-                val refreshed = computeOfflineLevelSummaries()
-                _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                    isRunning = false,
-                    isPausedForRateLimit = false,
-                    activeLevel = null,
-                    levelSummaries = refreshed,
-                    statusMessage = "Завантаження $normLevel зупинено · вже збережене лишилось у кеші"
-                )
+                withContext(NonCancellable) {
+                    if (offlineDownloadSessionId.get() == sessionId) {
+                        val refreshed = computeOfflineLevelSummaries()
+                        _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                            isRunning = false,
+                            isPausedForRateLimit = false,
+                            activeLevel = null,
+                            levelSummaries = refreshed,
+                            statusMessage = "Завантаження $normLevel зупинено · вже збережене лишилось у кеші"
+                        )
+                    }
+                }
             } catch (e: Exception) {
-                val refreshed = computeOfflineLevelSummaries()
-                _offlineDownloadState.value = _offlineDownloadState.value.copy(
-                    isRunning = false,
-                    isPausedForRateLimit = false,
-                    activeLevel = null,
-                    levelSummaries = refreshed,
-                    statusMessage = "Помилка завантаження: ${e.message ?: "перевірте інтернет"}"
-                )
+                if (offlineDownloadSessionId.get() == sessionId) {
+                    val refreshed = computeOfflineLevelSummaries()
+                    _offlineDownloadState.value = _offlineDownloadState.value.copy(
+                        isRunning = false,
+                        isPausedForRateLimit = false,
+                        activeLevel = null,
+                        levelSummaries = refreshed,
+                        statusMessage = "Помилка завантаження: ${e.message ?: "перевірте інтернет"}"
+                    )
+                }
             }
         }
     }
 
     fun cancelOfflineLevelDownload() {
+        val activeLvl = _offlineDownloadState.value.activeLevel
+        offlineDownloadSessionId.incrementAndGet()
         offlineDownloadJob?.cancel()
         offlineDownloadJob = null
+        _offlineDownloadState.value = _offlineDownloadState.value.copy(
+            isRunning = false,
+            isPausedForRateLimit = false,
+            activeLevel = null,
+            statusMessage = if (activeLvl != null) {
+                "Завантаження $activeLvl зупинено · вже збережене лишилось у кеші"
+            } else {
+                "Завантаження зупинено · вже збережене лишилось у кеші"
+            }
+        )
+        refreshOfflineLevelSummaries()
     }
 
     private val _autoPronounce = MutableStateFlow(prefs.getBoolean("tts_auto_pronounce", true))

@@ -14,19 +14,28 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.math.abs
 import kotlin.math.ln
 
@@ -132,6 +141,7 @@ class StockPhotoRepository private constructor(context: Context) {
     // Separate concurrency lanes: visible cards never wait behind background prefetching
     private val foregroundApiGuard = Semaphore(permits = 5)
     private val prefetchApiGuard = Semaphore(permits = 2)
+    private val bulkApiGuard = Semaphore(permits = 6)
 
     private val subtopicSelectionLock = Any()
     private val subtopicUrlIndex = HashMap<String, MutableMap<String, String>>()
@@ -300,16 +310,67 @@ class StockPhotoRepository private constructor(context: Context) {
     }
 
     /**
-     * Resolves (if needed) and downloads the image bytes into Coil's disk cache synchronously
-     * on Dispatchers.IO so the card displays seamlessly without internet.
+     * Resolves a photo URL directly in the caller's coroutine context for bulk offline downloads.
+     * Supports immediate coroutine cancellation (including aborting the active HTTP call) and uses
+     * single-call fast resolution so bulk preloading preserves Pixabay API quota.
      */
-    suspend fun preloadWordForOffline(word: WordEntity): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun resolvePhotoForBulk(word: WordEntity): CachedStockPhoto? {
+        coroutineContext.ensureActive()
+        val key = cacheKey(word)
+        memoryUrlCache[key]?.let { return it }
+        readFromDiskCache(key)?.let { cached ->
+            memoryUrlCache[key] = cached
+            recordSubtopicUrl(word.subtopicId, key, cached.imageUrl)
+            return cached
+        }
+        if (!hasConfiguredApiKey() || verifiedEmptyCache.containsKey(key) || remainingCooldownMs() > 0L) {
+            return null
+        }
+
+        val outcome = bulkApiGuard.withPermit {
+            coroutineContext.ensureActive()
+            if (remainingCooldownMs() > 0L) return@withPermit PixabayCallResult.TransientFailure
+            val usedSnapshot = synchronized(subtopicSelectionLock) {
+                getUsedUrlsInSubtopic(word.subtopicId, excludeKey = key)
+            }
+            fetchFromPixabay(word, usedSnapshot, fastBulk = true)
+        }
+
+        return when (outcome) {
+            is PixabayCallResult.Hits -> {
+                synchronized(subtopicSelectionLock) {
+                    val usedNow = getUsedUrlsInSubtopic(word.subtopicId, excludeKey = key)
+                    val best = selectDistinctCandidate(outcome.ranked, usedNow)
+                    if (best != null) {
+                        alternativesCache[key] = outcome.ranked
+                        memoryUrlCache[key] = best
+                        recordSubtopicUrlLocked(word.subtopicId, key, best.imageUrl)
+                        writeToDiskCache(key, best)
+                    }
+                    best
+                }
+            }
+            PixabayCallResult.Empty -> {
+                verifiedEmptyCache[key] = true
+                null
+            }
+            PixabayCallResult.TransientFailure -> null
+        }
+    }
+
+    /**
+     * Resolves (if needed) and downloads the image bytes into Coil's disk cache on Dispatchers.IO
+     * so the card displays seamlessly without internet. Cooperatively cancels in-flight HTTP calls.
+     */
+    suspend fun preloadWordForOffline(word: WordEntity, fastBulk: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        coroutineContext.ensureActive()
         if (isPhotoDiskCached(word)) return@withContext true
         val resolved = getCachedSync(word) ?: run {
             if (!hasConfiguredApiKey() || remainingCooldownMs() > 0L) return@withContext false
-            resolvePhoto(word, highPriority = false)
+            if (fastBulk) resolvePhotoForBulk(word) else resolvePhoto(word, highPriority = false)
         } ?: return@withContext false
 
+        coroutineContext.ensureActive()
         try {
             val request = ImageRequest.Builder(appContext)
                 .data(resolved.imageUrl)
@@ -397,10 +458,12 @@ class StockPhotoRepository private constructor(context: Context) {
         return deferred.await()
     }
 
-    private fun fetchFromPixabay(
+    private suspend fun fetchFromPixabay(
         word: WordEntity,
-        usedUrlsInSubtopic: Set<String> = emptySet()
+        usedUrlsInSubtopic: Set<String> = emptySet(),
+        fastBulk: Boolean = false
     ): PixabayCallResult {
+        coroutineContext.ensureActive()
         val plan = StockPhotoQueryBuilder.build(word)
         val now = System.currentTimeMillis()
         if (pixabayApiKey.isEmpty() || now < pixabayCooldownUntilMs) {
@@ -414,6 +477,7 @@ class StockPhotoRepository private constructor(context: Context) {
         var nonFallbackStepsTried = 0
 
         for (step in plan.steps) {
+            coroutineContext.ensureActive()
             if (System.currentTimeMillis() < pixabayCooldownUntilMs) {
                 return bestFreshHits ?: fallbackDuplicateHits ?: PixabayCallResult.TransientFailure
             }
@@ -437,12 +501,15 @@ class StockPhotoRepository private constructor(context: Context) {
                         if (bestFreshHits == null || res.bestScore < bestFreshHits.bestScore) {
                             bestFreshHits = res
                         }
-                        // Fast 1-call exit whenever we hit a crisp, high-confidence visual match
-                        if (step.isSubtopicFallback || res.bestScore <= GOOD_MATCH_SCORE_THRESHOLD) {
+                        // Fast 1-call exit in bulk offline mode or whenever we hit a high-confidence match
+                        if (fastBulk || step.isSubtopicFallback || res.bestScore <= GOOD_MATCH_SCORE_THRESHOLD) {
                             return bestFreshHits
                         }
                     } else if (fallbackDuplicateHits == null || res.bestScore < fallbackDuplicateHits.bestScore) {
                         fallbackDuplicateHits = res
+                        if (fastBulk && step.isSubtopicFallback) {
+                            return fallbackDuplicateHits
+                        }
                     }
                 }
                 PixabayCallResult.Empty -> continue
@@ -460,11 +527,31 @@ class StockPhotoRepository private constructor(context: Context) {
         return if (sawTransientError) PixabayCallResult.TransientFailure else PixabayCallResult.Empty
     }
 
-    private fun queryPixabay(
+    private suspend fun executeApiCall(request: Request): Response =
+        suspendCancellableCoroutine { cont ->
+            val call = apiHttpClient.newCall(request)
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (cont.isActive) {
+                        cont.resume(response)
+                    } else {
+                        response.close()
+                    }
+                }
+            })
+        }
+
+    private suspend fun queryPixabay(
         step: PixabaySearchStep,
         profile: PhotoScoringProfile,
         variationSeed: Int
     ): PixabayCallResult {
+        coroutineContext.ensureActive()
         if (step.query.isBlank() || System.currentTimeMillis() < pixabayCooldownUntilMs) {
             return PixabayCallResult.TransientFailure
         }
@@ -478,18 +565,27 @@ class StockPhotoRepository private constructor(context: Context) {
             .build()
 
         return try {
-            apiHttpClient.newCall(request).execute().use { response ->
+            executeApiCall(request).use { response ->
+                val remainingHeader = response.header("X-RateLimit-Remaining")?.toIntOrNull()
+                val resetSeconds = response.header("X-RateLimit-Reset")?.toLongOrNull()
+
                 if (response.code == 429) {
-                    val resetSeconds = response.header("X-RateLimit-Reset")?.toLongOrNull()
-                    val cooldownMs = if (resetSeconds != null && resetSeconds in 1L..60L) {
+                    val cooldownMs = if (resetSeconds != null && resetSeconds in 1L..65L) {
                         (resetSeconds + 1L) * 1000L
                     } else {
                         DEFAULT_RATE_LIMIT_COOLDOWN_MS
                     }
-                    pixabayCooldownUntilMs = System.currentTimeMillis() + cooldownMs
+                    pixabayCooldownUntilMs = maxOf(pixabayCooldownUntilMs, System.currentTimeMillis() + cooldownMs)
                     Log.w(TAG, "Pixabay rate limit hit; cooling down for ${cooldownMs / 1000}s")
                     return PixabayCallResult.TransientFailure
                 }
+
+                // Proactively respect Pixabay's remaining quota before concurrent workers trigger 429s
+                if (remainingHeader != null && remainingHeader <= 2 && resetSeconds != null && resetSeconds in 1L..65L) {
+                    val cooldownMs = (resetSeconds + 1L) * 1000L
+                    pixabayCooldownUntilMs = maxOf(pixabayCooldownUntilMs, System.currentTimeMillis() + cooldownMs)
+                }
+
                 if (!response.isSuccessful) {
                     Log.w(TAG, "Pixabay HTTP ${response.code} for '${step.query}' (${step.lang})")
                     return if (response.code >= 500 || response.code == 408) {
@@ -541,6 +637,8 @@ class StockPhotoRepository private constructor(context: Context) {
                     bestScore = bestScore
                 )
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Pixabay request error for '${step.query}' (${step.lang}): ${e.message}")
             PixabayCallResult.TransientFailure
