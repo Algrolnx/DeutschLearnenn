@@ -91,7 +91,8 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
-    private val cacheDir = File(context.applicationContext.cacheDir, "tts_hd").apply { mkdirs() }
+    private val audioDir = File(context.applicationContext.filesDir, "tts_hd").apply { mkdirs() }
+    private val legacyCacheDir = File(context.applicationContext.cacheDir, "tts_hd")
     private val cachedAudioKeys = ConcurrentHashMap<String, Boolean>()
     private val tempFileSeq = AtomicLong(0L)
 
@@ -283,8 +284,10 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         if (cleaned.isEmpty()) return true
         val key = sha256(cleaned.lowercase(Locale.GERMAN))
         if (cachedAudioKeys.containsKey(key)) return true
-        val targetFile = File(cacheDir, "$key.mp3")
-        val exists = targetFile.exists() && targetFile.length() > 512L
+        val permanentFile = File(audioDir, "$key.mp3")
+        val legacyFile = File(legacyCacheDir, "$key.mp3")
+        val exists = (permanentFile.exists() && permanentFile.length() > 512L) ||
+            (legacyFile.exists() && legacyFile.length() > 512L)
         if (exists) cachedAudioKeys[key] = true
         return exists
     }
@@ -318,13 +321,26 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
     private suspend fun resolveOrFetchHdAudio(text: String): File? = withContext(Dispatchers.IO) {
         coroutineContext.ensureActive()
         val key = sha256(text.lowercase(Locale.GERMAN))
-        val targetFile = File(cacheDir, "$key.mp3")
+        val targetFile = File(audioDir, "$key.mp3")
         if (targetFile.exists() && targetFile.length() > 512L) {
             cachedAudioKeys[key] = true
             return@withContext targetFile
         }
+        val legacyFile = File(legacyCacheDir, "$key.mp3")
+        if (legacyFile.exists() && legacyFile.length() > 512L) {
+            try {
+                legacyFile.copyTo(targetFile, overwrite = true)
+                if (targetFile.length() > 512L) {
+                    cachedAudioKeys[key] = true
+                    return@withContext targetFile
+                }
+            } catch (_: Exception) {
+                cachedAudioKeys[key] = true
+                return@withContext legacyFile
+            }
+        }
 
-        val tempFile = File(cacheDir, "$key.${tempFileSeq.incrementAndGet()}.tmp")
+        val tempFile = File(audioDir, "$key.${tempFileSeq.incrementAndGet()}.tmp")
         try {
             val encoded = URLEncoder.encode(text, "UTF-8")
             val url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=de&client=tw-ob&q=$encoded"

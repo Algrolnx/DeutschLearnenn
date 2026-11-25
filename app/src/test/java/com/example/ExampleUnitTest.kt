@@ -1023,4 +1023,33 @@ class ExampleUnitTest {
         assertEquals(3, ranked.size)
         assertEquals(3, ranked.map { it.url }.distinct().size)
     }
+
+    @Test
+    fun offlineDownloadOrderingFollowsTopicCatalogMenuOrder() {
+        val a1Words = InitialVocabulary.getInitialWords()
+            .filter { it.level == "A1" }
+            .mapIndexed { idx, w -> w.copy(id = idx + 1) }
+
+        val ordered = LearningViewModel.orderWordsByTopicCatalog(a1Words)
+
+        assertEquals(a1Words.size, ordered.size)
+        assertEquals(a1Words.map { it.id }.toSet(), ordered.map { it.id }.toSet())
+
+        val expectedTopic1Subtopics = TopicCatalog.mainTopics.first().subtopics.map { it.id }
+        val distinctOrderedSubtopics = ordered.map { it.subtopicId }.distinct()
+        assertEquals(expectedTopic1Subtopics, distinctOrderedSubtopics.take(expectedTopic1Subtopics.size))
+
+        // Every subtopic block must appear contiguously (all words of Topic 1 finish before Topic 2 starts)
+        val seenSubtopics = mutableSetOf<String>()
+        var previousSubtopic: String? = null
+        for (word in ordered) {
+            if (word.subtopicId != previousSubtopic) {
+                assertTrue(
+                    "Subtopic ${word.subtopicId} should be contiguous in offline download queue",
+                    seenSubtopics.add(word.subtopicId)
+                )
+                previousSubtopic = word.subtopicId
+            }
+        }
+    }
 }

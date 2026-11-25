@@ -76,16 +76,25 @@ fun WordPhotoSurface(
     val hasApiKey = remember(repository) { repository.hasConfiguredApiKey() }
     val scope = rememberCoroutineScope()
 
+    var localPhotoFile by remember(word.id, word.german, word.subtopicId) {
+        mutableStateOf(repository.getLocalPhotoFile(word))
+    }
     var resolvedPhoto by remember(word.id, word.german, word.subtopicId) {
         mutableStateOf(repository.getCachedSync(word))
     }
-    val initialMemCached = remember(word.id, word.german, word.subtopicId, resolvedPhoto?.imageUrl, isThumbnail) {
+    val initialMemCached = remember(word.id, word.german, word.subtopicId, localPhotoFile?.absolutePath, resolvedPhoto?.imageUrl, isThumbnail) {
+        val file = localPhotoFile
+        if (file != null) {
+            val baseKey = "file:${file.absolutePath}:${file.lastModified()}"
+            val memKey = if (isThumbnail) "$baseKey#thumb" else baseKey
+            return@remember repository.isInMemoryCache(baseKey, memKey)
+        }
         val url = resolvedPhoto?.imageUrl ?: return@remember false
         val memKey = if (isThumbnail) "$url#thumb" else url
         repository.isInMemoryCache(url, memKey)
     }
     var isFetchingUrl by remember(word.id, word.german, word.subtopicId) {
-        mutableStateOf(resolvedPhoto == null && hasApiKey)
+        mutableStateOf(localPhotoFile == null && resolvedPhoto == null && hasApiKey)
     }
     var isImageLoaded by remember(word.id, word.german, word.subtopicId) {
         mutableStateOf(initialMemCached)
@@ -94,7 +103,7 @@ fun WordPhotoSurface(
         mutableStateOf(false)
     }
     var photoUnavailable by remember(word.id, word.german, word.subtopicId) {
-        mutableStateOf(!hasApiKey && resolvedPhoto == null)
+        mutableStateOf(localPhotoFile == null && !hasApiKey && resolvedPhoto == null)
     }
     var needsRefreshAfterError by remember(word.id, word.german, word.subtopicId) {
         mutableStateOf(false)
@@ -104,19 +113,27 @@ fun WordPhotoSurface(
     }
 
     LaunchedEffect(word.id, word.german, word.subtopicId) {
-        if (resolvedPhoto == null && hasApiKey) {
-            isFetchingUrl = true
-            val fetched = repository.resolvePhoto(word, highPriority = !isThumbnail)
-            resolvedPhoto = fetched
-            photoUnavailable = fetched == null
-            isFetchingUrl = false
+        if (localPhotoFile == null) {
+            val freshLocal = repository.getLocalPhotoFile(word)
+            if (freshLocal != null) {
+                localPhotoFile = freshLocal
+                photoUnavailable = false
+                isFetchingUrl = false
+            } else if (resolvedPhoto == null && hasApiKey) {
+                isFetchingUrl = true
+                val fetched = repository.resolvePhoto(word, highPriority = !isThumbnail)
+                resolvedPhoto = fetched
+                photoUnavailable = fetched == null
+                isFetchingUrl = false
+            }
         }
         onPhotoReadyChange(true)
     }
 
     // Avoid distracting 1-frame spinner flicker for fast RAM/disk cached images
-    val isPendingLoad = isFetchingUrl || (resolvedPhoto != null && !isImageLoaded && !photoUnavailable)
-    LaunchedEffect(isPendingLoad, word.id, resolvedPhoto?.imageUrl) {
+    val hasPhotoSource = localPhotoFile != null || resolvedPhoto != null
+    val isPendingLoad = isFetchingUrl || (hasPhotoSource && !isImageLoaded && !photoUnavailable)
+    LaunchedEffect(isPendingLoad, word.id, localPhotoFile?.absolutePath, resolvedPhoto?.imageUrl) {
         if (isPendingLoad) {
             delay(140L)
             showLoadingSpinner = true
@@ -130,8 +147,12 @@ fun WordPhotoSurface(
             hasRetriedExpiredUrl = true
             isFetchingUrl = true
             val refreshed = repository.invalidateAndRefreshPhoto(word)
-            resolvedPhoto = refreshed
-            photoUnavailable = refreshed == null
+            if (refreshed != null && refreshed.imageUrl != resolvedPhoto?.imageUrl) {
+                resolvedPhoto = refreshed
+                photoUnavailable = false
+            } else {
+                photoUnavailable = localPhotoFile == null && !isImageLoaded
+            }
             isFetchingUrl = false
         }
         needsRefreshAfterError = false
@@ -155,13 +176,19 @@ fun WordPhotoSurface(
             )
         }
 
+        val activeFile = localPhotoFile
         val activePhoto: CachedStockPhoto? = resolvedPhoto
-        if (activePhoto != null) {
-            val imageRequest = remember(activePhoto.imageUrl, isThumbnail) {
-                val memKey = if (isThumbnail) "${activePhoto.imageUrl}#thumb" else activePhoto.imageUrl
-                val alreadyInRam = repository.isInMemoryCache(activePhoto.imageUrl, memKey)
+        if (activeFile != null || activePhoto != null) {
+            val imageRequest = remember(activeFile?.absolutePath, activeFile?.lastModified(), activePhoto?.imageUrl, isThumbnail) {
+                val baseKey = if (activeFile != null) {
+                    "file:${activeFile.absolutePath}:${activeFile.lastModified()}"
+                } else {
+                    activePhoto!!.imageUrl
+                }
+                val memKey = if (isThumbnail) "$baseKey#thumb" else baseKey
+                val alreadyInRam = repository.isInMemoryCache(baseKey, memKey)
                 ImageRequest.Builder(context)
-                    .data(activePhoto.imageUrl)
+                    .data(activeFile ?: activePhoto?.imageUrl)
                     .apply {
                         if (isThumbnail) {
                             size(StockPhotoRepository.THUMB_DECODE_SIZE, StockPhotoRepository.THUMB_DECODE_SIZE)
@@ -170,7 +197,7 @@ fun WordPhotoSurface(
                         }
                     }
                     .memoryCacheKey(memKey)
-                    .crossfade(if (alreadyInRam) 0 else 100)
+                    .crossfade(if (alreadyInRam || activeFile != null) 0 else 100)
                     .build()
             }
 
@@ -182,10 +209,21 @@ fun WordPhotoSurface(
                 onSuccess = {
                     isImageLoaded = true
                     photoUnavailable = false
+                    if (activeFile == null && activePhoto != null) {
+                        repository.savePhotoToPermanentCacheAsync(word, activePhoto.imageUrl)
+                    }
                 },
                 onError = {
                     isImageLoaded = false
-                    if (!hasRetriedExpiredUrl && hasApiKey) {
+                    if (activeFile != null) {
+                        repository.deleteCorruptLocalPhoto(word)
+                        localPhotoFile = null
+                        if (activePhoto == null && hasApiKey && !hasRetriedExpiredUrl) {
+                            needsRefreshAfterError = true
+                        } else if (activePhoto == null) {
+                            photoUnavailable = true
+                        }
+                    } else if (!hasRetriedExpiredUrl && hasApiKey) {
                         needsRefreshAfterError = true
                     } else {
                         photoUnavailable = true
@@ -207,6 +245,7 @@ fun WordPhotoSurface(
                                 isFetchingUrl = true
                                 val next = repository.cycleNextPhoto(word)
                                 if (next != null) {
+                                    localPhotoFile = null
                                     resolvedPhoto = next
                                 }
                                 isFetchingUrl = false

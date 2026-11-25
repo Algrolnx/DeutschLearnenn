@@ -9,6 +9,7 @@ import com.example.data.db.BoxCount
 import com.example.data.db.LevelStats
 import com.example.data.db.SubtopicLevelCount
 import com.example.data.model.SubtopicProgressEntity
+import com.example.data.model.TopicCatalog
 import com.example.data.model.WordEntity
 import com.example.data.repository.StockPhotoRepository
 import com.example.data.repository.VocabularyRepository
@@ -46,6 +47,7 @@ import java.io.InputStreamReader
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 sealed class Screen {
     object MainTopics : Screen()
@@ -404,11 +406,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 return@launch
             }
 
-            // Order subtopic-first (up to 15 words per subtopic first) so active lessons cache earliest
-            val grouped = allLevelWords.groupBy { it.subtopicId }
-            val priorityBatch = grouped.values.flatMap { it.take(15) }
-            val priorityIds = priorityBatch.mapTo(HashSet()) { it.id }
-            val orderedWords = priorityBatch + allLevelWords.filter { it.id !in priorityIds }
+            // Strictly follow the menu order (Topic 1 & all its subtopics first, then Topic 2, etc.)
+            val orderedWords = orderWordsByTopicCatalog(allLevelWords)
 
             val totalWords = orderedWords.size
             val hasPhotoApi = stockPhotoRepository.hasConfiguredApiKey()
@@ -422,6 +421,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             val wordsCompletedCount = AtomicInteger(0)
             val wordLatches = Array(totalWords) { AtomicInteger(0) }
             val rateLimitWaitSec = AtomicInteger(0)
+            val currentTopicLabel = AtomicReference("")
             val lastUiPublishMs = AtomicLong(0L)
 
             fun publishProgress(force: Boolean = false) {
@@ -435,15 +435,16 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 val completedWords = wordsCompletedCount.get()
                 val fraction = ((doneAudio + donePhotos).toFloat() / totalSteps).coerceIn(0f, 1f)
                 val waitSec = rateLimitWaitSec.get()
+                val topicSuffix = currentTopicLabel.get().takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
 
                 val statusText = if (waitSec > 0) {
                     if (doneAudio < totalWords) {
                         "Рівень $normLevel: аудіо триває · пауза ліміту Pixabay (~$waitSec с)"
                     } else {
-                        "Рівень $normLevel: пауза ліміту Pixabay (~$waitSec с)..."
+                        "Рівень $normLevel: пауза ліміту Pixabay (~$waitSec с)$topicSuffix"
                     }
                 } else {
-                    "Рівень $normLevel: $completedWords / $totalWords слів"
+                    "Рівень $normLevel: $completedWords / $totalWords слів$topicSuffix"
                 }
 
                 _offlineDownloadState.value = _offlineDownloadState.value.copy(
@@ -466,12 +467,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 progressFraction = 0f,
                 isPausedForRateLimit = false,
                 isRunning = true,
-                statusMessage = "Завантаження рівня $normLevel..."
+                statusMessage = "Завантаження рівня $normLevel (починаючи з Теми 1)..."
             )
 
             try {
-                // Run HD audio pool (10 parallel workers) and photo pool (6 parallel workers) concurrently
-                // so audio never blocks photos and Pixabay rate-limit pauses never stall audio.
+                // Run HD audio pool (10 parallel workers) and photo pool (3 parallel workers) concurrently
+                // so audio never blocks photos and Pixabay's 100 req/min limit is utilized cleanly without 429 storms.
                 coroutineScope {
                     val audioCursor = AtomicInteger(0)
                     val audioWorkers = List(10) {
@@ -504,24 +505,42 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
                     val photoWorkers = if (hasPhotoApi) {
                         val photoCursor = AtomicInteger(0)
-                        List(6) {
+                        List(3) {
                             launch(Dispatchers.IO) {
                                 while (isActive) {
                                     val idx = photoCursor.getAndIncrement()
                                     if (idx >= totalWords) break
                                     ensureActive()
                                     val word = orderedWords[idx]
+                                    TopicCatalog.findSubtopicById(word.subtopicId)?.let { sub ->
+                                        currentTopicLabel.set(sub.titleUk)
+                                    }
 
-                                    val photoOk = if (stockPhotoRepository.isPhotoDiskCached(word)) {
+                                    val photoOk = if (stockPhotoRepository.getLocalPhotoFile(word) != null) {
                                         true
-                                    } else if (stockPhotoRepository.getCachedSync(word) != null) {
-                                        // URL is already resolved; download CDN bytes directly with zero API quota cost
-                                        stockPhotoRepository.preloadWordForOffline(word, fastBulk = true)
                                     } else {
                                         var loaded = false
-                                        for (attempt in 0 until 2) {
+                                        for (attempt in 0 until 6) {
                                             ensureActive()
-                                            var waitMs = stockPhotoRepository.remainingCooldownMs()
+                                            // If no cached URL yet, respect active Pixabay cooldown before hitting API
+                                            if (stockPhotoRepository.getCachedSync(word) == null) {
+                                                var waitMs = stockPhotoRepository.remainingCooldownMs()
+                                                while (waitMs > 0L && isActive) {
+                                                    val sec = ((waitMs + 999L) / 1000L).toInt().coerceAtLeast(1)
+                                                    rateLimitWaitSec.set(sec)
+                                                    publishProgress(force = true)
+                                                    delay(minOf(1000L, waitMs))
+                                                    waitMs = stockPhotoRepository.remainingCooldownMs()
+                                                }
+                                            }
+                                            ensureActive()
+                                            rateLimitWaitSec.set(0)
+                                            loaded = stockPhotoRepository.preloadWordForOffline(word, fastBulk = true)
+                                            if (loaded) break
+                                            // Only retry if we hit a Pixabay rate-limit cooldown
+                                            val cooldown = stockPhotoRepository.remainingCooldownMs()
+                                            if (cooldown <= 0L) break
+                                            var waitMs = cooldown
                                             while (waitMs > 0L && isActive) {
                                                 val sec = ((waitMs + 999L) / 1000L).toInt().coerceAtLeast(1)
                                                 rateLimitWaitSec.set(sec)
@@ -529,12 +548,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                                                 delay(minOf(1000L, waitMs))
                                                 waitMs = stockPhotoRepository.remainingCooldownMs()
                                             }
-                                            ensureActive()
                                             rateLimitWaitSec.set(0)
-                                            loaded = stockPhotoRepository.preloadWordForOffline(word, fastBulk = true)
-                                            if (loaded || stockPhotoRepository.remainingCooldownMs() == 0L) {
-                                                break
-                                            }
                                         }
                                         loaded
                                     }
@@ -2616,6 +2630,19 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         const val MIXED_ROUND_SIZE = 15
         val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7, 8)
         val DAILY_LIMIT_PRESETS: List<Int> = listOf(40, 60, 80)
+
+        internal fun orderWordsByTopicCatalog(words: List<WordEntity>): List<WordEntity> {
+            val catalogSubtopicOrder = TopicCatalog.mainTopics
+                .flatMap { it.subtopics }
+                .mapIndexed { idx, sub -> sub.id to idx }
+                .toMap()
+            return words.sortedWith(
+                compareBy<WordEntity>(
+                    { catalogSubtopicOrder[it.subtopicId] ?: Int.MAX_VALUE },
+                    { it.id }
+                )
+            )
+        }
 
         internal fun nextEnabledStage(enabledStages: Set<Int>, afterStage: Int): Int? {
             return enabledStages.filter { it in 1..8 && it > afterStage }.minOrNull()

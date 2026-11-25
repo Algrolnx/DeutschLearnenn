@@ -32,8 +32,10 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -134,6 +136,8 @@ class StockPhotoRepository private constructor(context: Context) {
         .build()
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val offlinePhotoDir = File(appContext.filesDir, "offline_word_photos").apply { mkdirs() }
+    private val tempPhotoSeq = AtomicLong(0L)
     private val memoryUrlCache = ConcurrentHashMap<String, CachedStockPhoto>()
     private val alternativesCache = ConcurrentHashMap<String, List<CachedStockPhoto>>()
     private val verifiedEmptyCache = ConcurrentHashMap<String, Boolean>()
@@ -142,7 +146,7 @@ class StockPhotoRepository private constructor(context: Context) {
     // Separate concurrency lanes: visible cards never wait behind background prefetching
     private val foregroundApiGuard = Semaphore(permits = 5)
     private val prefetchApiGuard = Semaphore(permits = 2)
-    private val bulkApiGuard = Semaphore(permits = 6)
+    private val bulkApiGuard = Semaphore(permits = 3)
 
     private val subtopicSelectionLock = Any()
     private val subtopicUrlIndex = HashMap<String, MutableMap<String, String>>()
@@ -189,6 +193,37 @@ class StockPhotoRepository private constructor(context: Context) {
         return readFromDiskCache(key)?.also { cached ->
             memoryUrlCache[key] = cached
             recordSubtopicUrl(word.subtopicId, key, cached.imageUrl)
+        }
+    }
+
+    private fun localPhotoFileForKey(key: String): File {
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
+        val hash = digest.joinToString("") { "%02x".format(it) }.take(32)
+        return File(offlinePhotoDir, "$hash.jpg")
+    }
+
+    /**
+     * Returns the permanent on-device photo file in filesDir if downloaded, or null if not yet saved.
+     * Local files never expire (unlike Pixabay's 24h webformatURLs) and are never evicted by cacheDir pruning.
+     */
+    fun getLocalPhotoFile(word: WordEntity): File? {
+        val file = localPhotoFileForKey(cacheKey(word))
+        return if (file.exists() && file.length() > MIN_VALID_PHOTO_BYTES) file else null
+    }
+
+    fun deleteCorruptLocalPhoto(word: WordEntity) {
+        try {
+            localPhotoFileForKey(cacheKey(word)).delete()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun savePhotoToPermanentCacheAsync(word: WordEntity, imageUrl: String) {
+        if (imageUrl.isBlank()) return
+        val targetFile = localPhotoFileForKey(cacheKey(word))
+        if (targetFile.exists() && targetFile.length() > MIN_VALID_PHOTO_BYTES) return
+        repoScope.launch {
+            downloadUrlToLocalFile(imageUrl, targetFile)
         }
     }
 
@@ -244,6 +279,9 @@ class StockPhotoRepository private constructor(context: Context) {
             writeToDiskCache(key, chosen)
             chosen
         }
+        // Replace any previously persisted local file with the newly chosen photo
+        localPhotoFileForKey(key).delete()
+        savePhotoToPermanentCacheAsync(word, next.imageUrl)
         return next
     }
 
@@ -252,11 +290,25 @@ class StockPhotoRepository private constructor(context: Context) {
      * never cancels an in-flight lookup and upcoming cards are already decoded in Coil RAM cache.
      */
     fun prefetchWordsAsync(words: List<WordEntity>) {
-        if (words.isEmpty() || !hasConfiguredApiKey() || System.currentTimeMillis() < pixabayCooldownUntilMs) {
-            return
-        }
+        if (words.isEmpty()) return
         val uniqueWords = words.distinctBy { cacheKey(it) }.take(4)
         for (word in uniqueWords) {
+            val localFile = getLocalPhotoFile(word)
+            if (localFile != null) {
+                val memKey = "file:${localFile.absolutePath}:${localFile.lastModified()}"
+                if (!isInMemoryCache(memKey, memKey)) {
+                    val request = ImageRequest.Builder(appContext)
+                        .data(localFile)
+                        .size(CARD_DECODE_WIDTH, CARD_DECODE_HEIGHT)
+                        .memoryCacheKey(memKey)
+                        .build()
+                    imageLoader.enqueue(request)
+                }
+                continue
+            }
+            if (!hasConfiguredApiKey() || System.currentTimeMillis() < pixabayCooldownUntilMs) {
+                continue
+            }
             val cached = getCachedSync(word)
             if (cached != null) {
                 if (!isInMemoryCache(cached.imageUrl)) {
@@ -296,35 +348,108 @@ class StockPhotoRepository private constructor(context: Context) {
     }
 
     /**
-     * Returns true if this word already has both a cached photo URL and its image bytes
-     * stored inside Coil's on-device disk cache for offline viewing.
+     * Returns true if this word has its image bytes saved locally on device (permanent file
+     * or legacy Coil disk cache) so it can render reliably without internet.
      */
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     fun isPhotoDiskCached(word: WordEntity): Boolean {
+        if (getLocalPhotoFile(word) != null) return true
         val cached = getCachedSync(word) ?: return false
         return try {
             val diskCache = imageLoader.diskCache ?: return false
-            diskCache.openSnapshot(cached.imageUrl)?.use { true } ?: false
+            diskCache.openSnapshot(cached.imageUrl)?.use { snapshot ->
+                snapshot.data.toFile().length() > MIN_VALID_PHOTO_BYTES
+            } ?: false
         } catch (_: Exception) {
             false
         }
     }
+
+    private suspend fun executeImageCall(request: Request): Response =
+        suspendCancellableCoroutine { cont ->
+            val call = imageHttpClient.newCall(request)
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (cont.isActive) {
+                        cont.resume(response)
+                    } else {
+                        response.close()
+                    }
+                }
+            })
+        }
+
+    private suspend fun downloadUrlToLocalFile(imageUrl: String, targetFile: File): Boolean =
+        withContext(Dispatchers.IO) {
+            coroutineContext.ensureActive()
+            if (targetFile.exists() && targetFile.length() > MIN_VALID_PHOTO_BYTES) {
+                return@withContext true
+            }
+            val tmpFile = File(offlinePhotoDir, "${targetFile.name}.${tempPhotoSeq.incrementAndGet()}.tmp")
+            try {
+                val request = Request.Builder()
+                    .url(imageUrl)
+                    .build()
+                executeImageCall(request).use { response ->
+                    if (!response.isSuccessful) return@withContext false
+                    val body = response.body ?: return@withContext false
+                    val contentType = response.header("Content-Type").orEmpty()
+                    if (contentType.isNotBlank() && !contentType.startsWith("image/", ignoreCase = true)) {
+                        return@withContext false
+                    }
+                    body.byteStream().use { input ->
+                        tmpFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                if (tmpFile.length() <= MIN_VALID_PHOTO_BYTES) {
+                    tmpFile.delete()
+                    return@withContext false
+                }
+                if (targetFile.exists() && targetFile.length() > MIN_VALID_PHOTO_BYTES) {
+                    tmpFile.delete()
+                    return@withContext true
+                }
+                if (tmpFile.renameTo(targetFile)) {
+                    true
+                } else {
+                    tmpFile.copyTo(targetFile, overwrite = true)
+                    tmpFile.delete()
+                    targetFile.exists() && targetFile.length() > MIN_VALID_PHOTO_BYTES
+                }
+            } catch (ce: CancellationException) {
+                tmpFile.delete()
+                throw ce
+            } catch (e: Exception) {
+                tmpFile.delete()
+                Log.w(TAG, "Direct offline photo save failed for $imageUrl: ${e.message}")
+                false
+            }
+        }
 
     /**
      * Resolves a photo URL directly in the caller's coroutine context for bulk offline downloads.
      * Supports immediate coroutine cancellation (including aborting the active HTTP call) and uses
      * single-call fast resolution so bulk preloading preserves Pixabay API quota.
      */
-    private suspend fun resolvePhotoForBulk(word: WordEntity): CachedStockPhoto? {
+    private suspend fun resolvePhotoForBulk(word: WordEntity, forceFresh: Boolean = false): CachedStockPhoto? {
         coroutineContext.ensureActive()
         val key = cacheKey(word)
-        memoryUrlCache[key]?.let { return it }
-        readFromDiskCache(key)?.let { cached ->
-            memoryUrlCache[key] = cached
-            recordSubtopicUrl(word.subtopicId, key, cached.imageUrl)
-            return cached
+        if (!forceFresh) {
+            memoryUrlCache[key]?.let { return it }
+            readFromDiskCache(key)?.let { cached ->
+                memoryUrlCache[key] = cached
+                recordSubtopicUrl(word.subtopicId, key, cached.imageUrl)
+                return cached
+            }
         }
-        if (!hasConfiguredApiKey() || verifiedEmptyCache.containsKey(key) || remainingCooldownMs() > 0L) {
+        if (!hasConfiguredApiKey() || (!forceFresh && verifiedEmptyCache.containsKey(key)) || remainingCooldownMs() > 0L) {
             return null
         }
 
@@ -360,48 +485,93 @@ class StockPhotoRepository private constructor(context: Context) {
     }
 
     /**
-     * Resolves (if needed) and downloads the image bytes into Coil's disk cache on Dispatchers.IO
-     * so the card displays seamlessly without internet. Cooperatively cancels in-flight HTTP calls.
+     * Resolves (if needed) and saves the actual JPEG bytes permanently into `filesDir/offline_word_photos`
+     * so every downloaded word displays reliably offline without depending on expiring URLs or `cacheDir`.
      */
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
     suspend fun preloadWordForOffline(word: WordEntity, fastBulk: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         coroutineContext.ensureActive()
-        if (isPhotoDiskCached(word)) return@withContext true
-        val resolved = getCachedSync(word) ?: run {
+        val key = cacheKey(word)
+        val targetFile = localPhotoFileForKey(key)
+        if (targetFile.exists() && targetFile.length() > MIN_VALID_PHOTO_BYTES) {
+            return@withContext true
+        }
+
+        val existingCached = getCachedSync(word)
+        // If Coil already has this image in legacy cacheDir, copy it straight into permanent filesDir
+        if (existingCached != null) {
+            try {
+                val migrated = imageLoader.diskCache?.openSnapshot(existingCached.imageUrl)?.use { snapshot ->
+                    val src = snapshot.data.toFile()
+                    if (src.exists() && src.length() > MIN_VALID_PHOTO_BYTES) {
+                        src.copyTo(targetFile, overwrite = true)
+                        targetFile.exists() && targetFile.length() > MIN_VALID_PHOTO_BYTES
+                    } else {
+                        false
+                    }
+                } ?: false
+                if (migrated) return@withContext true
+            } catch (_: Exception) {
+            }
+        }
+
+        val resolved = existingCached ?: run {
             if (!hasConfiguredApiKey() || remainingCooldownMs() > 0L) return@withContext false
             if (fastBulk) resolvePhotoForBulk(word) else resolvePhoto(word, highPriority = false)
         } ?: return@withContext false
 
         coroutineContext.ensureActive()
-        try {
-            val request = ImageRequest.Builder(appContext)
-                .data(resolved.imageUrl)
-                .size(CARD_DECODE_WIDTH, CARD_DECODE_HEIGHT)
-                .memoryCacheKey(resolved.imageUrl)
-                .allowHardware(false)
-                .build()
-            val result = imageLoader.execute(request)
-            result.drawable != null || isPhotoDiskCached(word)
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (e: Exception) {
-            Log.w(TAG, "Offline image download failed for '${word.german}': ${e.message}")
-            false
+        if (downloadUrlToLocalFile(resolved.imageUrl, targetFile)) {
+            return@withContext true
         }
+
+        // If an older cached Pixabay URL expired (403/404), fetch a fresh URL once and save it
+        if (existingCached != null && hasConfiguredApiKey() && remainingCooldownMs() == 0L) {
+            coroutineContext.ensureActive()
+            val refreshed = resolvePhotoForBulk(word, forceFresh = true) ?: return@withContext false
+            return@withContext downloadUrlToLocalFile(refreshed.imageUrl, targetFile)
+        }
+
+        false
     }
 
     /**
-     * Invalidates a stale/expired cached Pixabay URL and fetches a fresh one.
+     * Refreshes an expired Pixabay URL without erasing an existing cached entry if offline.
      */
     suspend fun invalidateAndRefreshPhoto(word: WordEntity): CachedStockPhoto? {
+        if (!hasConfiguredApiKey()) return getCachedSync(word)
         val key = cacheKey(word)
-        memoryUrlCache.remove(key)
-        alternativesCache.remove(key)
+        val previous = getCachedSync(word)
         verifiedEmptyCache.remove(key)
-        synchronized(subtopicSelectionLock) {
-            subtopicUrlIndex[word.subtopicId.lowercase()]?.remove(key)
+        val outcome = foregroundApiGuard.withPermit {
+            withContext(Dispatchers.IO) {
+                val usedSnapshot = synchronized(subtopicSelectionLock) {
+                    getUsedUrlsInSubtopic(word.subtopicId, excludeKey = key)
+                }
+                fetchFromPixabay(word, usedSnapshot)
+            }
         }
-        prefs.edit().remove(key).apply()
-        return fetchAndCache(word, key, highPriority = true)
+        return when (outcome) {
+            is PixabayCallResult.Hits -> {
+                val chosen = synchronized(subtopicSelectionLock) {
+                    val usedNow = getUsedUrlsInSubtopic(word.subtopicId, excludeKey = key)
+                    val best = selectDistinctCandidate(outcome.ranked, usedNow)
+                    if (best != null) {
+                        alternativesCache[key] = outcome.ranked
+                        memoryUrlCache[key] = best
+                        recordSubtopicUrlLocked(word.subtopicId, key, best.imageUrl)
+                        writeToDiskCache(key, best)
+                    }
+                    best
+                }
+                if (chosen != null) {
+                    localPhotoFileForKey(key).delete()
+                    savePhotoToPermanentCacheAsync(word, chosen.imageUrl)
+                }
+                chosen ?: previous
+            }
+            else -> previous
+        }
     }
 
     private suspend fun fetchAndCache(
@@ -726,6 +896,7 @@ class StockPhotoRepository private constructor(context: Context) {
         private const val PREFS_NAME = "deutschlern_stock_photo_cache_v4"
         private const val KEY_ADJ_CACHE_MIGRATED_V1 = "__adj_photo_cache_migrated_v1"
         private const val DEFAULT_RATE_LIMIT_COOLDOWN_MS = 15_000L
+        private const val MIN_VALID_PHOTO_BYTES = 1024L
         private const val TARGET_ASPECT_RATIO = 4f / 3f
         internal const val CARD_DECODE_WIDTH = 640
         internal const val CARD_DECODE_HEIGHT = 480
