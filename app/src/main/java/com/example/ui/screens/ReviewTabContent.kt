@@ -191,12 +191,13 @@ fun ReviewTabContent(
                                     fontSize = 18.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
+                                val nextTs = dashboard.nextReviewTimestamp
                                 Text(
                                     text = when {
                                         dashboard.enrolledCount == 0 -> "Пройдіть усі 8 етапів першої підтеми на 100% — слова з'являться тут через 6 годин"
                                         dailyGoalReached -> "Мозку потрібен час на закріплення. Нова порція завтра!"
                                         dashboard.availableTodayCount > 0 -> "Короткий раунд до $nextRoundCount слів у перемішку з різними етапами"
-                                        dashboard.nextReviewTimestamp != null -> "Наступна порція: ${SpacedRepetition.formatTimeUntilUk(dashboard.nextReviewTimestamp!!)}"
+                                        nextTs != null -> "Наступна порція: ${SpacedRepetition.formatTimeUntilUk(nextTs)}"
                                         else -> "Усі слова чекають свого інтервалу"
                                     },
                                     style = MaterialTheme.typography.bodySmall,

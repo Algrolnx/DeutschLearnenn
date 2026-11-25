@@ -541,6 +541,131 @@ class ExampleUnitTest {
         assertEquals("die ", LearningViewModel.computeKeyboardHintWithArticle("", tomato))
         assertEquals("die T", LearningViewModel.computeKeyboardHintWithArticle("die ", tomato))
         assertEquals("die To", LearningViewModel.computeKeyboardHintWithArticle("die T", tomato))
+
+        // Pressing hint when article is wrong or missing replaces/prepends ONLY the article and preserves the typed noun
+        assertEquals("die Tomate", LearningViewModel.computeKeyboardHintWithArticle("der Tomate", tomato))
+        assertEquals("die Tomate", LearningViewModel.computeKeyboardHintWithArticle("das Tomate", tomato))
+        assertEquals("die Tom", LearningViewModel.computeKeyboardHintWithArticle("der Tom", tomato))
+        assertEquals("die Tomate", LearningViewModel.computeKeyboardHintWithArticle("Tomate", tomato))
+        assertEquals("die ", LearningViewModel.computeKeyboardHintWithArticle("der ", tomato))
+    }
+
+    @Test
+    fun stage6FillBlankMatchRequiresRealWordSlotAndAvoidsSubstringBugs() {
+        val rechnungBroken = WordEntity(
+            german = "Rechnung",
+            article = "die",
+            plural = "die Rechnungen",
+            translationUk = "рахунок",
+            translationEn = "bill",
+            exampleDe = "Zusammen oder getrennt bezahlen?",
+            exampleUk = "Разом чи окремо платитимете?",
+            categoryId = "food",
+            subtopicId = "food_restaurant"
+        )
+        assertNull(LearningViewModel.buildFillBlankMatch(rechnungBroken))
+
+        val rechnungFixed = rechnungBroken.copy(
+            exampleDe = "Die Rechnung, bitte! Wir bezahlen zusammen."
+        )
+        val rechnungMatch = LearningViewModel.buildFillBlankMatch(rechnungFixed)
+        assertNotNull(rechnungMatch)
+        assertEquals("Die _________, bitte! Wir bezahlen zusammen.", rechnungMatch?.sentenceWithBlank)
+        assertEquals("Rechnung", rechnungMatch?.matchedToken)
+
+        // Substring safety: "Ei" must NOT match inside "Ein"
+        val eiNoMatch = WordEntity(
+            german = "Ei",
+            article = "das",
+            plural = "die Eier",
+            translationUk = "яйце",
+            translationEn = "egg",
+            exampleDe = "Ein kleines Dorf.",
+            exampleUk = "Маленьке село.",
+            categoryId = "food",
+            subtopicId = "food_dairy"
+        )
+        assertNull(LearningViewModel.buildFillBlankMatch(eiNoMatch))
+
+        val eiRealMatch = eiNoMatch.copy(exampleDe = "Ein Ei zum Frühstück, bitte.")
+        val eiMatch = LearningViewModel.buildFillBlankMatch(eiRealMatch)
+        assertNotNull(eiMatch)
+        assertEquals("Ein _________ zum Frühstück, bitte.", eiMatch?.sentenceWithBlank)
+        assertEquals("Ei", eiMatch?.matchedToken)
+
+        // Plural and verb conjugation matching
+        val tooth = WordEntity(
+            german = "Zahn",
+            article = "der",
+            plural = "die Zähne",
+            translationUk = "зуб",
+            translationEn = "tooth",
+            exampleDe = "Ich putze mir die Zähne.",
+            exampleUk = "Я чищу зуби.",
+            categoryId = "body",
+            subtopicId = "body_parts"
+        )
+        val toothMatch = LearningViewModel.buildFillBlankMatch(tooth)
+        assertNotNull(toothMatch)
+        assertTrue(toothMatch!!.sentenceWithBlank.contains("_________"))
+        assertEquals("Zähne", toothMatch.matchedToken)
+
+        val gehen = WordEntity(
+            german = "gehen",
+            article = "",
+            plural = "",
+            translationUk = "йти",
+            translationEn = "to go",
+            exampleDe = "Ich gehe heute ins Kino.",
+            exampleUk = "Сьогодні я йду в кіно.",
+            categoryId = "verbs",
+            subtopicId = "verbs_motion"
+        )
+        val gehenMatch = LearningViewModel.buildFillBlankMatch(gehen)
+        assertNotNull(gehenMatch)
+        assertEquals("Ich _________ heute ins Kino.", gehenMatch?.sentenceWithBlank)
+        assertEquals("gehe", gehenMatch?.matchedToken)
+    }
+
+    @Test
+    fun vocabularySubtopicsAndFixedExamplesAreConsistent() {
+        val allWords = InitialVocabulary.getInitialWords()
+        val bratwurst = allWords.firstOrNull { it.german == "Bratwurst" }
+        assertNotNull(bratwurst)
+        assertEquals("food_meals", bratwurst?.subtopicId)
+
+        val fischbroetchen = allWords.firstOrNull { it.german == "Fischbrötchen" }
+        assertEquals("food_meals", fischbroetchen?.subtopicId)
+        val currywurst = allWords.firstOrNull { it.german == "Currywurst" }
+        assertEquals("food_meals", currywurst?.subtopicId)
+
+        val domesticAnimals = allWords.filter { it.subtopicId == "nature_animals" }.map { it.german }.toSet()
+        assertFalse(domesticAnimals.contains("Tiger"))
+        assertFalse(domesticAnimals.contains("Giraffe"))
+        assertFalse(domesticAnimals.contains("Zebra"))
+        assertFalse(domesticAnimals.contains("Krokodil"))
+        assertFalse(domesticAnimals.contains("Polarfuchs"))
+
+        val wildlife = allWords.filter { it.subtopicId == "nature_wildlife" }.map { it.german }.toSet()
+        assertFalse(wildlife.contains("Eisberg"))
+        assertFalse(wildlife.contains("Regenwald"))
+        assertFalse(wildlife.contains("Korallenriff"))
+        assertFalse(wildlife.contains("Flussufer"))
+
+        val restaurantWords = allWords.filter { it.subtopicId == "food_restaurant" }.map { it.german }.toSet()
+        assertFalse(restaurantWords.contains("Dauerbrenner"))
+
+        // Zero duplicates within the same subtopic across all levels A1-B2
+        val dupesInSameSubtopic = allWords
+            .groupBy { it.subtopicId to it.german.trim().lowercase() }
+            .filterValues { it.size > 1 }
+        assertTrue("No subtopic should contain duplicate words, found: ${dupesInSameSubtopic.keys}", dupesInSameSubtopic.isEmpty())
+
+        val rechnung = allWords.firstOrNull { it.id == 1432 }
+        assertNotNull(rechnung)
+        val rechnungFill = LearningViewModel.buildFillBlankMatch(rechnung!!)
+        assertNotNull("Rechnung (1432) must have a valid fill-in-the-blank match", rechnungFill)
+        assertTrue(rechnungFill!!.sentenceWithBlank.contains("_________"))
     }
 
     @Test
@@ -842,5 +967,60 @@ class ExampleUnitTest {
                 WordEntity(german = "wichtig", article = "", translationUk = "важливий", translationEn = "important", categoryId = "adjectives", subtopicId = "adj_qualities")
             ).steps.first().query
         )
+    }
+
+    @Test
+    fun levelScopedStageUnlockAndDailyStreakWorkAccurately() {
+        val allVisible = listOf(1, 2, 3, 4, 5, 6, 7, 8)
+        assertEquals(1, LearningViewModel.computeEffectiveUnlockedStage(emptySet(), allVisible))
+        assertEquals(2, LearningViewModel.computeEffectiveUnlockedStage(setOf(1), allVisible))
+        assertEquals(5, LearningViewModel.computeEffectiveUnlockedStage(setOf(1, 2, 3, 4), allVisible))
+        assertEquals(8, LearningViewModel.computeEffectiveUnlockedStage(setOf(1, 2, 3, 4, 5, 6, 7, 8), allVisible))
+
+        // Custom enabled subset skips disabled stages
+        val customVisible = listOf(2, 4, 7)
+        assertEquals(2, LearningViewModel.computeEffectiveUnlockedStage(emptySet(), customVisible))
+        assertEquals(4, LearningViewModel.computeEffectiveUnlockedStage(setOf(2), customVisible))
+        assertEquals(7, LearningViewModel.computeEffectiveUnlockedStage(setOf(2, 4), customVisible))
+        assertEquals(8, LearningViewModel.computeEffectiveUnlockedStage(setOf(2, 4, 7), customVisible))
+
+        // Daily streak calculations
+        val today = "2026-11-25"
+        val yesterday = "2026-11-24"
+        val older = "2026-11-20"
+        assertEquals(0, LearningViewModel.computeCurrentStreak(0, null, today, yesterday))
+        assertEquals(4, LearningViewModel.computeCurrentStreak(4, today, today, yesterday))
+        assertEquals(4, LearningViewModel.computeCurrentStreak(4, yesterday, today, yesterday))
+        assertEquals(0, LearningViewModel.computeCurrentStreak(4, older, today, yesterday))
+
+        assertEquals(1, LearningViewModel.computeUpdatedStreak(0, null, today, yesterday))
+        assertEquals(3, LearningViewModel.computeUpdatedStreak(3, today, today, yesterday))
+        assertEquals(4, LearningViewModel.computeUpdatedStreak(3, yesterday, today, yesterday))
+        assertEquals(1, LearningViewModel.computeUpdatedStreak(5, older, today, yesterday))
+    }
+
+    @Test
+    fun stockPhotoFallbackRankingHandlesIntMinValueSeedSafely() {
+        val word = WordEntity(
+            german = "Apfel",
+            article = "der",
+            translationUk = "яблуко",
+            translationEn = "apple",
+            categoryId = "food",
+            subtopicId = "food_fruits"
+        )
+        val profile = StockPhotoQueryBuilder.build(word).scoringProfile
+        val candidates = listOf(
+            PhotoCandidate("https://example.com/1.jpg", 800, 600, "a", listOf("apple", "fruit")),
+            PhotoCandidate("https://example.com/2.jpg", 800, 600, "b", listOf("apple", "red")),
+            PhotoCandidate("https://example.com/3.jpg", 800, 600, "c", listOf("fruit", "fresh"))
+        )
+        val ranked = StockPhotoRepository.rankSubtopicFallbackCandidates(
+            candidates = candidates,
+            profile = profile,
+            variationSeed = Int.MIN_VALUE
+        )
+        assertEquals(3, ranked.size)
+        assertEquals(3, ranked.map { it.url }.distinct().size)
     }
 }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -40,7 +41,6 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,10 +70,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -351,7 +356,7 @@ fun MixedReviewSessionScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Прослухайте та оберіть слово:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Прослухайте та оберіть правильний переклад:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     Spacer(modifier = Modifier.height(14.dp))
                                     Box(
@@ -362,7 +367,7 @@ fun MixedReviewSessionScreen(
                                             .clickable { viewModel.speak(currentItem.word.displayWithArticle) },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.VolumeUp, contentDescription = "Прослухати", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(34.dp))
+                                        Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Прослухати", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(34.dp))
                                     }
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -374,6 +379,52 @@ fun MixedReviewSessionScreen(
                                             onClick = { viewModel.speak(currentItem.word.displayWithArticle, true) },
                                             shape = RoundedCornerShape(10.dp)
                                         ) { Text("0.75x", fontWeight = FontWeight.SemiBold) }
+                                    }
+                                    if (selectedOptionIndex != null) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = extended.subtleFill,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .testTag("mixed_listening_revealed_german")
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    if (currentItem.word.article.isNotBlank()) {
+                                                        GenderBadge(article = currentItem.word.article)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                    }
+                                                    Text(
+                                                        text = currentItem.word.german,
+                                                        fontFamily = LoraFontFamily,
+                                                        fontSize = 19.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                                if (currentItem.word.transcription.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = currentItem.word.transcription,
+                                                        fontFamily = MonoFontFamily,
+                                                        fontStyle = FontStyle.Italic,
+                                                        fontSize = 12.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -696,8 +747,25 @@ fun MixedReviewSessionScreen(
                                         Text("Доповніть речення:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     Spacer(modifier = Modifier.height(14.dp))
+                                    val primaryColor = MaterialTheme.colorScheme.primary
+                                    val annotatedSentence = remember(
+                                        selectedString,
+                                        currentItem.sentenceWithBlank,
+                                        currentItem.word.exampleDe,
+                                        currentItem.matchedToken,
+                                        primaryColor
+                                    ) {
+                                        buildFillBlankAnnotatedSentence(
+                                            sentenceWithBlank = currentItem.sentenceWithBlank,
+                                            fullSentence = currentItem.word.exampleDe,
+                                            matchedToken = currentItem.matchedToken,
+                                            isAnswered = selectedString != null,
+                                            blankColor = primaryColor,
+                                            filledColor = SuccessGreen
+                                        )
+                                    }
                                     Text(
-                                        text = if (selectedString != null) currentItem.word.exampleDe else currentItem.sentenceWithBlank,
+                                        text = annotatedSentence,
                                         fontFamily = LoraFontFamily,
                                         fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
@@ -711,6 +779,13 @@ fun MixedReviewSessionScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
                                     )
+                                    if (selectedString != null) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        SpeakerButton(
+                                            onSpeak = { slow -> viewModel.speak(currentItem.word.exampleDe, slow) },
+                                            size = 44.dp
+                                        )
+                                    }
                                 }
                             }
 
@@ -866,9 +941,29 @@ fun MixedReviewSessionScreen(
                                 }
 
                                 if (spellingInputMode == Stage6InputMode.KEYBOARD) {
+                                    var textFieldValue by remember(currentItem.word.id, currentIndex) {
+                                        mutableStateOf(
+                                            TextFieldValue(
+                                                text = spellingInput,
+                                                selection = TextRange(spellingInput.length)
+                                            )
+                                        )
+                                    }
+                                    LaunchedEffect(spellingInput) {
+                                        if (textFieldValue.text != spellingInput) {
+                                            textFieldValue = TextFieldValue(
+                                                text = spellingInput,
+                                                selection = TextRange(spellingInput.length)
+                                            )
+                                        }
+                                    }
+
                                     OutlinedTextField(
-                                        value = spellingInput,
-                                        onValueChange = { viewModel.updateMixedSpellingTypedText(it) },
+                                        value = textFieldValue,
+                                        onValueChange = { newValue ->
+                                            textFieldValue = newValue
+                                            viewModel.updateMixedSpellingTypedText(newValue.text)
+                                        },
                                         enabled = !isResolved,
                                         singleLine = true,
                                         placeholder = {
@@ -894,9 +989,11 @@ fun MixedReviewSessionScreen(
                                             }
                                         ),
                                         keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Password,
                                             imeAction = ImeAction.Done,
                                             autoCorrectEnabled = false
                                         ),
+                                        visualTransformation = VisualTransformation.None,
                                         keyboardActions = KeyboardActions(
                                             onDone = { viewModel.submitMixedSpellingTypedAnswer() }
                                         ),
@@ -1011,14 +1108,17 @@ fun MixedReviewSessionScreen(
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center
                                     )
-                                } else if (!spellingErrorHint.isNullOrBlank()) {
-                                    Text(
-                                        text = spellingErrorHint!!,
-                                        color = StreakAmber,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
+                                } else {
+                                    val hint = spellingErrorHint
+                                    if (!hint.isNullOrBlank()) {
+                                        Text(
+                                            text = hint,
+                                            color = StreakAmber,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
 
                                 if (!isResolved) {

@@ -485,7 +485,7 @@ class StockPhotoRepository private constructor(context: Context) {
             return PixabayCallResult.TransientFailure
         }
 
-        val variationSeed = abs("${word.subtopicId}_${word.german}".hashCode())
+        val variationSeed = "${word.subtopicId}_${word.german}".hashCode() and 0x7fffffff
         var sawTransientError = false
         var bestFreshHits: PixabayCallResult.Hits? = null
         var fallbackDuplicateHits: PixabayCallResult.Hits? = null
@@ -912,7 +912,7 @@ class StockPhotoRepository private constructor(context: Context) {
             val ranked = rankCandidates(candidates, profile)
             if (ranked.size <= 1) return ranked
             val topPool = ranked.take(12)
-            val start = abs(variationSeed) % topPool.size
+            val start = (variationSeed and 0x7fffffff) % topPool.size
             return List(topPool.size) { offset -> topPool[(start + offset) % topPool.size] }
         }
     }

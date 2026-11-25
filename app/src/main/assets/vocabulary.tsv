@@ -369,7 +369,7 @@
 369	Desinfektionsmittel	das	die Desinfektionsmittel	[desinfektionsmittel]	дезінфікуючий засіб	disinfectant	Die Hände mit Desinfektionsmittel reinigen.	Очистити руки антисептиком.	body	medicine_care	A2
 370	Verbandskasten	der	die Verbandskästen	[verbandskasten]	аптечка першої допомоги	first-aid kit	Den Verbandskasten im Auto überprüfen.	Перевірити аптечку в автомобілі.	body	medicine_care	A2
 371	Tropfen	der	die Tropfen	[tropfen]	краплі	drops	Fünf Tropfen in warmes Wasser geben.	Додати п'ять крапель у теплу воду.	body	medicine_care	A2
-372	Sirup	der	die Sirupe	[sirup]	сироп	syrup	Süßer Hustensaft für Kinder.	Солодкий сироп від кашлю для дітей.	body	medicine_care	A2
+372	Sirup	der	die Sirupe	[sirup]	сироп	syrup	Der süße Sirup hilft schnell gegen Husten.	Солодкий сироп швидко допомагає від кашлю.	body	medicine_care	A2
 373	Schmerzmittel	das	die Schmerzmittel	[schmerzmittel]	знеболювальне	painkiller	Ein starkes Schmerzmittel nehmen.	Прийняти сильне знеболювальне.	body	medicine_care	A2
 374	Antibiotikum	das	die Antibiotika	[antibiotikum]	антибіотик	antibiotic	Das Antibiotikum bis zum Ende nehmen.	Приймати антибіотик до кінця курсу.	body	medicine_care	A2
 375	Vitamintablette	die	die Vitamintabletten	[vitamintablette]	вітамінна таблетка	vitamin tablet	Vitamintabletten im Winter.	Вітамінні таблетки взимку.	body	medicine_care	B1
@@ -420,7 +420,7 @@
 420	Lippenbalsam	der	die Lippenbalsame	[lippenbalsam]	бальзам для губ	lip balm	Lippenbalsam schützt vor Kälte.	Бальзам для губ захищає від холоду.	body	appearance_hygiene	A2
 421	Make-up	das	-	[make-up]	макіяж	makeup	Dezentes Make-up für den Tag.	Стриманий макіяж на день.	body	appearance_hygiene	A2
 422	Nagellack	der	die Nagellacke	[nagellack]	лак для нігтів	nail polish	Roter Nagellack auf den Fingernägeln.	Червоний лак на нігтях.	body	appearance_hygiene	A2
-423	Nagelfeile	die	die Nagelfeilen	[nagelfeile]	пилочка для нігтів	nail file	Die Nägel mit einer Feile glätten.	Підпиляти нігті пилочкою.	body	appearance_hygiene	A2
+423	Nagelfeile	die	die Nagelfeilen	[nagelfeile]	пилочка для нігтів	nail file	Mit der Nagelfeile glättet sie vorsichtig die Nägel.	Пилочкою для нігтів вона обережно підрівнює нігті.	body	appearance_hygiene	A2
 424	Nagelschere	die	die Nagelscheren	[nagelschere]	манікюрні ножиці	nail scissors	Kleine Nagelschere für die Maniküre.	Маленькі ножиці для манікюру.	body	appearance_hygiene	A2
 425	Wattestäbchen	das	die Wattestäbchen	[wattestäbchen]	ватна паличка	cotton swab	Wattestäbchen im Badezimmer.	Ватні палички у ванній кімнаті.	body	appearance_hygiene	B1
 426	Taschentuch	das	die Taschentücher	[taschentuch]	носова хустинка	tissue	Ein Taschentuch aus der Packung nehmen.	Дістати серветку з пачки.	body	appearance_hygiene	B1
@@ -513,21 +513,21 @@
 513	Bank	die	die Banken	[bank]	банк	bank	Ein Konto bei der Bank eröffnen.	Відкрити рахунок у банку.	city	city_places	A2
 514	Postamt	das	die Postämter	[postamt]	поштове відділення	post office	Briefe auf dem Postamt abgeben.	Відправити листи у поштовому відділенні.	city	city_places	A2
 515	Polizeistation	die	die Polizeistationen	[polizeistation]	поліцейський відділок	police station	Hilfe bei der Polizeistation suchen.	Шукати допомоги в поліцейському відділку.	city	city_places	A2
-516	Feuerwache	die	die Feuerwachen	[feuerwache]	пожежна частина	fire station	Die Feuerwehr rückt aus.	Пожежники виїжджають на виклик.	city	city_places	A2
+516	Feuerwache	die	die Feuerwachen	[feuerwache]	пожежна частина	fire station	Die neue Feuerwache liegt direkt an der Hauptstraße.	Нова пожежна частина розташована просто на головній вулиці.	city	city_places	A2
 517	Schwimmhalle	die	die Schwimmhallen	[schwimmhalle]	критий басейн	indoor pool	Bahnen in der Schwimmhalle ziehen.	Плавати доріжками в басейні.	city	city_places	A2
 518	Stadion	das	die Stadien	[stadion]	стадіон	stadium	Fußballspiel im Stadion schauen.	Дивитися футбольний матч на стадіоні.	city	city_places	A2
 519	Zoo	der	die Zoos	[zoo]	зоопарк	zoo	Wilde Tiere im Zoo beobachten.	Спостерігати за дикими тваринами в зоопарку.	city	city_places	A2
-520	Botanischer Garten	der	-	[botanischer garten]	ботанічний сад	botanical garden	Exotische Pflanzen bewundern.	Милуватися екзотичними рослинами.	city	city_places	A2
-521	Markthalle	die	die Markthallen	[markthalle]	критий ринок	market hall	Frische regionale Spezialitäten.	Свіжі регіональні делікатеси.	city	city_places	A2
+520	Botanischer Garten	der	-	[botanischer garten]	ботанічний сад	botanical garden	Am Sonntag besuchen wir einen Botanischen Garten.	У неділю ми відвідаємо ботанічний сад.	city	city_places	A2
+521	Markthalle	die	die Markthallen	[markthalle]	критий ринок	market hall	In der Markthalle gibt es frische regionale Produkte.	У критому ринку є свіжі місцеві продукти.	city	city_places	A2
 522	Oper	die	die Opern	[oper]	оперний театр	opera house	Eine Mozart-Oper hören.	Слухати оперу Моцарта.	city	city_places	A2
 523	Galerie	die	die Galerien	[galerie]	галерея	art gallery	Moderne Kunst in der Galerie.	Сучасне мистецтво в галереї.	city	city_places	A2
 524	Gericht	das	die Gerichte	[gericht]	суд	court	Verhandlung vor dem Gericht.	Слухання справи в суді.	city	city_places	A2
 525	Finanzamt	das	die Finanzämter	[finanzamt]	податкова служба	tax office	Steuererklärung beim Finanzamt.	Податкова декларація в податковій.	city	city_places	B1
-526	Bürgeramt	das	die Bürgerämter	[bürgeramt]	центр надання адмінпослуг	citizens office	Neuen Wohnsitz anmelden.	Зареєструвати нове місце проживання.	city	city_places	B1
+526	Bürgeramt	das	die Bürgerämter	[bürgeramt]	центр надання адмінпослуг	citizens office	Im Bürgeramt kann man seinen Wohnsitz anmelden.	У центрі надання адмінпослуг можна зареєструвати місце проживання.	city	city_places	B1
 527	Kaufhaus	das	die Kaufhäuser	[kaufhaus]	універмаг	department store	Einkaufen im großen Kaufhaus.	Шопінг у великому універмазі.	city	city_places	B1
 528	Einkaufszentrum	das	die Einkaufszentren	[einkaufszentrum]	торговий центр	shopping mall	Modegeschäfte im Einkaufszentrum.	Модні бутики в торговому центрі.	city	city_places	B1
 529	Bäckerei	die	die Bäckereien	[bäckerei]	пекарня	bakery	Frische Brötchen aus der Bäckerei.	Свіжі булочки з пекарні.	city	city_places	B1
-530	Metzgerei	die	die Metzgereien	[metzgerei]	м'ясна крамниця	butcher's	Wurst beim Metzger kaufen.	Купити ковбасу в м'ясника.	city	city_places	B1
+530	Metzgerei	die	die Metzgereien	[metzgerei]	м'ясна крамниця	butcher's	Wir kaufen frische Wurst in der kleinen Metzgerei.	Ми купуємо свіжу ковбасу в маленькій м'ясній крамниці.	city	city_places	B1
 531	Café	das	die Cafés	[café]	кав'ярня	café	Cappuccino im Straßen-Café trinken.	Пити капучино у вуличному кафе.	city	city_places	B1
 532	Restaurant	das	die Restaurants	[restaurant]	ресторан	restaurant	Abendessen im italienischen Restaurant.	Вечеря в італійському ресторані.	city	city_places	B1
 533	Kneipe	die	die Kneipen	[kneipe]	паб / пивна	pub	Gemütlicher Abend in der Kneipe.	Затишний вечір у пабі.	city	city_places	B1
@@ -537,15 +537,15 @@
 537	Jugendzentrum	das	die Jugendzentren	[jugendzentrum]	молодіжний центр	youth centre	Freizeitangebote im Jugendzentrum.	Дозвілля в молодіжному центрі.	city	city_places	B1
 538	Altenheim	das	die Altenheime	[altenheim]	будинок для літніх людей	nursing home	Großeltern im Altenheim besuchen.	Відвідувати дідуся й бабусю в пансіонаті.	city	city_places	B2
 539	Tierheim	das	die Tierheime	[tierheim]	притулок для тварин	animal shelter	Einen Hund aus dem Tierheim adoptieren.	Взяти собаку з притулку для тварин.	city	city_places	B2
-540	Spielplatz	der	die Spielplätze	[spielplatz]	дитячий майданчик	playground	Kinder spielen auf der Schaukel.	Діти гойдаються на гойдалці.	city	city_places	B2
+540	Spielplatz	der	die Spielplätze	[spielplatz]	дитячий майданчик	playground	Die Kinder spielen am Nachmittag gern auf dem Spielplatz.	Після обіду діти люблять гратися на дитячому майданчику.	city	city_places	B2
 541	Bolzplatz	der	die Bolzplätze	[bolzplatz]	футбольний майданчик	kickabout pitch	Fußball spielen auf dem Bolzplatz.	Грати у футбол на вуличному майданчику.	city	city_places	B2
-542	Skatepark	der	die Skateparks	[skatepark]	скейт-парк	skate park	Tricks mit dem Skateboard üben.	Тренувати трюки на скейті.	city	city_places	B2
+542	Skatepark	der	die Skateparks	[skatepark]	скейт-парк	skate park	Im neuen Skatepark üben Jugendliche Tricks mit dem Board.	У новому скейтпарку підлітки тренують трюки на дошці.	city	city_places	B2
 543	Friedhof	der	die Friedhöfe	[friedhof]	кладовище	cemetery	Ruhiger Friedhof mit alten Bäumen.	Тихий цвинтар зі старими деревами.	city	city_places	B2
 544	Tankstelle	die	die Tankstellen	[tankstelle]	заправка	petrol station	Benzin an der Tankstelle tanken.	Заправитися бензином на заправці.	city	city_places	B2
 545	Waschstraße	die	die Waschstraßen	[waschstraße]	автомийка	car wash	Das Auto in der Waschstraße reinigen.	Помити автомобіль на автомийці.	city	city_places	B2
 546	Werkstatt	die	die Werkstätten	[werkstatt]	автомайстерня	workshop / garage	Bremsen in der Werkstatt prüfen.	Перевірити гальма в автомайстерні.	city	city_places	B2
 547	Parkhaus	das	die Parkhäuser	[parkhaus]	критий паркінг	car park	Im Parkhaus parken.	Припаркуватися в паркінгу.	city	city_places	B2
-548	Bushaltestelle	die	die Bushaltestellen	[bushaltestelle]	автобусна зупинка	bus stop	An der Haltestelle auf Linie 4 warten.	Чекати на автобус номер 4.	city	city_places	B2
+548	Bushaltestelle	die	die Bushaltestellen	[bushaltestelle]	автобусна зупинка	bus stop	An der Bushaltestelle warte ich auf die Linie vier.	На автобусній зупинці я чекаю четвертий маршрут.	city	city_places	B2
 549	Bahnhofsvorplatz	der	die Bahnhofsvorplätze	[bahnhofsvorplatz]	привокзальна площа	station forecourt	Taxis auf dem Bahnhofsvorplatz.	Таксі на привокзальній площі.	city	city_places	B2
 550	Fußgängerbrücke	die	die Fußgängerbrücken	[fußgängerbrücke]	пішохідний міст	footbridge	Über die Fußgängerbrücke gehen.	Перейти пішохідним мостом.	city	city_places	B2
 551	Arzt	der	die Ärzte	[arzt]	лікар	doctor (m)	Der Arzt untersucht den Patienten.	Лікар оглядає пацієнта.	city	city_jobs	A1
@@ -571,7 +571,7 @@
 571	Fahrerin	die	die Fahrerinnen	[fahrerin]	водійка	driver (f)	Die Taxifahrerin kennt den Weg.	Водійка таксі знає дорогу.	city	city_jobs	A2
 572	Briefträger	der	die Briefträger	[briefträger]	листоноша	postman	Der Briefträger bringt Post.	Листоноша приносить пошту.	city	city_jobs	A2
 573	Briefträgerin	die	die Briefträgerinnen	[briefträgerin]	листоноша (жінка)	postwoman	Die Briefträgerin fährt Fahrrad.	Листоноша їздить на велосипеді.	city	city_jobs	A2
-574	Krankenpfleger	der	die Krankenpfleger	[krankenpfleger]	медбрат	male nurse	Der Pfleger betreut Kranke.	Медбрат доглядає хворих.	city	city_jobs	A2
+574	Krankenpfleger	der	die Krankenpfleger	[krankenpfleger]	медбрат	male nurse	Der freundliche Krankenpfleger kümmert sich um alle Patienten.	Привітний медбрат піклується про всіх пацієнтів.	city	city_jobs	A2
 575	Krankenschwester	die	die Krankenschwestern	[krankenschwester]	медсестра	nurse	Die Krankenschwester misst Fieber.	Медсестра міряє температуру.	city	city_jobs	B1
 576	Zahnarzt	der	die Zahnärzte	[zahnarzt]	стоматолог	dentist (m)	Keine Angst vor dem Zahnarzt.	Не боятися стоматолога.	city	city_jobs	B1
 577	Zahnärztin	die	die Zahnärztinnen	[zahnärztin]	стоматологиня	dentist (f)	Die Zahnärztin füllt den Zahn.	Стоматологиня пломбує зуб.	city	city_jobs	B1
@@ -604,7 +604,7 @@
 604	Preis	der	die Preise	[preis]	ціна	price	Ein günstiger Preis.	Вигідна ціна.	city	city_shopping	A1
 605	Rabatt	der	die Rabatte	[rabatt]	знижка	discount	Zwanzig Prozent Rabatt bekommen.	Отримати знижку 20 відсотків.	city	city_shopping	A1
 606	Einkaufswagen	der	die Einkaufswagen	[einkaufswagen]	візок для покупок	trolley	Einen Einkaufswagen schieben.	Котити візок для покупок.	city	city_shopping	A1
-607	Einkaufskorb	der	die Einkaufskörbe	[einkaufskorb]	кошик для покупок	basket	Waren in den Korb legen.	Класти товари в кошик.	city	city_shopping	A1
+607	Einkaufskorb	der	die Einkaufskörbe	[einkaufskorb]	кошик для покупок	basket	Ich lege frisches Obst in den Einkaufskorb.	Я кладу свіжі фрукти в кошик для покупок.	city	city_shopping	A1
 608	Kassierer	der	die Kassierer	[kassierer]	касир	cashier (m)	Der Kassierer scannt die Produkte.	Касир сканує продукти.	city	city_shopping	A1
 609	Kassiererin	die	die Kassiererinnen	[kassiererin]	касирка	cashier (f)	Die Kassiererin gibt Wechselgeld.	Касирка дає решту.	city	city_shopping	A1
 610	Kassenbon	der	die Kassenbons	[kassenbon]	чек	receipt	Möchten Sie den Kassenbon mitnehmen?	Бажаєте взяти чек?	city	city_shopping	A1
@@ -628,13 +628,13 @@
 628	Tiefkühlabteilung	die	die Tiefkühlabteilungen	[tiefkühlabteilung]	відділ заморозки	frozen food aisle	Pizza in der Tiefkühlabteilung finden.	Знайти піцу у відділі заморозки.	city	city_shopping	B1
 629	Obststand	der	die Obststände	[obststand]	ятка з фруктами	fruit stall	Frische Äpfel am Obststand.	Свіжі яблука на ятці з фруктами.	city	city_shopping	B1
 630	Gemüsestand	der	die Gemüsestände	[gemüsestand]	овочева ятка	vegetable stall	Salat am Gemüsestand kaufen.	Купити салат на овочевій ятці.	city	city_shopping	B1
-631	Fleischtheke	die	die Fleischtheken	[fleischtheke]	м'ясний відділ	meat counter	Frisches Rindfleisch an der Theke.	Свіжа яловичина у м'ясному відділі.	city	city_shopping	B1
+631	Fleischtheke	die	die Fleischtheken	[fleischtheke]	м'ясний відділ	meat counter	An der Fleischtheke gibt es heute frisches Rindfleisch.	У м'ясному відділі сьогодні є свіжа яловичина.	city	city_shopping	B1
 632	Käsetheke	die	die Käsetheken	[käsetheke]	сирний відділ	cheese counter	Käse an der Käsetheke probieren.	Скуштувати сир у сирному відділі.	city	city_shopping	B1
 633	Backstation	die	die Backstationen	[backstation]	відділ випічки	bakery corner	Knusprige Brötchen an der Backstation.	Хрусткі булочки у відділі випічки.	city	city_shopping	B1
 634	Selbstbedienungskasse	die	die Selbstbedienungskassen	[selbstbedienungskasse]	каса самообслуговування	self-checkout	Schnell an der SB-Kasse zahlen.	Швидко розрахуватися на касі самообслуговування.	city	city_shopping	B1
 635	Barcode	der	die Barcodes	[barcode]	штрихкод	barcode	Den Barcode scannen.	Відсканувати штрихкод товару.	city	city_shopping	B1
 636	Scanner	der	die Scanner	[scanner]	сканер	scanner	Der Scanner piept beim Erfassen.	Сканер пищить при зчитуванні товару.	city	city_shopping	B1
-637	Preisschild	das	die Preisschilder	[preisschild]	цінник	price tag	Der Preis steht auf dem Schild.	Ціну вказано на ціннику.	city	city_shopping	B1
+637	Preisschild	das	die Preisschilder	[preisschild]	цінник	price tag	Der genaue Preis steht deutlich auf dem Preisschild.	Точна ціна чітко вказана на ціннику.	city	city_shopping	B1
 638	Menge	die	die Mengen	[menge]	кількість	quantity	Große Mengen günstig kaufen.	Купувати велику кількість вигідно.	city	city_shopping	B2
 639	Gewicht	das	die Gewichte	[gewicht]	вага	weight	Das Gewicht der Bananen wiegen.	Зважити вагу бананів.	city	city_shopping	B2
 640	Gramm	das	die Gramme	[gramm]	грам	gram	200 Gramm Schinken bitte.	200 грамів шинки, будь ласка.	city	city_shopping	B2
@@ -673,7 +673,7 @@
 673	Wechselkurs	der	die Wechselkurse	[wechselkurs]	валютний курс	exchange rate	Ein günstiger Wechselkurs.	Вигідний курс валют.	city	city_services	A2
 674	Unterschrift	die	die Unterschriften	[unterschrift]	підпис	signature	Ihre Unterschrift bitte hier unten.	Ваш підпис тут унизу, будь ласка.	city	city_services	A2
 675	Formular	das	die Formulare	[formular]	бланк / формуляр	form	Ein Formular leserlich ausfüllen.	Розбірливо заповнити формуляр.	city	city_services	B1
-676	Briefumschlag	der	die Briefumschläge	[briefumschlag]	конверт	envelope	Die Adresse auf den Umschlag schreiben.	Написати адресу на конверті.	city	city_services	B1
+676	Briefumschlag	der	die Briefumschläge	[briefumschlag]	конверт	envelope	Ich schreibe die Adresse ordentlich auf den Briefumschlag.	Я охайно пишу адресу на конверті.	city	city_services	B1
 677	Postkarte	die	die Postkarten	[postkarte]	поштова листівка	postcard	Grüße per Postkarte schicken.	Надіслати привітання поштовою листівкою.	city	city_services	B1
 678	Absender	der	die Absender	[absender]	відправник	sender	Den Absender oben links eintragen.	Вказати відправника вгорі ліворуч.	city	city_services	B1
 679	Empfänger	der	die Empfänger	[empfänger]	одержувач	recipient	Der Name des Empfängers auf dem Paket.	Ім'я одержувача на посилці.	city	city_services	B1
@@ -785,7 +785,7 @@
 785	Ethik	die	-	[ethik]	етика (предмет)	ethics	Philosophische Fragen im Fach Ethik.	Філософські питання на уроках етики.	education	education_school	B1
 786	Informatik	die	-	[informatik]	інформатика	computer science	Erste Algorithmen in Informatik schreiben.	Писати перші алгоритми на інформатиці.	education	education_school	B1
 787	Hausaufgabe	die	die Hausaufgaben	[hausaufgabe]	домашнє завдання	homework	Die Hausaufgaben gleich nach der Schule machen.	Робити домашку одразу після школи.	education	education_school	B1
-788	Note	die	die Noten	[note]	шкільна оцінка	grade	Eine Eins mit Sternchen bekommen.	Отримати одиницю з зірочкою (найвища оцінка в Німеччині).	education	education_school	B2
+788	Note	die	die Noten	[note]	шкільна оцінка	grade	Für diesen Aufsatz habe ich eine sehr gute Note bekommen.	За цей твір я отримав дуже хорошу оцінку.	education	education_school	B2
 789	Zeugnis	das	die Zeugnisse	[zeugnis]	шкільний табель / атестат	report card	Gute Noten auf dem Halbjahreszeugnis.	Гарні оцінки в табелі за півріччя.	education	education_school	B2
 790	Ferien	die	-	[ferien]	шкільні канікули	school holidays	Sechs Wochen sonnige Sommerferien.	Шість тижнів сонячних літніх канікул.	education	education_school	B2
 791	Sommerferien	die	-	[sommerferien]	літні канікули	summer holidays	Mit den Eltern in den Sommerferien verreisen.	Подорожувати з батьками під час літніх канікул.	education	education_school	B2
@@ -836,8 +836,8 @@
 836	Graduierung	die	die Graduierungen	[graduierung]	випускний вишу	graduation	Die feierliche Graduierung im Talar.	Урочистий випуск у мантіях.	education	education_university	B1
 837	Stipendium	das	die Stipendien	[stipendium]	стипендія	scholarship	Ein monatliches Stipendium für Begabte.	Щомісячна стипендія для обдарованих студентів.	education	education_university	B1
 838	BAföG	das	-	[bafög]	державна студентська допомога (Німеччина)	student grant	Einen Antrag auf BAföG stellen.	Подати заявку на державну студентську виплату BAföG.	education	education_university	B2
-839	Studentenwohnheim	das	die Studentenwohnheime	[studentenwohnheim]	студентський гуртожиток	dormitory	Ein günstiges Zimmer im Wohnheim mieten.	Орендувати недорогу кімнату в гуртожитку.	education	education_university	B2
-840	Wohngemeinschaft	die	die Wohngemeinschaften	[wohngemeinschaft]	спільне проживання (WG)	shared flat	Zusammen mit drei Studenten in einer WG wohnen.	Жити разом із трьома студентами у спільній квартирі.	education	education_university	B2
+839	Studentenwohnheim	das	die Studentenwohnheime	[studentenwohnheim]	студентський гуртожиток	dormitory	Viele Studierende mieten ein Zimmer im Studentenwohnheim.	Багато студентів орендують кімнату в студентському гуртожитку.	education	education_university	B2
+840	Wohngemeinschaft	die	die Wohngemeinschaften	[wohngemeinschaft]	спільне проживання (WG)	shared flat	Sie lebt seit einem Jahr in einer netten Wohngemeinschaft.	Вона вже рік живе в приємній спільній квартирі.	education	education_university	B2
 841	WG-Zimmer	das	die WG-Zimmer	[wg-zimmer]	кімната в спільній квартирі	room in a shared flat	Ein helles möbliertes WG-Zimmer suchen.	Шукати світлу мебльовану кімнату у WG.	education	education_university	B2
 842	Einschreibung	die	die Einschreibungen	[einschreibung]	зарахування до вишу	enrollment	Die offizielle Einschreibung vor Semesterbeginn.	Офіційне зарахування до початку семестру.	education	education_university	B2
 843	Immatrikulation	die	die Immatrikulationen	[immatrikulation]	імматрикуляція / зарахування	matriculation	Die Urkunde zur Immatrikulation erhalten.	Отримати посвідчення про зарахування до студентів.	education	education_university	B2
@@ -1035,19 +1035,19 @@
 1035	Faszination	die	-	[faszination]	захоплення / зачарування	fascination	Die Faszination des Weltalls spüren.	Відчути зачарування космосом.	emotions	emotions_positive	B1
 1036	Erstaunen	das	-	[erstaunen]	здивування від приємного	astonishment	In sprachloses Erstaunen versetzen.	Привести в безмовне захоплене здивування.	emotions	emotions_positive	B1
 1037	Überraschung	die	die Überraschungen	[überraschung]	сюрприз / несподіванка	surprise	Eine gelungene Überraschung zur Feier.	Вдалий сюрприз на свято.	emotions	emotions_positive	B1
-1038	Begeisterung	die	-	[begeisterung]	палкий ентузіазм	excitement	Voller Begeisterung über das Geschenk.	У захваті від подарунка.	emotions	emotions_positive	B2
+1038	Herzensfreude	die	-	[ˈhɛʁtsənsˌfʁɔʏ̯də]	щира радість	heartfelt joy	Sie begrüßte ihre Gäste mit großer Herzensfreude.	Вона зустріла своїх гостей зі щирою радістю.	emotions	emotions_positive	B2
 1039	Lebensfreude	die	-	[lebensfreude]	радість життя	joy of living	Voller Energie und Lebensfreude sein.	Бути сповненим енергії та радості життя.	emotions	emotions_positive	B2
-1040	Harmonie	die	-	[harmonie]	душевна злагода	harmony	In Harmonie mit sich selbst leben.	Жити в гармонії з самим собою.	emotions	emotions_positive	B2
+1040	Seelenruhe	die	-	[ˈzeːlənˌʁuːə]	душевний спокій	peace of mind	Er erledigte die schwierige Aufgabe mit völliger Seelenruhe.	Він виконав складне завдання з цілковитим душевним спокоєм.	emotions	emotions_positive	B2
 1041	Erfüllung	die	-	[erfüllung]	самореалізація	fulfillment	Berufliche Erfüllung finden.	Знайти професійне покликання та задоволення.	emotions	emotions_positive	B2
 1042	Wärme	die	-	[wärme]	душевне тепло	warmth	Menschliche Wärme spüren.	Відчувати людське душевне тепло.	emotions	emotions_positive	B2
-1043	Geborgenheit	die	-	[geborgenheit]	захищеність	comfort	Sicherheit und Geborgenheit zu Hause.	Безпека та затишок удома.	emotions	emotions_positive	B2
+1043	Vertrauenswürdigkeit	die	-	[fɛɐ̯ˈtʁaʊ̯ənsvʏʁdɪçkaɪ̯t]	надійність / гідність довіри	trustworthiness	Ihre Vertrauenswürdigkeit wird im ganzen Team geschätzt.	Її надійність цінують у всій команді.	emotions	emotions_positive	B2
 1044	Aufmerksamkeit	die	-	[aufmerksamkeit]	увага / турбота	attention	Kleine Aufmerksamkeiten erfreuen das Herz.	Маленькі знаки уваги радують серце.	emotions	emotions_positive	B2
 1045	Wertschätzung	die	-	[wertschätzung]	висока оцінка / повага	appreciation	Große Wertschätzung für gute Arbeit erfahren.	Отримати високу повагу за хорошу роботу.	emotions	emotions_positive	B2
 1046	Respekt	der	-	[respekt]	повага	respect	Gegenseitigen Respekt voreinander zeigen.	Виявляти взаємну повагу один до одного.	emotions	emotions_positive	B2
 1047	Toleranz	die	-	[toleranz]	толерантність / терпимість	tolerance	Toleranz gegenüber anderen Meinungen üben.	Проявляти терпимість до інших думок.	emotions	emotions_positive	B2
 1048	Großzügigkeit	die	-	[großzügigkeit]	щедрість	generosity	Die herzliche Großzügigkeit der Gastgeber.	Щира щедрість господарів.	emotions	emotions_positive	B2
 1049	Herzlichkeit	die	-	[herzlichkeit]	сердечність	cordiality	Mit großer Herzlichkeit empfangen werden.	Бути прийнятим із великою сердечністю.	emotions	emotions_positive	B2
-1050	Zuversicht	die	-	[zuversicht]	бадьорий оптимізм	confidence	Mit Mut und Zuversicht in die Zukunft.	З мужністю та впевненістю в майбутнє.	emotions	emotions_positive	B2
+1050	Daseinsfreude	die	-	[ˈdaːzaɪ̯nsˌfʁɔʏ̯də]	радість буття / оптимізм	joy of living	Seine ansteckende Daseinsfreude inspiriert alle.	Його заразлива радість буття надихає всіх.	emotions	emotions_positive	B2
 1051	Angst	die	die Ängste	[angst]	страх	fear	Keine Angst vor Fehlern haben.	Не мати страху перед помилками.	emotions	emotions_negative	A1
 1052	Furcht	die	-	[furcht]	боязнь	dread / fright	Furcht vor der Dunkelheit überwinden.	Подолати страх темряви.	emotions	emotions_negative	A1
 1053	Wut	die	-	[wut]	лють / гнів	rage / anger	Vor lauter Wut rot im Gesicht werden.	Почервоніти від люті.	emotions	emotions_negative	A1
@@ -1246,7 +1246,7 @@
 1246	Begründung	die	die Begründungen	[begründung]	обґрунтування	justification	Gute Argumente zur Begründung liefern.	Навести переконливі аргументи для обґрунтування.	emotions	emotions_communication	B2
 1247	Argument	das	die Argumente	[argument]	аргумент	argument	Ein stichhaltiges Argument vorbringen.	Навести вагомий аргумент.	emotions	emotions_communication	B2
 1248	Beweis	der	die Beweise	[beweis]	доказ у розмові	proof	Den überzeugenden Beweis liefern.	Надати переконливий доказ.	emotions	emotions_communication	B2
-1249	Einwand	der	die Einwände	[einwand]	заперечення	objection	Einen Gegenbeweis im Streit erbringen.	Надати зустрічний доказ у суперечці.	emotions	emotions_communication	B2
+1249	Gegendarstellung	die	die Gegendarstellungen	[ˈɡeːɡənˌdaːɐ̯ʃtɛlʊŋ]	спростування / контраргумент	counterstatement	Die Zeitung veröffentlichte am nächsten Tag eine Gegendarstellung.	Наступного дня газета опублікувала спростування.	emotions	emotions_communication	B2
 1250	Zuhörer	der	die Zuhörer	[zuhörer]	уважний слухач	listener	Ein verständnisvoller und geduldiger Zuhörer.	Розуміючий і терплячий слухач.	emotions	emotions_communication	B2
 1251	Apfel	der	die Äpfel	[ˈapfl̩]	яблуко	apple	Ich esse jeden Tag einen frischen Apfel.	Я щодня їм свіже яблуко.	food	food_fruits	A1
 1252	Erdbeere	die	die Erdbeeren	[ˈeːɐ̯tˌbeːʁə]	полуниця	strawberry	Süße Erdbeeren wachsen im Sommer im Garten.	Солодка полуниця росте влітку в саду.	food	food_fruits	A1
@@ -1321,7 +1321,7 @@
 1321	Sekt	der	die Sekte	[zɛkt]	ігристе вино	sparkling wine	Ein Glas Sekt zum Anstoßen.	Келих шампанського для тосту.	food	food_drinks	A2
 1322	Cocktail	der	die Cocktails	[ˈkɔkteɪ̯l]	коктейль	cocktail	Fruchtiger Cocktail an der Bar.	Фруктовий коктейль у барі.	food	food_drinks	A2
 1323	Apfelschorle	die	die Apfelschorlen	[ˈapfl̩ˌʃɔʁlə]	яблучний шорле	apple spritzer	Apfelschorle löscht den Durst.	Яблучний шорле втамовує спрагу.	food	food_drinks	A2
-1324	Kräutertee	der	die Kräutertees	[ˈkʁɔɪ̯tɐˌteː]	трав'яний чай	herbal tea	Kamillentee beruhigt am Abend.	Ромашковий чай заспокоює ввечері.	food	food_drinks	A2
+1324	Kräutertee	der	die Kräutertees	[ˈkʁɔɪ̯tɐˌteː]	трав'яний чай	herbal tea	Am Abend trinke ich gern heißen Kräutertee.	Увечері я люблю пити гарячий трав'яний чай.	food	food_drinks	A2
 1325	Eistee	der	die Eistees	[ˈaɪ̯sˌteː]	холодний чай	iced tea	Kalter Eistee mit Pfirsich.	Холодний чай з персиком.	food	food_drinks	A2
 1326	Espresso	der	die Espressos	[ɛsˈpʁɛso]	еспресо	espresso	Ein starker kleiner Espresso.	Міцне маленьке еспресо.	food	food_drinks	A2
 1327	Cappuccino	der	die Cappuccinos	[kapʊˈtʃiːno]	капучино	cappuccino	Cappuccino mit Milchschaum.	Капучино з молочною пінкою.	food	food_drinks	A2
@@ -1397,7 +1397,7 @@
 1397	Frikadelle	die	die Frikadellen	[fʁikaˈdɛlə]	котлета	meatball / patty	Warme Frikadelle mit Senf.	Тепла котлета з гірчицею.	food	food_meat_fish	B1
 1398	Leberwurst	die	die Leberwürste	[ˈleːbɐˌvʊʁst]	печінкова ковбаса	liver sausage	Leberwurst auf frischem Brot.	Печінкова ковбаса на свіжому хлібі.	food	food_meat_fish	B1
 1399	Weißwurst	die	die Weißwürste	[ˈvaɪ̯sˌvʊʁst]	біла ковбаска	bavarian white sausage	Bayerische Weißwurst mit süßem Senf.	Баварська біла ковбаска із солодким гірчичним соусом.	food	food_meat_fish	B1
-1400	Currywurst	die	die Currywürste	[ˈkœʁiˌvʊʁst]	каррівурст	curry sausage	Currywurst ist typisch für Berlin.	Каррівурст — типова страва Берліна.	food	food_meat_fish	B1
+1400	Currywurst	die	die Currywürste	[ˈkœʁiˌvʊʁst]	каррівурст	curry sausage	Currywurst ist typisch für Berlin.	Каррівурст — типова страва Берліна.	food	food_meals	B1
 1401	Schokolade	die	die Schokoladen	[ʃokoˈlaːdə]	шоколад	chocolate	Dunkle Schokolade schmeckt edel.	Темний шоколад має вишуканий смак.	food	food_sweets	A1
 1402	Kuchen	der	die Kuchen	[ˈkuːxn̩]	пиріг	cake	Apfelkuchen mit Zimt gebacken.	Яблучний пиріг з корицею.	food	food_sweets	A1
 1403	Torte	die	die Torten	[ˈtɔʁtə]	торт	gateau	Geburtstagstorte mit Kerzen.	Іменинний торт зі свічками.	food	food_sweets	A1
@@ -1429,7 +1429,7 @@
 1429	Baiser	das	die Baisers	[bɛˈzeː]	безе	meringue	Luftiges Baiser aus Eiweiß.	Повітряне безе з яєчного білка.	food	food_sweets	B1
 1430	Puderzucker	der	-	[ˈpuːdɐˌtsʊkɐ]	цукрова пудра	powdered sugar	Puderzucker über den Kuchen streuen.	Посипати торт цукровою пудрою.	food	food_sweets	B1
 1431	Speisekarte	die	die Speisekarten	[ˈʃpaɪ̯zəˌkaʁtə]	меню ресторану	menu	Könnten wir bitte die Speisekarte sehen?	Чи можемо ми побачити меню?	food	food_restaurant	A1
-1432	Rechnung	die	die Rechnungen	[ˈʁɛçnʊŋ]	рахунок	bill	Zusammen oder getrennt bezahlen?	Разом чи окремо платитимете?	food	food_restaurant	A1
+1432	Rechnung	die	die Rechnungen	[ˈʁɛçnʊŋ]	рахунок	bill	Die Rechnung, bitte! Wir bezahlen zusammen.	Рахунок, будь ласка! Ми платимо разом.	food	food_restaurant	A1
 1433	Kellner	der	die Kellner	[ˈkɛlnɐ]	офіціант	waiter	Der Kellner bringt das Essen.	Офіціант приносить їжу.	food	food_restaurant	A1
 1434	Kellnerin	die	die Kellnerinnen	[ˈkɛlnəʁɪn]	офіціантка	waitress	Die Kellnerin nimmt die Bestellung auf.	Офіціантка приймає замовлення.	food	food_restaurant	A1
 1435	Trinkgeld	das	die Trinkgelder	[ˈtʁɪŋkˌɡɛlt]	чайові	tip	Wir geben zehn Prozent Trinkgeld.	Ми даємо десять відсотків чайових.	food	food_restaurant	A1
@@ -1447,7 +1447,7 @@
 1447	Stammgast	der	die Stammgäste	[ˈʃtamˌɡast]	постійний відвідувач	regular guest	Er ist Stammgast in diesem Café.	Він постійний гість у цій кав'ярні.	food	food_restaurant	A2
 1448	Biergarten	der	die Biergärten	[ˈbiːɐ̯ˌɡaʁtn̩]	пивний сад	beer garden	Im Biergarten unter Kastanienbäumen.	У пивному саду під каштанами.	food	food_restaurant	A2
 1449	Tagesgericht	das	die Tagesgerichte	[ˈtaːɡəsɡəˌʁɪçt]	страва дня	dish of the day	Das Tagesgericht ist heute Lachs.	Сьогодні страва дня — лосось.	food	food_restaurant	A2
-1450	Trinkbecher	der	die Trinkbecher	[ˈtʁɪŋkˌbɛçɐ]	стаканчик	cup	Ein Becher zum Mitnehmen.	Стаканчик із напоєм із собою.	food	food_restaurant	A2
+1450	Trinkbecher	der	die Trinkbecher	[ˈtʁɪŋkˌbɛçɐ]	стаканчик	cup	Bitte nehmen Sie einen sauberen Trinkbecher.	Візьміть, будь ласка, чистий стаканчик.	food	food_restaurant	A2
 1451	Zahnstocher	der	die Zahnstocher	[ˈtsaːnˌʃtɔxɐ]	зубочистка	toothpick	Zahnstocher stehen auf dem Tisch.	Зубочистки стоять на столі.	food	food_restaurant	B1
 1452	Aschenbecher	der	die Aschenbecher	[ˈaʃn̩ˌbɛçɐ]	попільничка	ashtray	Der Aschenbecher steht draußen.	Попільничка стоїть надворі.	food	food_restaurant	B1
 1453	Garderobe	die	die Garderoben	[ɡaʁdəˈʁoːbə]	гардероб	cloakroom	Mäntel an der Garderobe abgeben.	Здати пальта в гардероб.	food	food_restaurant	B1
@@ -1478,7 +1478,7 @@
 1478	Reibe	die	die Reiben	[ˈʁaɪ̯bə]	терка	grater	Käse mit der Reibe raspeln.	Натерти сир на тертці.	food	food_cooking	B1
 1479	Schürze	die	die Schürzen	[ˈʃʏʁtsə]	фартух	apron	Eine Schürze beim Kochen tragen.	Одягати фартух під час готування.	food	food_cooking	B1
 1480	Deckel	der	die Deckel	[ˈdɛkl̩]	кришка	lid	Den Deckel auf den Topf setzen.	Накрити каструлю кришкою.	food	food_cooking	B1
-1481	Vollkornbrot	das	die Vollkornbrote	[vollkornbrot]	цільнозерновий хліб	wholegrain bread	Vollkornbrot ist gesund.	Цільнозерновий хліб корисний.	food	food_meals	B1
+1481	Sauerteigbrot	das	die Sauerteigbrote	[ˈzaʊ̯ɐtaɪ̯kˌbʁoːt]	хліб на заквасці	sourdough bread	Frisches Sauerteigbrot schmeckt wunderbar mit Butter.	Свіжий хліб на заквасці чудово смакує з маслом.	food	food_meals	B1
 1482	Sonnenblumenöl	das	die Sonnenblumenöle	[sonnenblumenöl]	соняшникова олія	sunflower oil	Sonnenblumenöl zum Braten.	Соняшникова олія для смаження.	food	food_meals	B1
 1483	Rapsöl	das	-	[rapsöl]	ріпакова олія	rapeseed oil	Rapsöl enthält gesunde Fette.	Ріпакова олія містить корисні жири.	food	food_meals	B1
 1484	Olivenöl	das	die Olivenöle	[olivenöl]	оливкова олія	olive oil	Natives Olivenöl extra.	Оливкова олія першого холодного віджиму.	food	food_meals	B1
@@ -1858,7 +1858,7 @@
 1858	Serviette	die	die Servietten	[serviette]	серветка	napkin	Papierservietten auf den Tisch.	Паперові серветки на стіл.	home	home_kitchen	A1
 1859	Kanne	die	die Kannen	[kanne]	чайник / глечик	teapot / jug	Tee aus der Kanne einschenken.	Налити чай із чайника.	home	home_kitchen	A1
 1860	Flasche	die	die Flaschen	[flasche]	пляшка	bottle	Eine Glasflasche Wasser.	Скляна пляшка води.	home	home_kitchen	A1
-1861	Kaffeetasse	die	die Kaffeetassen	[kaffeetasse]	кавова чашка	coffee cup	Frischer Espresso in der Tasse.	Свіже еспресо в чашці.	home	home_kitchen	A1
+1861	Kaffeetasse	die	die Kaffeetassen	[kaffeetasse]	кавова чашка	coffee cup	Die weiße Kaffeetasse steht auf dem Tisch.	Біла кавова чашка стоїть на столі.	home	home_kitchen	A1
 1862	Teetasse	die	die Teetassen	[teetasse]	чайна чашка	teacup	Heiße Teetasse mit Zitrone.	Гаряча чайна чашка з лимоном.	home	home_kitchen	A2
 1863	Weinglas	das	die Weingläser	[weinglas]	келих для вина	wine glass	Rotwein im Weinglas.	Червоне вино в келиху.	home	home_kitchen	A2
 1864	Bierglas	das	die Biergläser	[bierglas]	пивний кухоль	beer glass	Ein kaltes Bier im Glas.	Холодне пиво в келиху.	home	home_kitchen	A2
@@ -1899,15 +1899,15 @@
 1899	Untersetzer	der	die Untersetzer	[untersetzer]	підставка під гаряче	coaster	Heißen Topf auf den Untersetzer stellen.	Поставити гарячу каструлю на підставку.	home	home_kitchen	B2
 1900	Topflappen	der	die Topflappen	[topflappen]	прихватка	potholder	Hände mit Topflappen vor Hitze schützen.	Захистити руки від жару прихватками.	home	home_kitchen	B2
 1901	Kühlschrank	der	die Kühlschränke	[kühlschrank]	холодильник	refrigerator	Käse im Kühlschrank lagern.	Зберігати сир у холодильнику.	home	home_appliances	A1
-1902	Waschmaschine	die	die Waschmaschinen	[waschmaschine]	пральна машина	washing machine	Wäsche in die Maschine füllen.	Завантажити білизну в пральну машину.	home	home_appliances	A1
+1902	Waschmaschine	die	die Waschmaschinen	[waschmaschine]	пральна машина	washing machine	Die Waschmaschine läuft heute schon zum zweiten Mal.	Пральна машина сьогодні працює вже вдруге.	home	home_appliances	A1
 1903	Herd	der	die Herde	[herd]	кухонна плита	cooker	Wasser auf dem Herd kochen.	Кип'ятити воду на плиті.	home	home_appliances	A1
-1904	Backofen	der	die Backöfen	[backofen]	духова шафа	oven	Pizza im Ofen backen.	Пекти піцу в духовці.	home	home_appliances	A1
+1904	Backofen	der	die Backöfen	[backofen]	духова шафа	oven	Die Pizza backt zwanzig Minuten im heißen Backofen.	Піца випікається двадцять хвилин у гарячій духовці.	home	home_appliances	A1
 1905	Mikrowelle	die	die Mikrowellen	[mikrowelle]	мікрохвильовка	microwave	Suppe in der Mikrowelle aufwärmen.	Розігріти суп у мікрохвильовці.	home	home_appliances	A1
 1906	Staubsauger	der	die Staubsauger	[staubsauger]	пилосос	vacuum cleaner	Den Teppich mit dem Staubsauger saugen.	Пропилососити килим пилососом.	home	home_appliances	A1
-1907	Geschirrspüler	der	die Geschirrspüler	[geschirrspüler]	посудомийка	dishwasher	Geschirr in die Spülmaschine räumen.	Скласти посуд у посудомийку.	home	home_appliances	A1
-1908	Kaffeemaschine	die	die Kaffeemaschinen	[kaffeemaschine]	кавомашина	coffee machine	Kaffee auf Knopfdruck.	Кава одним натисканням кнопки.	home	home_appliances	A1
+1907	Geschirrspüler	der	die Geschirrspüler	[geschirrspüler]	посудомийка	dishwasher	Nach dem Abendessen räume ich den Geschirrspüler ein.	Після вечері я завантажую посудомийну машину.	home	home_appliances	A1
+1908	Kaffeemaschine	die	die Kaffeemaschinen	[kaffeemaschine]	кавомашина	coffee machine	Morgens macht unsere Kaffeemaschine frischen Espresso.	Уранці наша кавоварка готує свіжий еспресо.	home	home_appliances	A1
 1909	Toaster	der	die Toaster	[toaster]	тостер	toaster	Toastbrot im Toaster rösten.	Підсмажити тост у тостері.	home	home_appliances	A1
-1910	Wasserkocher	der	die Wasserkocher	[wasserkocher]	електрочайник	kettle	Wasser für Tee kochen.	Закип'ятити воду для чаю.	home	home_appliances	A1
+1910	Wasserkocher	der	die Wasserkocher	[wasserkocher]	електрочайник	kettle	Der Wasserkocher erhitzt das Wasser für den Tee.	Електрочайник нагріває воду для чаю.	home	home_appliances	A1
 1911	Bügeleisen	das	die Bügeleisen	[bügeleisen]	праска	iron	Hemd mit dem Bügeleisen glätten.	Попрасувати сорочку праскою.	home	home_appliances	A1
 1912	Föhn	der	die Föhne	[föhn]	фен	hairdryer	Haare nach dem Waschen föhnen.	Сушити волосся феном після миття.	home	home_appliances	A2
 1913	Mixer	der	die Mixer	[mixer]	блендер / міксер	blender	Einen Frucht-Smoothie mixen.	Збити фруктовий смузі блендером.	home	home_appliances	A2
@@ -3308,7 +3308,7 @@
 3308	Gepäck	das	-	[gepäck]	багаж	luggage	Gepäck am Schalter abgeben.	Здати багаж у касі.	travel	travel_station	A1
 3309	Reisepass	der	die Reisepässe	[reisepass]	закордонний паспорт	passport	Gültiger Reisepass.	Дійсний закордонний паспорт.	travel	travel_station	A1
 3310	Flugticket	das	die Flugtickets	[flugticket]	авіаквиток	airline ticket	Flugticket online vorzeigen.	Показати авіаквиток онлайн.	travel	travel_station	A1
-3311	Sitzplatz	der	die Sitzplätze	[sitzplatz]	місце	seat	Platz am Gang reservieren.	Забронювати місце біля проходу.	travel	travel_station	A1
+3311	Sitzplatz	der	die Sitzplätze	[sitzplatz]	місце	seat	Ich habe einen bequemen Sitzplatz am Fenster reserviert.	Я забронював зручне місце біля вікна.	travel	travel_station	A1
 3312	Verspätung	die	die Verspätungen	[verspätung]	запізнення	delay	Wegen Schneefall Verspätung.	Запізнення через снігопад.	travel	travel_station	A2
 3313	Abfahrt	die	die Abfahrten	[abfahrt]	відправлення	departure	Abfahrt um zehn Uhr.	Відправлення о десятій годині.	travel	travel_station	A2
 3314	Ankunft	die	die Ankünfte	[ankunft]	прибуття	arrival	Pünktliche Ankunft am Ziel.	Вчасне прибуття до пункту призначення.	travel	travel_station	A2
@@ -3454,9 +3454,9 @@
 3454	Sonnenschirm	der	die Sonnenschirme	[sonnenschirm]	парасолька від сонця	sun umbrella	Schatten unter dem Sonnenschirm.	Тінь під сонцезахисною парасолькою.	travel	travel_vacation	A1
 3455	Sonnenbrille	die	die Sonnenbrillen	[sonnenbrille]	сонцезахисні окуляри	sunglasses	Die Sonnenbrille schützt die Augen.	Сонцезахисні окуляри захищають очі.	travel	travel_vacation	A1
 3456	Sonnencreme	die	die Sonnencremes	[sonnencreme]	сонцезахисний крем	sunscreen	Sonnencreme mit hohem Lichtschutzfaktor.	Крем від засмаги з високим рівнем захисту.	travel	travel_vacation	A1
-3457	Handtuch	das	die Handtücher	[handtuch]	рушник	towel	Ein großes buntes Badetuch.	Великий яскравий рушник.	travel	travel_vacation	A1
+3457	Handtuch	das	die Handtücher	[handtuch]	рушник	towel	Vergiss dein großes Handtuch für den Strand nicht.	Не забудь свій великий рушник для пляжу.	travel	travel_vacation	A1
 3458	Souvenir	das	die Souvenirs	[souvenir]	сувенір	souvenir	Schöne Souvenirs für Freunde mitbringen.	Привезти гарні сувеніри для друзів.	travel	travel_vacation	A1
-3459	Fotoapparat	der	die Fotoapparate	[fotoapparat]	фотокамера	camera	Erinnerungsfotos mit der Kamera machen.	Робити фотографії на пам'ять камерою.	travel	travel_vacation	A1
+3459	Fotoapparat	der	die Fotoapparate	[fotoapparat]	фотокамера	camera	Auf jede Reise nimmt er seinen Fotoapparat mit.	У кожну подорож він бере із собою фотоапарат.	travel	travel_vacation	A1
 3460	Reiseleiter	der	die Reiseleiter	[reiseleiter]	екскурсовод / гід	tour guide	Der Reiseleiter erklärt die Geschichte.	Гід розповідає історію пам'ятки.	travel	travel_vacation	A1
 3461	Katamaran	der	die Katamarane	[katamaran]	катамаран	catamaran	Eine Tour mit dem Katamaran buchen.	Замовити тур на катамарані.	travel	travel_vacation	A1
 3462	Welle	die	die Wellen	[welle]	хвиля	wave	Große Wellen brechen am Ufer.	Великі хвилі розбиваються об берег.	travel	travel_vacation	A2
@@ -3748,7 +3748,7 @@
 3748	schließen		schloss, geschlossen	[schließen]	закриватися на ніч	to close	Die Supermärkte schließen um zwanzig Uhr.	Супермаркети зачиняються о двадцятій годині.	verbs	verbs_change	B2
 3749	einstürzen		stürzte ein, eingestürzt	[einstürzen]	обвалюватися	to collapse	Die alte baufällige Mauer stürzt ein.	Старий аварійний мур обвалюється.	verbs	verbs_change	B2
 3750	aufblühen		blühte auf, aufgeblüht	[aufblühen]	розквітати	to bloom	Bunte Blumen blühen im Frühling auf.	Барвисті квіти розквітають навесні.	verbs	verbs_change	B2
-3751	Büro	das	die Büros	[büro]	офіс	office	Im modernen Großraumbüro arbeiten.	Працювати в сучасному відкритому офісі.	work	work_office	A1
+3751	Büro	das	die Büros	[büro]	офіс	office	Heute arbeite ich bis siebzehn Uhr im Büro.	Сьогодні я працюю в офісі до сімнадцятої години.	work	work_office	A1
 3752	Schreibtisch	der	die Schreibtische	[schreibtisch]	письмовий стіл	desk	Die Dokumente auf dem Schreibtisch ordnen.	Впорядкувати документи на робочому столі.	work	work_office	A1
 3753	Bürostuhl	der	die Bürostühle	[bürostuhl]	офісне крісло	office chair	Ein bequemer ergonomischer Bürostuhl.	Зручне ергономічне офісне крісло.	work	work_office	A1
 3754	Kollege	der	die Kollegen	[kollege]	колега (чоловік)	colleague	Ein hilfsbereiter Kollege im Team.	Чуйний колега в команді.	work	work_office	A1
@@ -4040,7 +4040,7 @@
 4040	Pfefferminztee	der	die Pfefferminztees		м'ятний чай	peppermint tea	Frischer Pfefferminztee beruhigt den Magen sofort.	Свіжий м'ятний чай одразу заспокоює шлунок.	food	food_drinks	A2
 4041	Litschi	die	die Litschis		лічі	lychee	Litschi ist eine süße asiatische Frucht.	Лічі — солодкий азійський фрукт.	food	food_fruits	B2
 4042	Wildlachs	der	-		дикий лосось	wild salmon	Wildlachs enthält viele gesunde Omega-Fettsäuren.	Дикий лосось містить багато корисних жирних кислот.	food	food_meat_fish	B1
-4043	Dauerbrenner	der	die Dauerbrenner	[ˈdaʊ̯ɐˌbrɛnɐ]	хіт меню	all-time favorite	Schnitzel mit Pommes bleibt der Dauerbrenner.	Шніцель із картоплею фрі залишається хітом меню.	food	food_restaurant	B2
+4043	Stammrestaurant	das	die Stammrestaurants	[ˈʃtamʁɛstoˌʁɑ̃ː]	улюблений ресторан	favorite restaurant	Wir essen jeden Freitag in unserem Stammrestaurant.	Ми щоп'ятниці вечеряємо в нашому улюбленому ресторані.	food	food_restaurant	B2
 4044	Streuselkuchen	der	die Streuselkuchen		пиріг із крихтою	crumb cake	Frischer Streuselkuchen vom Bäcker schmeckt sonntags perfekt.	Свіжий пиріг із крихтою з пекарні ідеальний у неділю.	food	food_sweets	B1
 4045	Mangold	der	-		мангольд	Swiss chard	Die bunten Stiele des Mangolds sehen in der Pfanne toll aus.	Різнокольорові стебла мангольду гарно виглядають на пательні.	food	food_vegetables	B2
 4046	Dünsten	das		[ˈdʏnstn̩]	тушкування у власному соку	steaming / braising	Beim Dünsten bleiben viele Vitamine erhalten.	При тушкуванні зберігається багато вітамінів.	food	food_cooking	B2
@@ -4074,7 +4074,7 @@
 4074	Muskatnuss	die	die Muskatnüsse	[mʊsˈkaːtnʊs]	мускатний горіх	nutmeg	Etwas Muskatnuss passt hervorragend zu Kartoffelpüree.	Трохи мускатного горіха чудово пасує до пюре.	food	food_cooking	B1
 4075	Sojamilch	die		[ˈzoːjamɪlç]	соєве молоко	soy milk	Sojamilch ist eine pflanzliche Alternative zu Kuhmilch.	Соєве молоко — рослинна альтернатива коров'ячому.	food	food_drinks	B1
 4076	Guave	die	die Guaven		гуава	guava	Die tropische Guave hat einen intensiven Duft.	Тропічна гуава має насичений аромат.	food	food_fruits	B2
-4077	Bratwurst	die	die Bratwürste	[ˈbraːtvʊrst]	смажена ковбаска	fried sausage	Auf dem Markt riecht es nach Bratwurst.	На ринку пахне смаженими ковбасками.	food	food_meat_fish	A1
+4077	Bratwurst	die	die Bratwürste	[ˈbraːtvʊrst]	смажена ковбаска	fried sausage	Auf dem Markt riecht es nach Bratwurst.	На ринку пахне смаженими ковбасками.	food	food_meals	A1
 4078	Platzreservierung	die	die Platzreservierungen	[ˈplatsrezɛrˌviːrʊŋ]	бронювання столика	table reservation	Abends ist eine Platzreservierung sinnvoll.	Увечері доречно заздалегідь забронювати столик.	food	food_restaurant	B1
 4079	Fruchtgummi	das	die Fruchtgummis	[ˈfrʊxtˌɡʊmi]	желейні цукерки	gummy candy	Kinder lieben buntes Fruchtgummi.	Діти обожнюють кольорові желейні цукерки.	food	food_sweets	A2
 4080	Chilischote	die	die Chilischoten		перець чилі	chili pepper	Eine kleine Chilischote macht das Gericht richtig feurig.	Один маленький перчик чилі робить страву вогняною.	food	food_vegetables	B1
@@ -4096,7 +4096,7 @@
 4096	Eiskaffee	der	die Eiskaffees	[ˈaɪ̯skafe]	холодна кава з морозивом	iced coffee	Im Juli gönne ich mir einen Eiskaffee.	У липні я балую себе холодною кавою.	food	food_drinks	A2
 4097	Walnuss	die	die Walnüsse		волоський горіх	walnut	Knacke die frische Walnuss einfach mit dem Nussknacker.	Розколи свіжий волоський горіх горіхоколом.	food	food_fruits	A2
 4098	Geflügel	das		[ɡəˈflyːɡl̩]	птиця (м'ясо)	poultry	Geflügel ist magerer als Schweinefleisch.	М'ясо птиці менш жирне, ніж свинина.	food	food_meat_fish	B1
-4099	Döner	der	die Döner	[ˈdøːnɐ]	донер-кебаб	doner kebab	Unterwegs holen wir uns schnell einen warmen Döner.	Дорогою ми швидко візьмемо теплий донер.	food	food_restaurant	A1
+4099	Döner	der	die Döner	[ˈdøːnɐ]	донер-кебаб	doner kebab	Unterwegs holen wir uns schnell einen warmen Döner.	Дорогою ми швидко візьмемо теплий донер.	food	food_meals	A1
 4100	Käsekuchen	der	die Käsekuchen	[ˈkɛːzəˌkuːxn̩]	чізкейк / сирник	cheesecake	Deutscher Käsekuchen wird mit Quark gebacken.	Німецький сирник випікають із сиру кварк.	food	food_sweets	A2
 4101	Schalotte	die	die Schalotten	[ʃaˈlɔtə]	цибуля-шалот	shallot	Schalotten sind milder als normale Zwiebeln.	Шалот ніжніший за звичайну цибулю.	food	food_vegetables	B2
 4102	Anis	der		[aˈniːs]	аніс	anise	Weihnachtsplätzchen erhalten durch Anis ihren Duft.	Різдвяне печиво отримує свій аромат завдяки анісу.	food	food_cooking	B2
@@ -4119,20 +4119,20 @@
 4119	Sahnetorte	die	die Sahnetorten	[ˈzaːnəˌtɔrtə]	кремовий торт із вершками	cream cake	Ein Stück Sahnetorte zum Kaffee macht glücklich.	Шматочок кремового торта до кави робить щасливим.	food	food_sweets	A2
 4120	Kichererbse	die	die Kichererbsen	[ˈkɪçɐˌʔɛrpsə]	нут	chickpea	Hummus wird aus Kichererbsen gemacht.	Хумус роблять із нуту.	food	food_vegetables	B1
 4121	Gemüsebrühe	die	die Gemüsebrühen	[ɡəˈmyːzəˌbryːə]	овочевий бульйон	vegetable broth	Eine gute Gemüsebrühe ist die Basis für viele Suppen.	Хороший овочевий бульйон — основа багатьох супів.	food	food_cooking	A2
-4122	Gurkenwasser	das		[ˈɡʊrkn̩ˌvasɐ]	огірковий розсіл / вода з огірком	cucumber water	Im Sommer erfrischt Wasser mit Minze und Gurke.	Влітку освіжає вода з м'ятою та огірком.	food	food_drinks	B1
+4122	Gurkenwasser	das		[ˈɡʊrkn̩ˌvasɐ]	огірковий розсіл / вода з огірком	cucumber water	Im Sommer erfrischt kaltes Gurkenwasser wunderbar.	Улітку холодна вода з огірком чудово освіжає.	food	food_drinks	B1
 4123	Pampelmuse	die	die Pampelmusen	[ˈpampl̩muːzə]	грейпфрут	grapefruit	Eine Pampelmuse hat einen leicht bitteren Geschmack.	Грейпфрут має трохи гіркуватий смак.	food	food_fruits	B1
 4124	Miesmuschel	die	die Miesmuscheln	[ˈmiːsmʊʃl̩]	мідія	mussel	Miesmuscheln werden in Weißwein gekocht.	Мідії варять у білому вині.	food	food_meat_fish	B2
 4125	Beerenkuchen	der	die Beerenkuchen	[ˈbeːrənˌkuːxn̩]	ягідний пиріг	berry cake	Frisch aus dem Ofen duftet der Beerenkuchen im ganzen Haus.	Щойно з духовки ягідний пиріг пахне на весь дім.	food	food_sweets	A2
 4126	Knolle	die	die Knollen	[ˈknɔlə]	бульба	tuber	Kartoffeln sind essbare Knollen unter der Erde.	Картопля — це їстівні бульби під землею.	food	food_vegetables	B2
 4127	Algenblatt	das	die Algenblätter	[ˈalɡn̩blat]	лист норі / морської водорості	seaweed sheet	Für selbstgemachtes Sushi brauchen wir geröstete Algenblätter.	Для домашніх суші нам потрібні підсмажені листи норі.	food	food_cooking	B2
 4128	Ananassaft	der	die Ananassäfte	[ˈananasˌzaft]	ананасовий сік	pineapple juice	Gekühlter Ananassaft schmeckt wunderbar exotisch.	Охолоджений ананасовий сік має чудовий екзотичний смак.	food	food_drinks	A2
-4129	Obstsalat	der	die Obstsalate	[ˈoːpstzaˌlaːt]	фруктовий салат	fruit salad	Ein bunter Obstsalat liefert viele Vitamine.	Різнокольоровий фруктовий салат дає багато вітамінів.	food	food_fruits	A1
-4130	Fischbrötchen	das	die Fischbrötchen	[ˈfɪʃbrøːtçən]	булочка з рибою	fish roll	An der Küste schmeckt ein frisches Fischbrötchen am besten.	На узбережжі свіжа булочка з рибою смакує найкраще.	food	food_meat_fish	A2
+4129	Obstsalat	der	die Obstsalate	[ˈoːpstzaˌlaːt]	фруктовий салат	fruit salad	Ein bunter Obstsalat liefert viele Vitamine.	Різнокольоровий фруктовий салат дає багато вітамінів.	food	food_meals	A1
+4130	Fischbrötchen	das	die Fischbrötchen	[ˈfɪʃbrøːtçən]	булочка з рибою	fish roll	An der Küste schmeckt ein frisches Fischbrötchen am besten.	На узбережжі свіжа булочка з рибою смакує найкраще.	food	food_meals	A2
 4131	Ahornsirup	der		[ˈaːhɔrnˌziːrʊp]	кленовий сироп	maple syrup	Zu Pfannkuchen essen wir gern süßen Ahornsirup.	До млинців ми охоче їмо солодкий кленовий сироп.	food	food_sweets	A2
 4132	Artischockenherz	das	die Artischockenherzen	[artiˈʃɔkn̩ˌhɛrts]	серцевина артишоку	artichoke heart	Auf der Pizza liegen zarte Artischockenherzen.	На піці лежать ніжні серцевини артишоку.	food	food_vegetables	B2
 4133	Backstunde	die	die Backstunden	[ˈbakʃtʊndə]	година випічки	baking session	Am verregneten Sonntag veranstalten wir eine Backstunde.	У дощову неділю ми влаштовуємо годину випічки.	food	food_cooking	B1
 4134	Fruchtfleisch	das		[ˈfrʊxtflaɪ̯ʃ]	м'якоть фрукта	fruit pulp	Das Fruchtfleisch der Mango ist saftig.	М'якоть манго дуже соковита.	food	food_fruits	B1
-4135	Hühnerbrühe	die		[ˈhyːnɐˌbryːə]	курячий бульйон	chicken broth	Bei Erkältung wärmt eine frische Hühnerbrühe sofort.	При застуді свіжий курячий бульйон миттєво зігріває.	food	food_meat_fish	A2
+4135	Hühnerbrühe	die		[ˈhyːnɐˌbryːə]	курячий бульйон	chicken broth	Bei Erkältung wärmt eine frische Hühnerbrühe sofort.	При застуді свіжий курячий бульйон миттєво зігріває.	food	food_meals	A2
 4136	Bananenbrot	das	die Bananenbrote	[baˈnaːnənˌbroːt]	банановий хліб	banana bread	Aus reifen Bananen backen wir ein saftiges Bananenbrot.	Зі стиглих бананів ми печемо ніжний банановий хліб.	food	food_sweets	A2
 4137	Austernpilz	der	die Austernpilze	[ˈaʊ̯stɐnpɪlts]	глива (гриб)	oyster mushroom	Gebratene Austernpilze schmecken wunderbar zu Reis.	Смажені гливи чудово смакують із рисом.	food	food_vegetables	B2
 4138	Backmischung	die	die Backmischungen	[ˈbakmɪʃʊŋ]	суміш для випікання	baking mix	Für den schnellen Kuchen hilft notfalls eine Backmischung.	Для швидкого пирога за потреби виручить готова суміш.	food	food_cooking	B1
@@ -4176,7 +4176,7 @@
 4176	Eingangstür	die	die Eingangstüren		вхідні двері	front door	Schließ bitte abends die Eingangstür ab.	Замкни, будь ласка, вхідні двері ввечері.	home	home_rooms	A2
 4177	Fieberthermometer	das	die Fieberthermometer		термометр	thermometer	Das digitale Fieberthermometer piept nach zehn Sekunden.	Цифровий термометр подає сигнал за десять секунд.	body	medicine_care	A2
 4178	Saxofon	das	die Saxofone		саксофон	saxophone	Im Jazzclub spielt ein talentierter Künstler Saxofon.	У джаз-клубі талановитий музикант грає на саксофоні.	hobbies	music_instruments	A2
-4179	Delfin	der	die Delfine		дельфін	dolphin	Eine Gruppe Delfine springt neben dem Boot aus dem Wasser.	Зграя дельфінів вистрибує з води біля човна.	nature	nature_animals	A2
+4179	Delfin	der	die Delfine		дельфін	dolphin	Eine Gruppe Delfine springt neben dem Boot aus dem Wasser.	Зграя дельфінів вистрибує з води біля човна.	nature	nature_wildlife	A2
 4180	Klippe	die	die Klippen		скеля / круча	cliff	Weiße Klippen ragen steil über das Meer.	Білі кручі стрімко здіймаються над морем.	nature	nature_landscape	B1
 4181	Mohnblume	die	die Mohnblumen		мак	poppy	Rote Mohnblumen leuchten am Rand des Kornfelds.	Червоні маки яскравіють на краю пшеничного поля.	nature	nature_plants	B1
 4182	Nieselregen	der	-		мряка	drizzle	Bei leichtem Nieselregen reicht eine Regenjacke.	За легкої мряки достатньо дощовика.	nature	nature_weather	B2
@@ -4255,9 +4255,9 @@
 4255	Abstellkammer	die	die Abstellkammern		комора	storage room	Der Besen steht in der kleinen Abstellkammer.	Віник стоїть у маленькій коморі.	home	home_rooms	B2
 4256	Blutbild	das	die Blutbilder		аналіз крові	blood test	Ein großes Blutbild zeigt alle wichtigen Vitaminwerte.	Розгорнутий аналіз крові показує всі важливі показники.	body	medicine_care	B2
 4257	Metronom	das	die Metronome		метроном	metronome	Ein Metronom hilft, den gleichmäßigen Takt zu halten.	Метроном допомагає тримати рівний ритм.	hobbies	music_instruments	B2
-4258	Pinguin	der	die Pinguine		пінгвін	penguin	Pinguine sind hervorragende Schwimmer im kalten Wasser.	Пінгвіни — чудові плавці в холодній воді.	nature	nature_animals	A2
+4258	Pinguin	der	die Pinguine		пінгвін	penguin	Pinguine sind hervorragende Schwimmer im kalten Wasser.	Пінгвіни — чудові плавці в холодній воді.	nature	nature_wildlife	A2
 4259	Heide	die	die Heiden		пустище / вересова пустка	heathland	Im Spätsommer blüht die Heide wunderschön violett.	Наприкінці літа вересова пустка чудово цвіте фіолетовим.	nature	nature_landscape	B2
-4260	Kastaniebaum	der	die Kastanienbäume		каштан (дерево)	chestnut tree	Im Biergarten spenden große Kastanienbäume kühlen Schatten.	У саду великі каштани дарують прохолодну тінь.	nature	nature_plants	A2
+4260	Ahornbaum	der	die Ahornbäume	[ˈaːhɔʁnˌbaʊ̯m]	клен	maple tree	Im Herbst leuchtet der Ahornbaum kräftig rot.	Восени клен яскраво палає червоним.	nature	nature_plants	A2
 4261	Brise	die	die Brisen		легкий вітерець / бриз	breeze	Am Abend weht eine angenehme Brise vom Meer.	Увечері з моря віє приємний бриз.	nature	nature_weather	B1
 4262	Seehund	der	die Seehunde		тюлень	seal	Auf der Sandbank ruhen sich mehrere Seehunde aus.	На піщаній мілині відпочиває кілька тюленів.	nature	nature_wildlife	B1
 4263	Fernglas	das	die Ferngläser		бінокль	binoculars	Durch das Fernglas beobachten wir Adler am Fels.	У бінокль ми спостерігаємо за орлами на скелі.	hobbies	outdoor_activities	B1
@@ -4309,7 +4309,7 @@
 4309	Straßenbahnfahrer	der	die Straßenbahnfahrer		водій трамвая	tram driver	Der Straßenbahnfahrer grüßt regelmäßig seine Morgengäste.	Водій трамвая регулярно вітає ранкових пасажирів.	city	city_jobs	A2
 4310	Aussichtsturm	der	die Aussichtstürme		оглядова вежа	observation tower	Vom Aussichtsturm sieht man die ganze Altstadt.	З оглядової вежі видно все старе місто.	city	city_places	B1
 4311	Schneiderei	die	die Schneidereien		ательє з пошиття одягу	tailor shop	Die Schneiderei kürzt meine neue Hose bis morgen.	Ательє вкоротить мої нові штани до завтра.	city	city_services	B1
-4312	Eisdiele	die	die Eisdielen		кав'ярня-морозиво	ice cream parlor	Im Juli bildet sich vor der Eisdiele eine lange Schlange.	У липні перед джелатерією утворюється довга черга.	city	city_shopping	A1
+4312	Eisdiele	die	die Eisdielen		кав'ярня-морозиво	ice cream parlor	Im Juli bildet sich vor der Eisdiele eine lange Schlange.	У липні перед джелатерією утворюється довга черга.	city	city_places	A1
 4313	Musterlösung	die	die Musterlösungen		зразкова відповідь / ключ	model solution	Nach dem Üben vergleiche ich alles mit der Musterlösung.	Після практики я звіряю все зі зразковою відповіддю.	education	education_exams	B2
 4314	Steigerung	die	die Steigerungen		ступінь порівняння	comparison degree	Bei der Steigerung von gut sagt man besser und am besten.	У ступенях порівняння слова gut кажуть besser та am besten.	education	education_languages	B1
 4315	Klassensprecher	der	die Klassensprecher		староста класу	class representative	Die Schüler wählen demokratisch einen neuen Klassensprecher.	Учні демократично обирають нового старосту класу.	education	education_school	B1
@@ -4333,7 +4333,7 @@
 4333	Heizkörper	der	die Heizkörper		радіатор / батарея	radiator	Im Oktober drehen wir den Heizkörper wieder auf.	У жовтні ми знову вмикаємо батарею.	home	home_rooms	B1
 4334	Krankschreibung	die	die Krankschreibungen		лікарняний лист	sick note	Die Krankschreibung sendet die Praxis heute elektronisch.	Лікарняний лист клініка сьогодні надсилає електронно.	body	medicine_care	B1
 4335	Proberaum	der	die Proberäume		репетиційна кімната	rehearsal room	Die Band trifft sich dienstags im kleinen Proberaum.	Гурт зустрічається щовівторка в невеликій репетиційній кімнаті.	hobbies	music_instruments	B1
-4336	Rotkehlchen	das	die Rotkehlchen		вільшанка (пташка)	robin	Ein kleines Rotkehlchen hüpft zutraulich durch den Garten.	Маленька вільшанка довірливо стрибає по саду.	nature	nature_animals	B2
+4336	Rotkehlchen	das	die Rotkehlchen		вільшанка (пташка)	robin	Ein kleines Rotkehlchen hüpft zutraulich durch den Garten.	Маленька вільшанка довірливо стрибає по саду.	nature	nature_wildlife	B2
 4337	Ebene	die	die Ebenen		рівнина	plain	Hinter den Bergen erstreckt sich eine weite Ebene.	За горами простягається широка рівнина.	nature	nature_landscape	B1
 4338	Alpenblume	die	die Alpenblumen	[ˈalpn̩ˌbluːmə]	альпійська квітка	Alpine flower	Blauer Enzian ist eine geschützte Alpenblume.	Синя тирличка — охоронювана альпійська квітка.	nature	nature_plants	B1
 4339	Dürre	die	die Dürren		посуха	drought	Nach monatelanger Dürre brauchen die Felder Regen.	Після багатомісячної посухи полям потрібен дощ.	nature	nature_weather	B2
@@ -4411,12 +4411,12 @@
 4411	Winterterrasse	die	die Winterterrassen		засклена веранда	enclosed porch	Auf der sonnigen Winterterrasse stehen bequeme Korbsessel.	На сонячній веранді стоять зручні плетені крісла.	home	home_rooms	B2
 4412	Krankenkasse	die	die Krankenkassen		медична страхова каса	health insurance	Die Krankenkasse übernimmt die Kosten für die Vorsorge.	Медична страховка покриває витрати на профілактику.	body	medicine_care	B1
 4413	Konzertsaal	der	die Konzertsäle		концертний зал	concert hall	Die Akustik in diesem neuen Konzertsaal ist weltberühmt.	Акустика в цьому новому концертному залі всесвітньо відома.	hobbies	music_instruments	B1
-4414	Glühwürmchen	das	die Glühwürmchen		світлячок	firefly	In warmen Juni-Nächten tanzen hunderte Glühwürmchen über der Wiese.	У теплі червневі ночі сотні світлячків танцюють над лугом.	nature	nature_animals	B2
+4414	Glühwürmchen	das	die Glühwürmchen		світлячок	firefly	In warmen Juni-Nächten tanzen hunderte Glühwürmchen über der Wiese.	У теплі червневі ночі сотні світлячків танцюють над лугом.	nature	nature_wildlife	B2
 4415	Horizontlinie	die	die Horizontlinien		лінія горизонту	horizon line	Die Sonne sinkt langsam hinter die Horizontlinie.	Сонце повільно опускається за лінію горизонту.	nature	nature_landscape	B2
 4416	Blätterdach	das	die Blätterdächer	[ˈblɛtɐdax]	крона / шатро з листя	leaf canopy	Im heißen Juli spendet das dichte Blätterdach kühlen Schatten.	У спекотному липні густе шатро листя дарує прохолодну тінь.	nature	nature_plants	B2
 4417	Polarlicht	das	die Polarlichter		північне сяйво	aurora borealis	Im hohen Norden tanzen grüne Polarlichter am Nachthimmel.	На крайній півночі в нічному небі танцює зелене сяйво.	nature	nature_weather	B2
 4418	Steinbock	der	die Steinböcke		гірський козел	ibex	Auf den steilen Felsen klettert geschickt ein Steinbock.	По стрімких скелях спритно дереться гірський козел.	nature	nature_wildlife	B2
-4419	Heringzelt	der	die Zelt-Heringe		кілочок для намету	tent peg	Vergiss nicht, alle Heringe fest in die Wiese zu drücken.	Не забудь міцно закріпити всі кілочки в землю.	hobbies	outdoor_activities	B2
+4419	Zelthering	der	die Zeltheringe	[ˈtsɛltˌheːʁɪŋ]	кілочок для намету	tent peg	Schlag jeden Zelthering fest in den Boden.	Міцно забий кожен кілочок для намету в землю.	hobbies	outdoor_activities	B2
 4420	Erscheinung	die	die Erscheinungen		зовнішність / вигляд	appearance	Er hat eine sehr gepflegte Erscheinung.	У нього дуже доглянутий вигляд.	people	people_appearance	B2
 4421	schlagfertig				дотепний	witty	Mit ihrer schlagfertigen Antwort brachte sie alle zum Lachen.	Своєю дотепною відповіддю вона розсмішила всіх.	people	people_character	B2
 4422	Wehmut	die	-		тихий смуток / ностальгія	melancholy / wistfulness	Mit leiser Wehmut blicken wir zurück auf den schönen Sommer.	З легким сумом ми згадуємо чудове літо.	people	people_emotions	B2
@@ -4488,7 +4488,7 @@
 4488	Hauswirtschaftsraum	der	die Hauswirtschaftsräume		господарська кімната	utility room	Waschmaschine und Bügelbrett stehen im Hauswirtschaftsraum.	Пральна машина й дошка для прасування стоять у господарській кімнаті.	home	home_rooms	B2
 4489	Mullbinde	die	die Mullbinden		бинт марлевий	gauze bandage	Mit einer Mullbinde fixieren wir die sterile Kompresse.	Марлевим бинтом ми фіксуємо стерильну пов'язку.	body	medicine_care	B2
 4490	Querflöte	die	die Querflöten		поперечна флейта	transverse flute	Der helle Ton der Querflöte schwebt über dem Orchester.	Світлий звук поперечної флейти ширяє над оркестром.	hobbies	music_instruments	B1
-4491	Maulwurf	der	die Maulwürfe		кріт	mole	Der fleißige Maulwurf hinterlässt kleine Erdhügel auf der Wiese.	Працьовитий кріт залишає маленькі горбики землі на лузі.	nature	nature_animals	B1
+4491	Maulwurf	der	die Maulwürfe		кріт	mole	Der fleißige Maulwurf hinterlässt kleine Erdhügel auf der Wiese.	Працьовитий кріт залишає маленькі горбики землі на лузі.	nature	nature_wildlife	B1
 4492	Hochmoor	das	die Hochmoore		верхове болото	raised bog	Auf einem Holzpfad erkunden wir das stille Hochmoor.	Дерев'яною стежкою ми досліджуємо тихе верхове болото.	nature	nature_landscape	B2
 4493	Blumenwiese	die	die Blumenwiesen	[ˈbluːmənˌviːzə]	квітковий луг	flower meadow	Auf der bunten Blumenwiese summen friedlich hunderte Bienen.	На барвистому квітковому лузі мирно гудуть сотні бджіл.	nature	nature_plants	A2
 4494	Abendrot	das	-		вечірня заграва	sunset glow	Das warme Abendrot färbt die Wolken tief orange.	Тепла вечірня заграва забарвлює хмари в глибокий оранжевий.	nature	nature_weather	B2
@@ -4539,7 +4539,7 @@
 4539	Mosaik	das	die Mosaike		мозаїка	mosaic	Aus kleinen Glassteinen entsteht ein buntes Mosaik.	З маленьких скляних камінців постає барвиста мозаїка.	hobbies	art_creativity	B1
 4540	Geschmackssinn	der		[ɡəˈʃmakszɪn]	відчуття смаку	sense of taste	Frische Kräuter wecken sofort unseren feinen Geschmackssinn.	Свіжі трави одразу пробуджують наш тонкий смак.	body	body_parts	B1
 4541	Sanitäter	der	die Sanitäter		парамедик / санітар	paramedic	Die Sanitäter trafen innerhalb weniger Minuten ein.	Парамедики прибули за кілька хвилин.	city	city_emergency	B1
-4542	Architekturbüro	das	die Architekturbüros	[arçitɛkˈtuːɐ̯byˌroː]	архітектурне бюро	architecture firm	Das Architekturbüro plant den neuen Stadtplatz.	Архітектурне бюро проєктує нову міську площу.	city	city_jobs	B1
+4542	Architekturbüro	das	die Architekturbüros	[arçitɛkˈtuːɐ̯byˌroː]	архітектурне бюро	architecture firm	Das Architekturbüro plant den neuen Stadtplatz.	Архітектурне бюро проєктує нову міську площу.	city	city_places	B1
 4543	Neubau	der	die Neubauten		новобудова	new building	Der energieeffiziente Neubau steht mitten im Grünen.	Енергоефективна новобудова стоїть посеред зелені.	city	city_places	B1
 4544	Schlüsseldienst	der	die Schlüsseldienste		сервіс виготовлення ключів	locksmith	Beim Schlüsseldienst lässt sich schnell ein Zweitschlüssel machen.	У майстерні ключів швидко зроблять дублікат.	city	city_services	B1
 4545	Bauernmarkt	der	die Bauernmärkte	[ˈbaʊ̯ɐnmarkt]	фермерський ринок	farmers' market	Auf dem Bauernmarkt kaufen wir knackiges Gemüse ohne Verpackung.	На фермерському ринку ми купуємо хрусткі овочі без пакування.	city	city_shopping	A2
@@ -4642,7 +4642,7 @@
 4642	Kellertür	die	die Kellertüren		двері в підвал	cellar door	Hinter der grauen Kellertür liegt unser Fahrradkeller.	За сірими дверима в підвал розташована велокімната.	home	home_rooms	A2
 4643	Augenarzttermin	der	die Augenarzttermine	[ˈaʊ̯ɡn̩ʔaːɐ̯tsttɛɐ̯ˌmiːn]	прийом в окуліста	eye doctor appointment	Mein nächster Augenarzttermin ist im November.	Мій наступний візит до офтальмолога в листопаді.	body	medicine_care	B1
 4644	Taktstock	der	die Taktstöcke		диригентська паличка	conductor's baton	Die Dirigentin hebt ihren feinen Taktstock, und die Musik beginnt.	Диригентка піднімає паличку, і музика починається.	hobbies	music_instruments	B2
-4645	Chamäleon	das	die Chamäleons	[kaˈmɛːleɔn]	хамелеон	chameleon	Ein Chamäleon kann seine Hautfarbe rasch wechseln.	Хамелеон може швидко змінювати колір шкіри.	nature	nature_animals	B1
+4645	Chamäleon	das	die Chamäleons	[kaˈmɛːleɔn]	хамелеон	chameleon	Ein Chamäleon kann seine Hautfarbe rasch wechseln.	Хамелеон може швидко змінювати колір шкіри.	nature	nature_wildlife	B1
 4646	Bergpanorama	das	die Bergpanoramen	[ˈbɛrkpanoˌraːma]	гірська панорама	mountain panorama	Beim Frühstück auf der Hütte genießt man ein weites Bergpanorama.	Під час сніданку в хатині милуєшся широкою гірською панорамою.	nature	nature_landscape	B1
 4647	Kastanienbaum	der	die Kastanienbäume	[kasˈtaːni̯ənˌbaʊ̯m]	каштан (дерево)	chestnut tree	Unter dem riesigen Kastanienbaum gibt es schattige Tische.	Під величезним каштаном стоять тінисті столики.	nature	nature_plants	A2
 4648	Schneesturm	der	die Schneestürme		снігова буря / завірюха	blizzard	Während des Schneesturms bleiben die Bergpässe gesperrt.	Під час завірюхи гірські перевали залишаються закритими.	nature	nature_weather	B1
@@ -4718,7 +4718,7 @@
 4718	Altbauwohnung	die	die Altbauwohnungen	[ˈaltbaʊ̯ˌvoːnʊŋ]	квартира в старому будинку	old building apartment	Eine Altbauwohnung hat oft sehr hohe Decken.	Квартира в старому фонді часто має дуже високі стелі.	home	home_rooms	B1
 4719	Beipackzettel	der	die Beipackzettel	[ˈbaɪ̯pakˌtsɛtl̩]	інструкція до ліків (вкладиш)	package insert (leaflet)	Vor der Einnahme liest man immer den Beipackzettel.	Перед прийомом ліків завжди читають інструкцію-вкладиш.	body	medicine_care	B1
 4720	Ohrwurm	der	die Ohrwürmer		нав'язлива мелодія	earworm / catchy tune	Dieses fröhliche Lied ist ein echter Ohrwurm!	Ця весела пісня — справжня мелодія, що засідає в голові!	hobbies	music_instruments	B1
-4721	Falknerei	die	die Falknereien	[falknəˈraɪ̯]	соколине полювання / розплідник	falconry	Auf der Burg besuchten wir eine beeindruckende Falknerei.	У замку ми відвідали вражаючий соколиний розплідник.	nature	nature_animals	B2
+4721	Falknerei	die	die Falknereien	[falknəˈraɪ̯]	соколине полювання / розплідник	falconry	Auf der Burg besuchten wir eine beeindruckende Falknerei.	У замку ми відвідали вражаючий соколиний розплідник.	nature	nature_wildlife	B2
 4722	Alpenpanorama	das	die Alpenpanoramen	[ˈalpn̩panoˌraːma]	альпійська панорама	Alpine panorama	Vom Gipfel bietet sich ein traumhaftes Alpenpanorama.	З вершини відкривається казкова альпійська панорама.	nature	nature_landscape	B1
 4723	Bambus	der		[ˈbambʊs]	бамбук	bamboo	Bambus wächst erstaunlich schnell.	Бамбук росте напрочуд швидко.	nature	nature_plants	A2
 4724	Windböe	die	die Windböen		порив вітру	gust of wind	Eine kräftige Windböe wehte meinen Hut ins Gras.	Сильний порив вітру здув мій капелюх у траву.	nature	nature_weather	B2
@@ -4762,7 +4762,7 @@
 4762	Metallbauer	der	die Metallbauer		слюсар з металоконструкцій	metal fabricator	Der Metallbauer schweißt das neue Geländer für den Balkon.	Майстер з металу зварює нові перила для балкона.	work	work_trades	B2
 4763	neutral		neutraler, am neutralsten	[nɔɪ̯ˈtraːl]	нейтральний	neutral	Eine neutrale Farbe im Hintergrund lässt Fotos besser wirken.	Нейтральний колір фону робить ілюстрації виразнішими.	adjectives	adj_colors	B1
 4764	ausgeglichen				урівноважений / гармонійний	balanced / composed	Nach regelmäßigem Sport fühlt er sich deutlich ausgeglichener.	Після регулярного спорту він почувається значно врівноваженішим.	adjectives	adj_personality	B2
-4765	zuverlässigst				найбільш надійний	most reliable	Er gilt als der verlässlichste Techniker im gesamten Betrieb.	Він вважається найнадійнішим техніком на всьому підприємстві.	adjectives	adj_qualities	B2
+4765	hochwertig		hochwertiger, am hochwertigsten	[ˈhoːxˌveːɐ̯tɪç]	високоякісний	high-quality	Dieses Werkzeug ist sehr hochwertig verarbeitet.	Цей інструмент виготовлений дуже якісно.	adjectives	adj_qualities	B2
 4766	wohltuend				цілющий / приємний	soothing / beneficial	Ein warmes Fußbad nach einer langen Wanderung ist sehr wohltuend.	Тепла ванночка для ніг після довгого походу дуже приємна.	adjectives	adj_sensory	B2
 4767	künftig				майбутній / подальший	future	Künftige Versionen der App werden noch schneller laufen.	Майбутні версії додатка працюватимуть ще швидше.	adjectives	adj_size_time	B2
 4768	Gesichtspflege	die		[ɡəˈzɪçtsˌpfleːɡə]	догляд за обличчям	facial skincare	Abends gehört eine milde Reinigung zur Gesichtspflege.	Увечері м'яке очищення є частиною догляду за обличчям.	body	appearance_hygiene	A2
@@ -4794,7 +4794,7 @@
 4794	Balkonkasten	der	die Balkonkästen	[ˈbalkɔŋˌkastn̩]	балконний ящик для квітів	window box	In den Balkonkästen blühen bunte Geranien.	У балконних ящиках цвітуть яскраві герані.	home	home_rooms	B1
 4795	Erkältungstee	der	die Erkältungstees	[ɛɐ̯ˈkɛltʊŋsˌteː]	лікувальний чай від застуди	cold remedy tea	Bei Halsschmerzen koche ich mir abends einen Erkältungstee.	При болю в горлі ввечері я заварюю трав'яний чай від застуди.	body	medicine_care	A2
 4796	Chorprobe	die	die Chorproben	[ˈkoːɐ̯ˌproːbə]	репетиція хору	choir rehearsal	Jeden Dienstagabend treffen wir uns pünktlich zur Chorprobe.	Щовівторка ввечері ми вчасно збираємося на репетицію хору.	hobbies	music_instruments	B1
-4797	Flamingo	der	die Flamingos	[flaˈmɪŋɡo]	фламінго	flamingo	Rosa Flamingos stehen oft auf einem Bein im Wasser.	Рожеві фламінго часто стоять на одній нозі у воді.	nature	nature_animals	A2
+4797	Flamingo	der	die Flamingos	[flaˈmɪŋɡo]	фламінго	flamingo	Rosa Flamingos stehen oft auf einem Bein im Wasser.	Рожеві фламінго часто стоять на одній нозі у воді.	nature	nature_wildlife	A2
 4798	Bergbach	der	die Bergbäche	[ˈbɛrkbax]	гірський струмок	mountain stream	Im klaren Bergbach schwimmen kleine Forellen.	У прозорому гірському струмку плаває дрібна форель.	nature	nature_landscape	B1
 4799	Baumkrone	die	die Baumkronen	[ˈbaʊ̯mˌkroːnə]	крона дерева	treetop	Der Wind rauscht hoch oben in den Baumkronen.	Вітер шумить високо у кронах дерев.	nature	nature_plants	B1
 4800	Dauerregen	der		[ˈdaʊ̯ɐˌreːɡn̩]	затяжний дощ	continuous rain	Bei dem kühlen Dauerregen bleiben wir gemütlich im Haus.	Під час затяжного дощу ми затишно залишаємося вдома.	nature	nature_weather	A2
@@ -4809,7 +4809,7 @@
 4809	Seidentuch	das	die Seidentücher	[ˈzaɪ̯dn̩tuːx]	шовкова хустка	silk scarf	Ein gemustertes Seidentuch rundet das Outfit ab.	Візерунчаста шовкова хустка завершує образ.	shopping	shopping_materials	B1
 4810	Lieferkosten	die	die Lieferkosten	[ˈliːfɐˌkɔstn̩]	вартість доставки	shipping costs	Ab fünfzig Euro entfallen im Shop die Lieferkosten.	Від п'ятдесяти євро доставка в магазині безкоштовна.	shopping	shopping_money	B1
 4811	Bequemlichkeit	die		[bəˈkveːmlɪçkaɪ̯t]	зручність / комфорт	convenience / comfort	Bei Laufschuhen steht Bequemlichkeit an erster Stelle.	У кросівках комфорт стоїть на першому місці.	shopping	shopping_shoes	B1
-4812	Damenmode	die		[ˈdaːmənˌmoːdə]	жіноча мода	women's fashion	Die Abteilung für Damenmode befindet sich im zweiten Stock.	Відділ жіночого одягу розташований на третьому поверсі.	shopping	shopping_stores	A2
+4812	Damenmode	die		[ˈdaːmənˌmoːdə]	жіноча мода	women's fashion	Die Abteilung für Damenmode befindet sich im zweiten Stock.	Відділ жіночого одягу розташований на третьому поверсі.	shopping	shopping_clothing	A2
 4813	Begrüßungsritual	das	die Begrüßungsrituale	[bəˈɡryːsʊŋsriˌtu̯aːl]	ритуал привітання	greeting ritual	In jedem Land gibt es eigene kleine Begrüßungsrituale.	У кожній країні є власні маленькі ритуали привітання.	society	society_festivals	B2
 4814	Architekturerbe	das		[arçitɛkˈtuːɐ̯ˌʔɛrbə]	архітектурна спадщина	architectural heritage	Diese Altstadt zählt zum wertvollen Architekturerbe.	Це старе місто належить до цінної архітектурної спадщини.	society	society_history	B2
 4815	Faktenprüfung	die	die Faktenprüfungen	[ˈfaktn̩ˌpryːfʊŋ]	перевірка фактів / фактчекінг	fact-checking	Vor der Veröffentlichung erfolgt immer eine genaue Faktenprüfung.	Перед публікацією завжди проводиться ретельна перевірка фактів.	society	society_media	B2
@@ -4870,11 +4870,11 @@
 4870	Dachgeschoss	das	die Dachgeschosse	[ˈdaxɡəˌʃɔs]	мансардний поверх	attic floor	Im Dachgeschoss hat man einen tollen Ausblick.	На мансардному поверсі відкривається чудовий краєвид.	home	home_rooms	B1
 4871	Akupunktur	die		[akupʊŋkˈtuːɐ̯]	акупунктура / голковколювання	acupuncture	Viele Patienten nutzen Akupunktur gegen Rückenschmerzen.	Багато пацієнтів використовують акупунктуру проти болю в спині.	body	medicine_care	B2
 4872	Klaviertaste	die	die Klaviertasten	[klaˈviːɐ̯ˌtastə]	клавіша фортепіано	piano key	Ihre Finger gleiten mühelos über die weißen Klaviertasten.	Її пальці легко ковзають по білих клавішах піаніно.	hobbies	music_instruments	B1
-4873	Gepard	der	die Geparden	[ɡeˈpart]	гепард	cheetah	Der Gepard ist das schnellste Landtier der Welt.	Гепард — найшвидша наземна тварина у світі.	nature	nature_animals	B1
+4873	Gepard	der	die Geparden	[ɡeˈpart]	гепард	cheetah	Der Gepard ist das schnellste Landtier der Welt.	Гепард — найшвидша наземна тварина у світі.	nature	nature_wildlife	B1
 4874	Berghang	der	die Berghänge	[ˈbɛrkhaŋ]	схил гори	mountainside	Auf dem sonnigen Berghang weiden Kühe.	На сонячному схилі гори пасуться корови.	nature	nature_landscape	B1
 4875	Birkensaft	der		[ˈbɪrkn̩zaft]	березовий сік	birch sap	Im zeitigen Frühjahr gewinnt man frischen Birkensaft.	Ранньої весни збирають свіжий березовий сік.	nature	nature_plants	B2
 4876	Eisblume	die	die Eisblumen	[ˈaɪ̯sbluːmə]	морозний візерунок на склі	frost flower	Bei minus fünfzehn Grad blühen silberne Eisblumen am Fenster.	При мінус п'ятнадцяти на вікні розквітають срібні морозні візерунки.	nature	nature_weather	B2
-4877	Bachlauf	der	die Bachläufe	[ˈbaxlaʊ̯f]	русло струмка	stream bed	Wir folgten dem plätschernden Bachlauf durch das Tal.	Ми йшли вздовж дзюркотливого струмка долиною.	nature	nature_wildlife	B2
+4877	Bachlauf	der	die Bachläufe	[ˈbaxlaʊ̯f]	русло струмка	stream bed	Wir folgten dem plätschernden Bachlauf durch das Tal.	Ми йшли вздовж дзюркотливого струмка долиною.	nature	nature_landscape	B2
 4878	Boulderhalle	die	die Boulderhallen	[ˈbɔʊ̯ldɐˌhalə]	скеледром (боулдеринг)	bouldering gym	Abends treffen wir uns zum Klettern in der Boulderhalle.	Увечері ми зустрічаємося на скеледромі.	hobbies	outdoor_activities	B1
 4879	Erscheinungsbild	das	die Erscheinungsbilder	[ɛɐ̯ˈʃaɪ̯nʊŋsˌbɪlt]	зовнішній вигляд / імідж	outer appearance	Ein gepflegtes Erscheinungsbild zählt beim Vorstellungsgespräch.	Доглянутий вигляд має значення на співбесіді.	people	people_appearance	B2
 4880	Menschenkenntnis	die		[ˈmɛnʃn̩ˌkɛntnɪs]	знання людської психології	knowledge of human nature	Er besitzt eine bemerkenswerte Menschenkenntnis.	Він чудово розуміється на людях.	people	people_character	B2
@@ -4943,11 +4943,11 @@
 4943	Einbauküche	die	die Einbauküchen	[ˈaɪ̯nbaʊ̯ˌkʏçə]	вбудована кухня	fitted kitchen	Die neue Wohnung hat bereits eine Einbauküche.	У новій квартирі вже є вбудована кухня.	home	home_rooms	B1
 4944	Allgemeinmedizin	die		[alɡəˈmaɪ̯nmediˌtsiːn]	загальна медицина	general medicine	Sie absolviert ihre Facharztausbildung in der Allgemeinmedizin.	Вона проходить спеціалізацію із загальної медицини.	body	medicine_care	B2
 4945	Bassgitarre	die	die Bassgitarren	[ˈbasɡiˌtarə]	бас-гітара	bass guitar	Ohne Bassgitarre fehlt der Rockband der Druck.	Без бас-гітари рок-гурту бракує глибини звучання.	hobbies	music_instruments	B1
-4946	Giraffe	die	die Giraffen	[ɡiˈrafə]	жирафа	giraffe	Mit ihrem langen Hals erreicht die Giraffe hohe Blätter.	Своєю довгою шиєю жирафа дістає високе листя.	nature	nature_animals	A1
+4946	Giraffe	die	die Giraffen	[ɡiˈrafə]	жирафа	giraffe	Mit ihrem langen Hals erreicht die Giraffe hohe Blätter.	Своєю довгою шиєю жирафа дістає високе листя.	nature	nature_wildlife	A1
 4947	Bergkette	die	die Bergketten	[ˈbɛrkkɛtə]	гірський хребет	mountain range	Am Horizont zeichnet sich eine schneebedeckte Bergkette ab.	На горизонті видніється засніжений гірський хребет.	nature	nature_landscape	B1
 4948	Blütenstaub	der		[ˈblyːtn̩ʃtaʊ̯p]	пилок квітів	pollen	Im Frühling fliegt viel gelber Blütenstaub durch die Luft.	Навесні в повітрі літає багато жовтого пилку.	nature	nature_plants	B1
 4949	Frühlingsluft	die		[ˈfryːlɪŋslʊft]	весняне повітря	spring air	Die milde Frühlingsluft lockt alle sofort auf die Straße.	Лагідне весняне повітря одразу вабить усіх на вулицю.	nature	nature_weather	A2
-4950	Eisberg	der	die Eisberge	[ˈaɪ̯sbɛrk]	айсберг	iceberg	Nur ein kleiner Teil eines Eisbergs ragt aus dem Meer.	Лише невелика частина айсберга виступає над водою.	nature	nature_wildlife	B1
+4950	Eisberg	der	die Eisberge	[ˈaɪ̯sbɛrk]	айсберг	iceberg	Nur ein kleiner Teil eines Eisbergs ragt aus dem Meer.	Лише невелика частина айсберга виступає над водою.	nature	nature_landscape	B1
 4951	Fackelwanderung	die	die Fackelwanderungen	[ˈfakl̩ˌvandərʊŋ]	нічна прогулянка зі смолоскипами	torchlight hike	Die winterliche Fackelwanderung durch den Wald war magisch.	Зимова прогулянка зі смолоскипами лісом була чарівною.	hobbies	outdoor_activities	B2
 4952	Gesichtsausdruck	der	die Gesichtsausdrücke	[ɡəˈzɪçtsˌʔaʊ̯sdrʊk]	вираз обличчя	facial expression	An seinem Gesichtsausdruck erkannte ich sofort die Freude.	По його виразу обличчя я одразу впізнав радість.	people	people_appearance	B1
 4953	Mittelpunkt	der	die Mittelpunkte	[ˈmɪtl̩pʊŋkt]	центр уваги	center of attention	Sie steht auf Partys gern im Mittelpunkt.	На вечірках вона любить бути в центрі уваги.	people	people_character	B1
@@ -4980,7 +4980,7 @@
 4980	nähern		näherte, hat genähert	[ˈnɛːɐn]	наближатися	to approach	Der schnelle Zug nähert sich langsam dem Hauptbahnhof.	Швидкий потяг повільно наближається до головного вокзалу.	verbs	verbs_movement	B2
 4981	Jahresumsatz	der	die Jahresumsätze		річний оборот	annual turnover	Der Jahresumsatz der kleinen Bäckerei ist stetig gewachsen.	Річний оборот маленької пекарні стабільно зріс.	work	work_business	B2
 4982	Elternzeitvertretung	die	die Elternzeitvertretungen	[ˈɛltɐntsaɪ̯tfɛɐ̯ˌtreːtʊŋ]	заміна на час декретної відпустки	parental leave cover	Für ein Jahr arbeitet sie als Elternzeitvertretung im Marketing.	Протягом року вона працює на заміні у відділі маркетингу.	work	work_career	B2
-4983	Dienstagmorgen	der	die Dienstagmorgen	[ˈdiːnstaːkˌmɔrɡn̩]	ранок вівторка	Tuesday morning	Jeden Dienstagmorgen holen wir frische Brötchen vom Bäcker.	Щовівторка вранці ми беремо свіжі булочки в пекаря.	work	work_office	A1
+4983	Terminkalender	der	die Terminkalender	[tɛʁˈmiːnkaˌlɛndɐ]	щоденник / календар зустрічей	appointment calendar	Ich trage das Treffen sofort in meinen Terminkalender ein.	Я одразу записую зустріч у свій календар зустрічей.	work	work_office	A1
 4984	Drehmoment	das	die Drehmomente	[ˈdreːmoˌmɛnt]	крутний момент	torque	Dieser Schraubenschlüssel misst das genaue Drehmoment.	Цей гайковий ключ вимірює точний крутний момент.	work	work_tools	B2
 4985	Bauplan	der	die Baupläne	[ˈbaʊ̯plaːn]	будівельний кресленик / план	blueprint	Der Ingenieur prüft den neuen Bauplan ganz genau.	Інженер дуже уважно перевіряє нове креслення.	work	work_trades	B1
 4986	schneebedeckt			[ˈʃneːbəˌdɛkt]	вкритий снігом / засніжений	snow-covered	Am Horizont leuchten die schneebedeckten Gipfel der Alpen.	На обрії сяють засніжені вершини Альп.	adjectives	adj_colors	B1
@@ -5012,11 +5012,11 @@
 5012	Erdgeschoss	das	die Erdgeschosse	[ˈeːɐ̯tɡəˌʃɔs]	перший поверх	ground floor	Meine Oma wohnt bequem im Erdgeschoss.	Моя бабуся зручно живе на першому поверсі.	home	home_rooms	A2
 5013	Blutgruppe	die	die Blutgruppen	[ˈbluːtɡrʊpə]	група крові	blood type	Kennen Sie Ihre eigene Blutgruppe?	Ви знаєте свою групу крові?	body	medicine_care	B1
 5014	Bratsche	die	die Bratschen	[ˈbraːtʃə]	альт (інструмент)	viola	Die Bratsche klingt etwas tiefer als die Geige.	Альт звучить трохи нижче за скрипку.	hobbies	music_instruments	B2
-5015	Gorilla	der	die Gorillas	[ɡoˈrɪla]	горила	gorilla	Berggorillas leben in den dichten Wäldern Afrikas.	Гірські горили живуть у густих лісах Африки.	nature	nature_animals	A2
+5015	Gorilla	der	die Gorillas	[ɡoˈrɪla]	горила	gorilla	Berggorillas leben in den dichten Wäldern Afrikas.	Гірські горили живуть у густих лісах Африки.	nature	nature_wildlife	A2
 5016	Dschungelpfad	der	die Dschungelpfade	[ˈdʒʊŋl̩pfaːt]	стежка в джунглях	jungle trail	Der schmale Dschungelpfad führte zu einem Wasserfall.	Вузька стежка в джунглях вела до водоспаду.	nature	nature_landscape	B2
 5017	Brennnessel	die	die Brennnesseln	[ˈbrɛnˌnɛsl̩]	кропива	stinging nettle	Achtung, am Wegrand wachsen viele Brennnesseln.	Обережно, край дороги росте багато кропиви.	nature	nature_plants	B1
 5018	Herbstwind	der	die Herbstwinde	[ˈhɛrpstvɪnt]	осінній вітер	autumn wind	Der frische Herbstwind weht goldene Blätter über den Weg.	Свіжий осінній вітер мете золоте листя по стежці.	nature	nature_weather	A2
-5019	Flussmündung	die	die Flussmündungen	[ˈflʊsmʏndʊŋ]	гирло річки	river mouth	An der Flussmündung mischen sich Süß- und Salzwasser.	У гирлі річки змішуються прісна й солона вода.	nature	nature_wildlife	B2
+5019	Flussmündung	die	die Flussmündungen	[ˈflʊsmʏndʊŋ]	гирло річки	river mouth	An der Flussmündung mischen sich Süß- und Salzwasser.	У гирлі річки змішуються прісна й солона вода.	nature	nature_landscape	B2
 5020	Fallschirmsprung	der	die Fallschirmsprünge	[ˈfalʃɪrmˌʃprʊŋ]	стрибок із парашутом	parachute jump	Ein Fallschirmsprung kostet eine gehörige Portion Mut.	Стрибок із парашутом потребує неабиякої сміливості.	hobbies	outdoor_activities	B1
 5021	Haarfarbe	die	die Haarfarben	[ˈhaːɐ̯ˌfarbə]	колір волосся	hair color	Die Haarfarbe meines Bruders ist dunkelbraun.	Колір волосся мого брата темно-каштановий.	people	people_appearance	A1
 5022	Offenherzigkeit	die		[ˈɔfn̩hɛrtsɪçkaɪ̯t]	відкритість / щирість	open-heartedness	Ihre Offenherzigkeit erleichtert neue Kontakte.	Її щирість полегшує нові знайомства.	people	people_character	B2
@@ -5049,10 +5049,10 @@
 5049	Erfolgsgeschichte	die	die Erfolgsgeschichten	[ɛɐ̯ˈfɔlksɡəˌʃɪçtə]	історія успіху	success story	Mit Fleiß wird dein Lernweg eine echte Erfolgsgeschichte.	З наполегливістю твоє навчання стане справжньою історією успіху.	work	work_career	B1
 5050	Anwesenheitsliste	die	die Anwesenheitslisten	[ˈanveːzn̩haɪ̯tsˌlɪstə]	список присутності	attendance sheet	Bitte tragen Sie sich morgens in die Anwesenheitsliste ein.	Будь ласка, розпишіться вранці в списку присутності.	work	work_office	B1
 5051	Endkontrolle	die	die Endkontrollen	[ˈɛntkɔnˌtrɔlə]	фінальна перевірка якості	final inspection	Kein Gerät verlässt die Fabrik ohne strenge Endkontrolle.	Жоден прилад не залишає завод без суворого фінального контролю.	work	work_tools	B2
-5052	Buchhalter	der	die Buchhalter	[ˈbuːxhaltɐ]	бухгалтер	accountant	Unser Buchhalter prüft alle Reisekostenabrechnungen.	Наш бухгалтер перевіряє всі звіти про відрядження.	work	work_trades	A2
+5052	Buchhalter	der	die Buchhalter	[ˈbuːxhaltɐ]	бухгалтер	accountant	Unser Buchhalter prüft alle Reisekostenabrechnungen.	Наш бухгалтер перевіряє всі звіти про відрядження.	work	work_business	A2
 5053	auffällig		auffälliger, am auffälligsten	[ˈaʊ̯ffɛlɪç]	помітний / яскравий	conspicuous / striking	Sie trug eine auffällige gelbe Regenjacke.	На ній була яскрава жовта дощова куртка.	adjectives	adj_colors	B1
 5054	lebhaft				жвавий / енергійний	lively	Im Seminar entstand sofort eine sehr lebhafte und spannende Diskussion.	На семінарі одразу виникла дуже жвава та цікава дискусія.	adjectives	adj_personality	B1
-5055	makellose				чистий / бездоганний	spotless	Eine makellose Aussprache kommt mit Geduld und Freude ganz von selbst.	Бездоганна вимова приходить із терпінням та задоволенням.	adjectives	adj_qualities	B2
+5055	erstklassig		-	[ˈeːɐ̯stˌklasɪç]	першокласний	first-class	Der Service im Hotel war wirklich erstklassig.	Обслуговування в готелі було справді першокласним.	adjectives	adj_qualities	B2
 5056	lau				теплий / легкий (про вечір)	mild / balmy	In einer lauen Sommernacht sitzen wir lange draußen im Hof.	Тихого теплого літнього вечора ми довго сидимо у дворі.	adjectives	adj_sensory	B2
 5057	knapp		knapper, am knappsten	[knap]	обмежений / стислий / обтягуючий	tight / scarce / brief	Die Zeit vor dem Abflug wurde plötzlich ziemlich knapp.	Часу перед вильотом раптом стало доволі обмаль.	adjectives	adj_size_time	B1
 5058	Zahnschmelz	der		[ˈtsaːnʃmɛlts]	зубна емаль	tooth enamel	Fluorid härtet den empfindlichen Zahnschmelz.	Фтор зміцнює чутливу зубну емаль.	body	appearance_hygiene	B2
@@ -5079,7 +5079,7 @@
 5079	Fensterscheibe	die	die Fensterscheiben	[ˈfɛnstɐˌʃaɪ̯bə]	віконне скло	windowpane	Am Samstag putze ich alle Fensterscheiben.	У суботу я мию всі шибки.	home	home_rooms	B1
 5080	Erste-Hilfe-Kurs	der	die Erste-Hilfe-Kurse	[ˈeːɐ̯stə ˈhɪlfə kʊrs]	курс першої допомоги	first aid course	Für den Führerschein braucht man einen Erste-Hilfe-Kurs.	Для водійських прав потрібен курс першої допомоги.	body	medicine_care	B1
 5081	Gitarrensolo	das	die Gitarrensolos	[ɡiˈtarənˌzoːlo]	гітарне соло	guitar solo	Das Publikum applaudierte beim schnellen Gitarrensolo.	Публіка зааплодувала під час швидкого гітарного соло.	hobbies	music_instruments	B1
-5082	Heuschrecke	die	die Heuschrecken	[ˈhɔɪ̯ʃrɛkə]	коник / сарана	grasshopper	Eine grüne Heuschrecke sprang weit ins hohe Gras.	Зелений коник далеко стрибнув у високу траву.	nature	nature_animals	B1
+5082	Heuschrecke	die	die Heuschrecken	[ˈhɔɪ̯ʃrɛkə]	коник / сарана	grasshopper	Eine grüne Heuschrecke sprang weit ins hohe Gras.	Зелений коник далеко стрибнув у високу траву.	nature	nature_wildlife	B1
 5083	Erdreich	das		[ˈeːɐ̯traɪ̯ç]	земля / ґрунт	soil / earth	Der Regen sickert tief ins trockene Erdreich ein.	Дощ глибоко вбирається в сухий ґрунт.	nature	nature_landscape	B2
 5084	Distel	die	die Disteln	[ˈdɪstl̩]	будяк / чортополох	thistle	Schmetterlinge besuchen oft blühende Disteln.	Метелики часто сідають на квітучий будяк.	nature	nature_plants	B2
 5085	Kaltfront	die	die Kaltfronten	[ˈkaltfrɔnt]	холодний атмосферний фронт	cold front	Aus dem Norden zieht am Abend eine spürbare Kaltfront heran.	Із півночі ввечері насувається відчутний холодний фронт.	nature	nature_weather	B2
@@ -5146,11 +5146,11 @@
 5146	Fliegengitter	das	die Fliegengitter	[ˈfliːɡn̩ˌɡɪtɐ]	москітна сітка	fly screen	Das Fliegengitter hält Mücken aus dem Schlafzimmer fern.	Москітна сітка не пускає комарів до спальні.	home	home_rooms	B1
 5147	Facharzt	der	die Fachärzte	[ˈfaxʔaːɐ̯tst]	лікар-спеціаліст	medical specialist	Der Hausarzt überweist mich an einen Facharzt.	Сімейний лікар направляє мене до профільного спеціаліста.	body	medicine_care	B1
 5148	Kammermusik	die		[ˈkamɐmuˌziːk]	камерна музика	chamber music	Im kleinen Saal hörten wir feine Kammermusik.	У малому залі ми слухали вишукану камерну музику.	hobbies	music_instruments	B2
-5149	Känguru	das	die Kängurus	[ˈkɛŋɡuru]	кенгуру	kangaroo	Kängurus tragen ihre Jungen im Beutel.	Кенгуру носять своїх малят у сумці.	nature	nature_animals	A2
+5149	Känguru	das	die Kängurus	[ˈkɛŋɡuru]	кенгуру	kangaroo	Kängurus tragen ihre Jungen im Beutel.	Кенгуру носять своїх малят у сумці.	nature	nature_wildlife	A2
 5150	Granit	der		[ɡraˈniːt]	граніт	granite	Dieser Berg besteht fast vollständig aus hartem Granit.	Ця гора майже повністю складається з твердого граніту.	nature	nature_landscape	B2
 5151	Frühlingsblume	die	die Frühlingsblumen	[ˈfryːlɪŋsˌbluːmə]	весняна квітка	spring flower	Die ersten Frühlingsblumen zeigen sich schon im März.	Перші весняні квіти з'являються вже у березні.	nature	nature_plants	A2
 5152	Meeresbrise	die	die Meeresbrisen	[ˈmeːrəsˌbriːzə]	морський бриз	sea breeze	Die salzige Meeresbrise kühlt uns nach dem Sonnenbad angenehm.	Солоний морський бриз приємно охолоджує нас після пляжу.	nature	nature_weather	B1
-5153	Kiesstrand	der	die Kiesstrände	[ˈkiːsʃtrant]	гальковий пляж	pebble beach	Für den Kiesstrand empfiehlt es sich, Badeschuhe zu tragen.	Для галькового пляжу варто носити аквашузи.	nature	nature_wildlife	B1
+5153	Kiesstrand	der	die Kiesstrände	[ˈkiːsʃtrant]	гальковий пляж	pebble beach	Für den Kiesstrand empfiehlt es sich, Badeschuhe zu tragen.	Для галькового пляжу варто носити аквашузи.	nature	nature_landscape	B1
 5154	Gartenarbeit	die		[ˈɡartn̩ˌʔarbaɪ̯t]	садівництво	gardening	Am Wochenende entspannt sie bei der Gartenarbeit.	На вихідних вона відпочиває, працюючи в саду.	hobbies	outdoor_activities	A2
 5155	Augenbrauenstift	der	die Augenbrauenstifte	[ˈaʊ̯ɡn̩braʊ̯ənˌʃtɪft]	олівець для брів	eyebrow pencil	Im Kulturbeutel liegt auch ihr brauner Augenbrauenstift.	У косметичці також лежить її коричневий олівець для брів.	people	people_appearance	B1
 5156	Einzelgänger	der	die Einzelgänger	[ˈaɪ̯ntsl̩ˌɡɛŋɐ]	одинак / інтроверт	loner	Obwohl er eher ein Einzelgänger ist, hilft er Nachbarn stets.	Хоч він радше одинак, сусідам завжди допомагає.	people	people_character	B2
@@ -5190,7 +5190,7 @@
 5190	Aquarellpapier	das	die Aquarellpapiere	[akvaˈrɛlpaˌpiːɐ̯]	папір для акварелі	watercolor paper	Dickes Aquarellpapier wellt sich beim Malen kaum.	Щільний акварельний папір майже не згортається при малюванні.	hobbies	art_creativity	B1
 5191	Gelenk	das	die Gelenke	[ɡəˈlɛŋk]	суглоб	joint	Schwimmen entlastet jedes Gelenk im Körper.	Плавання знімає навантаження з кожного суглоба.	body	body_parts	B1
 5192	Feuerlöschzug	der	die Feuerlöschzüge	[ˈfɔɪ̯ɐlœʃˌtsuːk]	пожежний розрахунок	fire brigade unit	Der Feuerlöschzug rückte innerhalb von fünf Minuten aus.	Пожежний підрозділ виїхав за п'ять хвилин.	city	city_emergency	B2
-5193	Bühnentechnik	die		[ˈbyːnənˌtɛçnɪk]	сценічне обладнання	stage technology	Die moderne Bühnentechnik im Stadttheater wurde erneuert.	Сучасну сценічну техніку в міському театрі оновили.	city	city_jobs	B2
+5193	Bühnentechnik	die		[ˈbyːnənˌtɛçnɪk]	сценічне обладнання	stage technology	Die moderne Bühnentechnik im Stadttheater wurde erneuert.	Сучасну сценічну техніку в міському театрі оновили.	hobbies	art_creativity	B2
 5194	Fernbahnhof	der	die Fernbahnhöfe	[ˈfɛrnbaːnˌhoːf]	вокзал далекого сполучення	long-distance train station	Der ICE hält nur am zentralen Fernbahnhof.	Швидкісний потяг зупиняється лише на головному вокзалі.	city	city_places	B1
 5195	Anwaltskanzlei	die	die Anwaltskanzleien	[ˈanvaltsˌkantslaɪ̯]	адвокатська контора	law firm	Seine Anwaltskanzlei liegt gegenüber dem Gericht.	Його адвокатська контора розташована навпроти суду.	city	city_services	B1
 5196	Einkaufsstraße	die	die Einkaufsstraßen	[ˈaɪ̯nkaʊ̯fsˌʃtraːsə]	торгова вулиця	shopping street	Samstags ist die zentrale Einkaufsstraße voller Menschen.	У суботу центральна торгова вулиця переповнена людьми.	city	city_shopping	A2
@@ -5209,11 +5209,11 @@
 5209	Haustür	die	die Haustüren	[ˈhaʊ̯styːɐ̯]	вхідні двері	front door	Bitte schließ abends die Haustür zweimal ab.	Будь ласка, замикай ввечері вхідні двері на два оберти.	home	home_rooms	A1
 5210	Fiebermesser	der	die Fiebermesser	[ˈfiːbɐˌmɛsɐ]	градусник	clinical thermometer	Wir legen den Fiebermesser bereit.	Ми підготуємо градусник.	body	medicine_care	A2
 5211	Konzerthalle	die	die Konzerthallen	[kɔnˈtsɛrthalə]	концертний зал	concert hall	Die neue Konzerthalle begeistert durch perfekte Akustik.	Новий концертний зал вражає ідеальною акустикою.	hobbies	music_instruments	A2
-5212	Koala	der	die Koalas	[koˈaːla]	коала	koala	Koalas schlafen den größten Teil des Tages im Eukalyptusbaum.	Коали сплять більшу частину дня на евкаліптах.	nature	nature_animals	A2
+5212	Koala	der	die Koalas	[koˈaːla]	коала	koala	Koalas schlafen den größten Teil des Tages im Eukalyptusbaum.	Коали сплять більшу частину дня на евкаліптах.	nature	nature_wildlife	A2
 5213	Höhenluft	die		[ˈhøːənˌlʊft]	гірське повітря	mountain air	Die frische Höhenluft tat unseren Lungen gut.	Свіже гірське повітря пішло на користь нашим легеням.	nature	nature_landscape	B2
 5214	Grashalm	der	die Grashalme	[ˈɡraːshalm]	травинка	blade of grass	Morgens glitzern Tautropfen an jedem Grashalm.	Вранці краплі роси виблискують на кожній травинці.	nature	nature_plants	B1
 5215	Morgenstimmung	die		[ˈmɔrɡn̩ˌʃtɪmʊŋ]	ранковий настрій	morning mood / atmosphere	Im Nebel über dem Teich liegt eine ganz eigene Morgenstimmung.	У тумані над ставком панує особлива ранкова атмосфера.	nature	nature_weather	B2
-5216	Korallenriff	das	die Korallenriffe	[koˈralənˌrɪf]	кораловий риф	coral reef	Bunte Fische tummeln sich am Korallenriff.	Різнобарвні риби плавають біля коралового рифу.	nature	nature_wildlife	B1
+5216	Korallenriff	das	die Korallenriffe	[koˈralənˌrɪf]	кораловий риф	coral reef	Bunte Fische tummeln sich am Korallenriff.	Різнобарвні риби плавають біля коралового рифу.	nature	nature_landscape	B1
 5217	Gondelfahrt	die	die Gondelfahrten	[ˈɡɔndl̩faːɐ̯t]	поїздка на гондолі / канатці	gondola ride	Die Gondelfahrt hinauf auf den Berg dauerte zwölf Minuten.	Підйом гондолою на гору тривав дванадцять хвилин.	hobbies	outdoor_activities	B1
 5218	Familienmitglied	das	die Familienmitglieder	[faˈmiːli̯ənmɪtˌɡliːt]	член сім'ї	family member	Jedes Familienmitglied hilft beim Umzug mit.	Кожен член сім'ї допомагає з переїздом.	people	people_family	A2
 5219	Seelenverwandter	der	die Seelenverwandten	[ˈzeːln̩fɛɐ̯ˌvantɐ]	споріднена душа	soulmate	Wir verstehen uns ohne Worte wie Seelenverwandte.	Ми розуміємо одне одного без слів, як споріднені душі.	people	people_relationships	B2
@@ -5266,11 +5266,11 @@
 5266	Regenschirmständer	der	die Regenschirmständer	[ˈreːɡn̩ʃɪrmˌʃtɛndɐ]	підставка для парасольок	umbrella stand	Stell den nassen Schirm in den Regenschirmständer.	Постав мокру парасольку в підставку.	home	home_rooms	B1
 5267	Genesung	die		[ɡəˈneːzʊŋ]	одужання	recovery	Wir wünschen dir eine schnelle und vollständige Genesung!	Бажаємо тобі швидкого і повного одужання!	body	medicine_care	B1
 5268	Kopfhörerbuchse	die	die Kopfhörerbuchsen	[ˈkɔpfhøːrɐˌbʊksə]	роз'єм для навушників	headphone jack	Manche Musikplayer haben noch eine klassische Kopfhörerbuchse.	Деякі плеєри досі мають класичний роз'єм для навушників.	hobbies	music_instruments	B2
-5269	Krokodil	das	die Krokodile	[krokoˈdiːl]	крокодил	crocodile	Das Krokodil liegt bewegungslos am Flussufer.	Крокодил лежить нерухомо на березі річки.	nature	nature_animals	A2
+5269	Krokodil	das	die Krokodile	[krokoˈdiːl]	крокодил	crocodile	Das Krokodil liegt bewegungslos am Flussufer.	Крокодил лежить нерухомо на березі річки.	nature	nature_wildlife	A2
 5270	Lawine	die	die Lawinen	[laˈviːnə]	лавина	avalanche	Wegen starker Schneefälle besteht im Hochgebirge Lawinengefahr.	Через сильні снігопади у високогір'ї є загроза лавин.	nature	nature_landscape	B1
 5271	Hagebutte	die	die Hagebutten	[ˈhaːɡəbʊtə]	шипшина	rosehip	Tee aus getrockneten Hagebutten enthält viel Vitamin C.	Чай із сушеної шипшини містить багато вітаміну C.	nature	nature_plants	B2
 5272	Abenddämmerung	die		[ˈaːbn̩tˌdɛmərʊŋ]	вечірні сутінки	dusk	In der Abenddämmerung kehren die Vögel ins Nest zurück.	У вечірніх сутінках птахи повертаються до гнізд.	nature	nature_weather	B1
-5273	Meeresströmung	die	die Meeresströmungen	[ˈmeːrəsˌʃtrøːmʊŋ]	морська течія	ocean current	Starke Meeresströmungen beeinflussen das Weltklima.	Потужні морські течії впливають на світовий клімат.	nature	nature_wildlife	B2
+5273	Meeresströmung	die	die Meeresströmungen	[ˈmeːrəsˌʃtrøːmʊŋ]	морська течія	ocean current	Starke Meeresströmungen beeinflussen das Weltklima.	Потужні морські течії впливають на світовий клімат.	nature	nature_landscape	B2
 5274	Kletterwand	die	die Kletterwände	[ˈklɛtɐvant]	стіна для скелелазіння	climbing wall	An der hohen Kletterwand sichert uns ein Seil.	На високій стіні для лазіння нас страхує мотузка.	hobbies	outdoor_activities	A2
 5275	Familienstammbaum	der	die Familienstammbäume	[faˈmiːli̯ənˌʃtambaʊ̯m]	генеалогічне дерево	family tree	Mein Onkel zeichnet unseren Familienstammbaum.	Мій дядько малює наше генеалогічне дерево.	people	people_family	B2
 5276	Spitzname	der	die Spitznamen	[ˈʃpɪtsˌnaːmə]	прізвисько	nickname	Schon in der Schule hatte er einen lustigen Spitznamen.	Ще зі школи в нього було кумедне прізвисько.	people	people_relationships	A2
@@ -5322,7 +5322,7 @@
 5322	Zierpflanze	die	die Zierpflanzen	[ˈtsiːɐ̯ˌpflantsə]	декоративна рослина	ornamental plant	Grüne Zierpflanzen verbessern das Raumklima.	Зелені декоративні рослини покращують мікроклімат у кімнаті.	home	home_rooms	B1
 5323	Hausmittel	das	die Hausmittel	[ˈhaʊ̯smɪtl̩]	домашній засіб лікування	home remedy	Zwiebelsirup ist ein altes Hausmittel gegen Husten.	Цибулевий сироп — давній домашній засіб від кашлю.	body	medicine_care	B1
 5324	Musikinstrument	das	die Musikinstrumente	[muˈziːkʔɪnstruˌmɛnt]	музичний інструмент	musical instrument	Welches Musikinstrument möchtest du gern lernen?	На якому музичному інструменті ти хотів би навчитися грати?	hobbies	music_instruments	A1
-5325	Leopard	der	die Leoparden	[leoˈpart]	леопард	leopard	Der Leopard klettert mühelos auf hohe Äste.	Леопард легко видирається на високі гілки.	nature	nature_animals	B1
+5325	Leopard	der	die Leoparden	[leoˈpart]	леопард	leopard	Der Leopard klettert mühelos auf hohe Äste.	Леопард легко видирається на високі гілки.	nature	nature_wildlife	B1
 5326	Vulkanausbruch	der	die Vulkanausbrüche	[vʊlˈkaːnˌʔaʊ̯sbrʊx]	виверження вулкана	volcanic eruption	Geologen überwachen den Berg vor einem Vulkanausbruch.	Геологи стежать за горою перед виверженням вулкана.	nature	nature_landscape	B1
 5327	Kiefernzapfen	der	die Kiefernzapfen	[ˈkiːfɐnˌtsapfn̩]	соснова шишка	pine cone	Im Sand des Waldes lagen zahlreiche Kiefernzapfen.	На лісовому піску лежало чимало соснових шишок.	nature	nature_plants	B1
 5328	Atmosphäre	die		[atmoˈsfɛːrə]	атмосфера	atmosphere	Die Atmosphäre schützt die Erde vor kosmischer Strahlung.	Атмосфера захищає Землю від космічного випромінювання.	nature	nature_weather	B1
@@ -5376,14 +5376,14 @@
 5376	Bodenbeläge	die	die Bodenbeläge	[ˈboːdn̩bəˌlɛːɡə]	підлогові матеріали	floor coverings	Im Baumarkt vergleichen wir verschiedene robuste Bodenbeläge.	У будівельному маркеті ми порівнюємо різні міцні покриття для підлоги.	home	home_rooms	B2
 5377	Impfpass	der	die Impfpässe	[ˈɪmpfpas]	паспорт вакцинації	vaccination record	Vor Fernreisen sollte man den Impfpass prüfen.	Перед далекими подорожами варто перевірити паспорт щеплень.	body	medicine_care	B1
 5378	Notenschlüssel	der	die Notenschlüssel	[ˈnoːtn̩ˌʃlʏsl̩]	музичний ключ	musical clef	Der Violinschlüssel ist der bekannteste Notenschlüssel.	Скрипковий ключ — найвідоміший музичний ключ.	hobbies	music_instruments	B2
-5379	Nilpferd	das	die Nilpferde	[ˈniːlpfeːɐ̯t]	бегемот	hippopotamus	Das Nilpferd kühlt sich tagsüber im Schlamm ab.	Бегемот вдень охолоджується в багнюці.	nature	nature_animals	A2
+5379	Nilpferd	das	die Nilpferde	[ˈniːlpfeːɐ̯t]	бегемот	hippopotamus	Das Nilpferd kühlt sich tagsüber im Schlamm ab.	Бегемот вдень охолоджується в багнюці.	nature	nature_wildlife	A2
 5380	Almwiese	die	die Almwiesen	[ˈalmviːzə]	альпійський луг	alpine meadow	Auf der duftenden Almwiese blühen viele Wildkräuter.	На запашному альпійському лузі цвіте багато диких трав.	nature	nature_landscape	B1
 5381	Laubbaum	der	die Laubbäume	[ˈlaʊ̯pbaʊ̯m]	листяне дерево	deciduous tree	Im Herbst verfärben sich alle Laubbäume golden.	Восени всі листяні дерева стають золотистими.	nature	nature_plants	B1
 5382	Bodenfrost	der		[ˈboːdn̩frɔst]	приморозок на ґрунті	ground frost	Für diese Nacht hat der Wetterdienst Bodenfrost gemeldet.	На цю ніч синоптики передали заморозки на ґрунті.	nature	nature_weather	B2
-5383	Regenwald	der	die Regenwälder	[ˈreːɡn̩valt]	тропічний ліс	rainforest	Der tropische Regenwald beherbergt unzählige Tierarten.	Тропічний ліс є домівкою для незліченних видів тварин.	nature	nature_wildlife	B1
+5383	Regenwald	der	die Regenwälder	[ˈreːɡn̩valt]	тропічний ліс	rainforest	Der tropische Regenwald beherbergt unzählige Tierarten.	Тропічний ліс є домівкою для незліченних видів тварин.	nature	nature_landscape	B1
 5384	Segelflug	der	die Segelflüge	[ˈzeːɡl̩fluːk]	планерний політ	gliding flight	Ein ruhiger Segelflug über die Hügel ist unvergesslich.	Тихий політ на планері над пагорбами незабутній.	hobbies	outdoor_activities	B2
 5385	Halbschwester	die	die Halbschwestern	[ˈhalpˌʃvɛstɐ]	зведена сестра	half-sister	Meine Halbschwester studiert in Hamburg.	Моя зведена сестра вчиться в Гамбурзі.	people	people_family	B1
-5386	Donnerstagabend	der	die Donnerstagabende	[ˈdɔnɐstaːkˌʔaːbn̩t]	вечір четверга	Thursday evening	Am Donnerstagabend treffen wir uns regelmäßig zum Sprachstammtisch.	У четвер увечері ми регулярно збираємося на розмовний клуб.	people	people_relationships	A1
+5386	Schulfreund	der	die Schulfreunde	[ˈʃuːlˌfʁɔʏ̯nt]	шкільний друг	school friend	Am Wochenende treffe ich meinen alten Schulfreund.	На вихідних я зустрічаюся зі своїм старим шкільним другом.	people	people_relationships	A1
 5387	Bestellliste	die	die Bestelllisten	[bəˈʃtɛlˌlɪstə]	список замовлення	order list	Auf der Bestellliste stehen noch drei neue Bücher.	У списку замовлень є ще три нові книги.	shopping	shopping_stores	B1
 5388	Beteiligung	die	die Beteiligungen	[bəˈtaɪ̯lɪɡʊŋ]	участь / залученість	participation	Die Beteiligung junger Menschen an der Wahl stieg an.	Участь молоді у виборах зросла.	society	society_politics	B1
 5389	Eishockey	das		[ˈaɪ̯shɔki]	хокей на льоду	ice hockey	Eishockey ist ein extrem schneller Mannschaftssport.	Хокей — надзвичайно швидкий командний вид спорту.	hobbies	sports_games	A2
@@ -5427,7 +5427,7 @@
 5427	Durchzug	der		[ˈdʊrçtsuːk]	протяг	draft (air)	Bei zwei offenen Fenstern entsteht schnell ein kühler Durchzug.	Коли відчинені два вікна, швидко виникає прохолодний протяг.	home	home_rooms	B1
 5428	Krankenakte	die	die Krankenakten	[ˈkraŋkn̩ˌʔaktə]	медична картка	medical record	Alle Befunde stehen digital in der Krankenakte.	Усі результати обстежень є в електронній медкарці.	body	medicine_care	B2
 5429	Opernhaus	das	die Opernhäuser	[ˈoːpɐnhaʊ̯s]	оперний театр	opera house	Heute Abend gehen wir festlich gekleidet ins Opernhaus.	Сьогодні ввечері ми святково вдягнені йдемо в оперу.	hobbies	music_instruments	A2
-5430	Polarfuchs	der	die Polarfüchse	[poˈlaːɐ̯fʊks]	песець	arctic fox	Der Polarfuchs trägt im Winter ein schneeweißes Fell.	Взимку песець має білосніжне хутро.	nature	nature_animals	B2
+5430	Polarfuchs	der	die Polarfüchse	[poˈlaːɐ̯fʊks]	песець	arctic fox	Der Polarfuchs trägt im Winter ein schneeweißes Fell.	Взимку песець має білосніжне хутро.	nature	nature_wildlife	B2
 5431	Bergspitze	die	die Bergspitzen	[ˈbɛrkʃpɪtsə]	вершина гори	mountain peak	Auf der höchsten Bergspitze lag selbst im Juli noch Schnee.	На найвищій вершині гори навіть у липні ще лежав сніг.	nature	nature_landscape	A2
 5432	Maiglöckchen	das	die Maiglöckchen	[ˈmaɪ̯ɡlœkçən]	конвалія	lily of the valley	Maiglöckchen blühen weiß und duften herrlich im Wald.	Конвалії цвітуть білим і чудово пахнуть у лісі.	nature	nature_plants	B1
 5433	Gewitterwolke	die	die Gewitterwolken	[ɡəˈvɪtɐˌvɔlkə]	грозова хмара	thundercloud	Dunkle Gewitterwolken ziehen aus Westen auf.	Темні грозові хмари насуваються із заходу.	nature	nature_weather	B1
@@ -5473,11 +5473,11 @@
 5473	Kerzenschein	der		[ˈkɛrtsn̩ʃaɪ̯n]	світло свічок	candlelight	Bei warmem Kerzenschein plaudern wir noch stundenlang.	При теплому світлі свічок ми спілкуємося ще годинами.	home	home_rooms	B1
 5474	Narbenpflege	die		[ˈnarbn̩ˌpfleːɡə]	догляд за рубцями	scar care	Spezielle Salben unterstützen eine gute Narbenpflege.	Спеціальні мазі допомагають загоєнню рубців.	body	medicine_care	B2
 5475	Solokonzert	das	die Solokonzerte	[ˈzoːlokɔnˌtsɛrt]	сольний концерт	solo concert	Die Pianistin gab ein gefeiertes Solokonzert.	Піаністка дала тріумфальний сольний концерт.	hobbies	music_instruments	B1
-5476	Robbe	die	die Robben	[ˈrɔbə]	тюлень	seal	Auf der Sandbank sonnen sich dutzende Robben.	На піщаній мілині гріються на сонці десятки тюленів.	nature	nature_animals	A2
+5476	Robbe	die	die Robben	[ˈrɔbə]	тюлень	seal	Auf der Sandbank sonnen sich dutzende Robben.	На піщаній мілині гріються на сонці десятки тюленів.	nature	nature_wildlife	A2
 5477	Eiszeit	die	die Eiszeiten	[ˈaɪ̯stsaɪ̯t]	льодовиковий період	ice age	Während der letzten Eiszeit prägten Gletscher diese Täler.	Під час останнього льодовикового періоду льодовики сформували ці долини.	nature	nature_landscape	B1
 5478	Nadelwald	der	die Nadelwälder	[ˈnaːdl̩valt]	хвойний ліс	coniferous forest	Im Nadelwald duftet es intensiv nach Harz.	У хвойному лісі інтенсивно пахне смолою.	nature	nature_plants	B1
 5479	Hitzewelle	die	die Hitzewellen	[ˈhɪtsəˌvɛlə]	хвиля спеки	heatwave	Während der Hitzewelle trinken wir viel Wasser.	Під час хвилі спеки ми п'ємо багато води.	nature	nature_weather	B1
-5480	Flussufer	das	die Flussufer	[ˈflʊsʔuːfɐ]	берег річки	riverbank	Am schattigen Flussufer sitzen Angler in aller Ruhe.	На тінистому березі річки спокійно сидять рибалки.	nature	nature_wildlife	A2
+5480	Flussufer	das	die Flussufer	[ˈflʊsʔuːfɐ]	берег річки	riverbank	Am schattigen Flussufer sitzen Angler in aller Ruhe.	На тінистому березі річки спокійно сидять рибалки.	nature	nature_landscape	A2
 5481	Taucheranzug	der	die Taucheranzüge	[ˈtaʊ̯xɐˌʔantsuːk]	гідрокостюм	wetsuit	Der Taucheranzug hält im kalten Meer angenehm warm.	Гідрокостюм зберігає тепло в холодному морі.	hobbies	outdoor_activities	B1
 5482	Nachwuchs	der		[ˈnaːxvuːks]	поповнення в сім'ї / молоде покоління	offspring / young generation	Unsere Nachbarn erwarten im Mai Nachwuchs.	Наші сусіди чекають на поповнення у травні.	people	people_family	B1
 5483	Fernbeziehung	die	die Fernbeziehungen	[ˈfɛrnbəˌtsiːʊŋ]	стосунки на відстані	long-distance relationship	Tägliche Anrufe helfen enorm in einer Fernbeziehung.	Щоденні дзвінки дуже допомагають у стосунках на відстані.	people	people_relationships	B1
@@ -5517,7 +5517,7 @@
 5517	Nachtruhe	die		[ˈnaxtruːə]	нічний спокій / тиша	night's rest / quiet hours	Ab zweiundzwanzig Uhr beginnt im Haus die allgemeine Nachtruhe.	Із двадцять другої години в будинку починається час нічної тиші.	home	home_rooms	B1
 5518	Operationssaal	der	die Operationssäle	[operaˈtsi̯oːnsˌzaːl]	операційна	operating room	Im Operationssaal herrscht höchste Sterilität.	В операційній панує максимальна стерильність.	body	medicine_care	B1
 5519	Tanzfläche	die	die Tanzflächen	[ˈtantsflɛçə]	танцпол	dance floor	Gegen Mitternacht füllte sich die Tanzfläche schnell.	Близько півночі танцпол швидко заповнився.	hobbies	music_instruments	A2
-5520	Tiger	der	die Tiger	[ˈtiːɡɐ]	тигр	tiger	Der Tiger schleicht lautlos durch das hohe Schilf.	Тигр безшумно підкрадається крізь високий очерет.	nature	nature_animals	A1
+5520	Tiger	der	die Tiger	[ˈtiːɡɐ]	тигр	tiger	Der Tiger schleicht lautlos durch das hohe Schilf.	Тигр безшумно підкрадається крізь високий очерет.	nature	nature_wildlife	A1
 5521	Felsenwand	die	die Felsenwände	[ˈfɛlzn̩vant]	скеляста стіна / урвище	rock face / cliff	An der steilen Felsenwand nisten wilde Falken.	На стрімкій скелі гніздяться дикі соколи.	nature	nature_landscape	B1
 5522	Strauch	der	die Sträucher	[ʃtraʊ̯x]	кущ	shrub / bush	Hinter dem dichten Strauch versteckte sich ein Igel.	За густим кущем сховався їжак.	nature	nature_plants	B1
 5523	Nordlicht	das	die Nordlichter	[ˈnɔrtlɪçt]	північне сяйво	aurora borealis	In Norwegen sahen wir grüne Nordlichter am Himmel.	У Норвегії ми бачили на небі зелене північне сяйво.	nature	nature_weather	B1
@@ -5559,7 +5559,7 @@
 5559	Bodenbelag	der	die Bodenbeläge	[ˈboːdn̩bəˌlaːk]	підлогове покриття	flooring	Helles Parkett ist ein zeitloser Bodenbelag.	Світлий паркет — позачасове підлогове покриття.	home	home_rooms	B2
 5560	Untersuchungszimmer	das	die Untersuchungszimmer	[ʊntɐˈzuːxʊŋsˌtsɪmɐ]	оглядовий кабінет	examination room	Die Ärztin bat mich ins Untersuchungszimmer.	Лікарка запросила мене до оглядового кабінету.	body	medicine_care	B1
 5561	Chorgesang	der		[ˈkoːɐ̯ɡəˌzaŋ]	хоровий спів	choral singing	Gemeinsamer Chorgesang verbindet Menschen jeden Alters.	Спільний хоровий спів об'єднує людей різного віку.	hobbies	music_instruments	B1
-5562	Wal	der	die Wale	[vaːl]	кит	whale	Der Blauwal ist das größte Säugetier unseres Planeten.	Синій кит — найбільший ссавець нашої планети.	nature	nature_animals	A2
+5562	Wal	der	die Wale	[vaːl]	кит	whale	Der Blauwal ist das größte Säugetier unseres Planeten.	Синій кит — найбільший ссавець нашої планети.	nature	nature_wildlife	A2
 5563	Gipfelluft	die		[ˈɡɪpfl̩lʊft]	повітря на вершині	summit air	Die klare Gipfelluft weckt sofort alle Lebensgeister.	Чисте повітря на вершині одразу додає сил.	nature	nature_landscape	B2
 5564	Baumrinde	die	die Baumrinden	[ˈbaʊ̯mrɪndə]	кора дерева	tree bark	Die raue Baumrinde schützt den Stamm vor Frost.	Шорстка кора дерева захищає стовбур від морозу.	nature	nature_plants	B1
 5565	Regentropfen	der	die Regentropfen	[ˈreːɡn̩ˌtrɔpfn̩]	крапля дощу	raindrop	Einzelne Regentropfen fielen auf die Windschutzscheibe.	Поодинокі краплі дощу впали на лобове скло.	nature	nature_weather	A2
@@ -5598,7 +5598,7 @@
 5598	Esszimmer	das	die Esszimmer	[ˈɛstsɪmɐ]	їдальня (кімната)	dining room	Sonntags trifft sich die Familie im großen Esszimmer.	У неділю родина збирається у великій їдальні.	home	home_rooms	A1
 5599	Arztbesuch	der	die Arztbesuche	[ˈaːɐ̯tstbəˌzuːx]	візит до лікаря	doctor's visit	Ein jährlicher Arztbesuch dient der guten Vorsorge.	Щорічний візит до лікаря важливий для профілактики.	body	medicine_care	A2
 5600	Geigenunterricht	der		[ˈɡaɪ̯ɡn̩ˌʔʊntɐrɪçt]	урок гри на скрипці	violin lessons	Donnerstags hat mein Sohn eine Stunde Geigenunterricht.	Щочетверга мій син має урок гри на скрипці.	hobbies	music_instruments	A2
-5601	Zebra	das	die Zebras	[ˈtseːbra]	зебра	zebra	Jedes Zebra besitzt ein einzigartiges Streifenmuster.	Кожна зебра має унікальний візерунок смуг.	nature	nature_animals	A1
+5601	Zebra	das	die Zebras	[ˈtseːbra]	зебра	zebra	Jedes Zebra besitzt ein einzigartiges Streifenmuster.	Кожна зебра має унікальний візерунок смуг.	nature	nature_wildlife	A1
 5602	Alpenvorland	das		[ˈalpn̩foːɐ̯ˌlant]	передгір'я Альп	Alpine foothills	Im grünen Alpenvorland gibt es unzählige glasklare Seen.	У зеленому передгір'ї Альп є безліч кришталевих озер.	nature	nature_landscape	B2
 5603	Blätterwald	der		[ˈblɛtɐvalt]	густе листя / гущавина	leafy canopy	Im dichten Blätterwald zwitschern hunderte Singvögel.	У густому листі щебечуть сотні співочих птахів.	nature	nature_plants	B1
 5604	Sonnenstrahl	der	die Sonnenstrahlen	[ˈzɔnənʃtraːl]	сонячний промінь	sunbeam	Die ersten Sonnenstrahlen wärmen das kalte Tal.	Перші сонячні промені зігрівають холодну долину.	nature	nature_weather	A2
@@ -5636,7 +5636,7 @@
 5636	Gartenlaube	die	die Gartenlauben	[ˈɡartn̩ˌlaʊ̯bə]	садова альтанка	garden gazebo	Im Sommer lesen wir gern im Schatten der Gartenlaube.	Влітку ми залюбки читаємо в тіні садової альтанки.	home	home_rooms	B1
 5637	Augenuntersuchung	die	die Augenuntersuchungen	[ˈaʊ̯ɡn̩ʔʊntɐˌzuːxʊŋ]	перевірка зору	eye exam	Alle zwei Jahre sollte man eine Augenuntersuchung machen lassen.	Кожні два роки варто перевіряти зір.	body	medicine_care	B1
 5638	Konzertkarte	die	die Konzertkarten	[kɔnˈtsɛrtˌkartə]	квиток на концерт	concert ticket	Die Konzertkarten waren innerhalb von zehn Minuten ausverkauft.	Квитки на концерт розкупили за десять хвилин.	hobbies	music_instruments	A2
-5639	Ameisenhaufen	der	die Ameisenhaufen	[ˈaːmaɪ̯zn̩ˌhaʊ̯fn̩]	мурашник	anthill	Am Waldrand entdeckten wir einen riesigen Ameisenhaufen.	На узліссі ми знайшли величезний мурашник.	nature	nature_animals	B1
+5639	Ameisenhaufen	der	die Ameisenhaufen	[ˈaːmaɪ̯zn̩ˌhaʊ̯fn̩]	мурашник	anthill	Am Waldrand entdeckten wir einen riesigen Ameisenhaufen.	На узліссі ми знайшли величезний мурашник.	nature	nature_wildlife	B1
 5640	Bodenprobe	die	die Bodenproben	[ˈboːdn̩ˌproːbə]	проба ґрунту	soil sample	Die Forscher entnehmen am Kraterrand eine weitere Bodenprobe.	Дослідники беруть біля краю кратера ще одну пробу ґрунту.	nature	nature_landscape	B2
 5641	Gartenblume	die	die Gartenblumen	[ˈɡartn̩ˌbluːmə]	садова квітка	garden flower	Bienen fliegen im Sommer jede bunte Gartenblume an.	Улітку бджоли сідають на кожну яскраву садову квітку.	nature	nature_plants	A1
 5642	Trockenzeit	die	die Trockenzeiten	[ˈtrɔkn̩tsaɪ̯t]	сезон посухи	dry season	In der Trockenzeit wandern viele Tiere zum Wasserloch.	У посушливий сезон багато тварин ідуть до водопою.	nature	nature_weather	B2
@@ -5706,7 +5706,7 @@
 5706	Einzelbett	das	die Einzelbetten	[ˈaɪ̯ntsl̩bɛt]	односпальне ліжко	single bed	Im Jugendzimmer steht ein praktisches Einzelbett mit Schubladen.	У кімнаті підлітка стоїть зручне односпальне ліжко з шухлядами.	home	home_furniture	A1
 5707	Balkonpflanze	die	die Balkonpflanzen	[balˈkɔŋˌpflantsə]	балконна рослина	balcony plant	Welche Balkonpflanze verträgt den ganzen Tag volle Sonne?	Яка балконна рослина витримує цілий день прямого сонця?	home	home_rooms	B1
 5708	Chorleiter	der	die Chorleiter	[ˈkoːɐ̯ˌlaɪ̯tɐ]	керівник хору / диригент	choir director	Der Chorleiter gibt den Einsatz für den letzten Vers.	Керівник хору дає знак на вступ для останнього куплета.	hobbies	music_instruments	B2
-5709	Buntspecht	der	die Buntspechte	[ˈbʊntʃpɛçt]	строкатий дятел	great spotted woodpecker	Ein Buntspecht klopft laut an die alte Kiefer.	Дятел голосно стукає по старій сосні.	nature	nature_animals	B2
+5709	Buntspecht	der	die Buntspechte	[ˈbʊntʃpɛçt]	строкатий дятел	great spotted woodpecker	Ein Buntspecht klopft laut an die alte Kiefer.	Дятел голосно стукає по старій сосні.	nature	nature_wildlife	B2
 5710	Heidekraut	das		[ˈhaɪ̯dəkraʊ̯t]	верес	heather	Im Spätsommer blüht das lila Heidekraut in Norddeutschland.	Наприкінці літа на півночі Німеччини цвіте бузковий верес.	nature	nature_plants	B2
 5711	Frostnacht	die	die Frostnächte	[ˈfrɔstnaxt]	морозна ніч	frosty night	Nach einer klaren Frostnacht glitzert der Garten weiß.	Після ясної морозної ночі сад виблискує білим інеєм.	nature	nature_weather	B2
 5712	Ehrenmitglied	das	die Ehrenmitglieder	[ˈeːrənmɪtˌɡliːt]	почесний член	honorary member	Nach fünfzig Jahren im Sportverein wurde er Ehrenmitglied.	Після п'ятдесяти років у спортклубі він став почесним членом.	people	people_relationships	B2
@@ -5762,13 +5762,13 @@
 5762	Abendmahlzeit	die	die Abendmahlzeiten	[ˈaːbn̩tˌmaːltsaɪ̯t]	вечірній прийом їжі	evening meal	Eine leichte Abendmahlzeit sorgt für ruhigeren Schlaf.	Легка вечеря забезпечує спокійніший сон.	food	food_meals	B1
 5763	Denksport	der		[ˈdɛŋkʃpɔrt]	інтелектуальна гра	mind sport	Schach und Sudoku zählen zum beliebten Denksport.	Шахи й судоку належать до популярних інтелектуальних ігор.	hobbies	gaming_entertainment	B1
 5764	Wadenkrampf	der	die Wadenkrämpfe	[ˈvaːdn̩krampf]	судома литки	calf cramp	Magnesium hilft oft gegen nächtliche Wadenkrämpfe.	Магній часто допомагає від нічних судом у литках.	body	health_illness	B2
-5765	Bastelschere	die	die Bastelscheren	[ˈbastl̩ˌʃeːrə]	ножиці для рукоділля	craft scissors	Für die Kinder haben wir eine abgerundete Bastelschere.	Для дітей ми маємо заокруглені ножиці для творчості.	home	home_furniture	A2
+5765	Bastelschere	die	die Bastelscheren	[ˈbastl̩ˌʃeːrə]	ножиці для рукоділля	craft scissors	Für die Kinder haben wir eine abgerundete Bastelschere.	Для дітей ми маємо заокруглені ножиці для творчості.	hobbies	art_creativity	A2
 5766	Dachbodenfund	der	die Dachbodenfunde	[ˈdaxboːdn̩ˌfʊnt]	знахідка на горищі	attic find	Die alte Taschenuhr war ein wertvoller Dachbodenfund.	Старий кишеньковий годинник став цінною знахідкою на горищі.	home	home_rooms	B2
 5767	Dauerfrost	der		[ˈdaʊ̯ɐfrɔst]	стійкий мороз (весь день нижче нуля)	continuous frost	Im Januar herrschte zwei Wochen lang eisiger Dauerfrost.	У січні два тижні поспіль тримався крижаний безперервний мороз.	nature	nature_weather	B2
 5768	Eislaufbahn	die	die Eislaufbahnen	[ˈaɪ̯slaʊ̯fˌbaːn]	ковзанка	ice skating rink	Im Dezember öffnet auf dem Marktplatz die Eislaufbahn.	У грудні на ринковій площі відкривається ковзанка.	hobbies	sports_games	A2
 5769	Datenbankabfrage	die	die Datenbankabfragen	[ˈdaːtn̩baŋkˌʔapfraːɡə]	запит до бази даних	database query	Eine saubere Datenbankabfrage dauert weniger als zehn Millisekunden.	Оптимізований запит до бази даних триває менше десяти мілісекунд.	tech	tech_data	B2
 5770	Dachgepäckträger	der	die Dachgepäckträger	[ˈdaxɡəpɛkˌtrɛːɡɐ]	багажник на даху авто	roof rack	Auf den Dachgepäckträger passen vier Paar Ski.	На багажник на даху поміщаються чотири пари лиж.	travel	travel_transport	B2
-5771	Anfangszeit	die	die Anfangszeiten	[ˈanfaŋstsaɪ̯t]	час початку	start time	Die Anfangszeit der Führung verschiebt sich auf zehn Uhr.	Час початку екскурсії переноситься на десяту годину.	travel	travel_vacation	B1
+5771	Reisezeit	die	die Reisezeiten	[ˈʁaɪ̯zəˌtsaɪ̯t]	час подорожі / туристичний сезон	travel season	Der Sommer ist die beliebteste Reisezeit in Europa.	Літо — найпопулярніший час для подорожей у Європі.	travel	travel_vacation	B1
 5772	spinnen		spann, hat gesponnen	[ˈʃpɪnən]	прясти / плести павутину	to spin	Die kleine Spinne spinnt morgens ein glitzerndes Netz.	Маленький павучок вранці плете блискучу павутину.	verbs	verbs_change	B2
 5773	vermitteln		vermittelte, hat vermittelt	[fɛɐ̯ˈmɪtl̩n]	передавати (знання) / бути посередником	to convey / mediate	Die Lehrerin vermittelt die Grammatik auf spielerische Weise.	Вчителька подає граматику в ігровій формі.	verbs	verbs_communication	B2
 5774	speichern		speicherte, hat gespeichert	[ˈʃpaɪ̯çɐn]	зберігати (файли/дані)	to save / store (data)	Die App speichert alle Audiodateien lokal im Cache.	Додаток зберігає всі аудіофайли локально в кеші.	verbs	verbs_daily	A2
@@ -5908,7 +5908,7 @@
 5908	niedlich		niedlicher, am niedlichsten	[ˈniːtlɪç]	милий / симпатичний	cute / adorable	Die kleinen Katzenbabys spielen wirklich niedlich miteinander.	Маленькі кошенята так мило граються одне з одним.	adjectives	adj_qualities	A2
 5909	behaglich		behaglicher, am behaglichsten	[bəˈhaːklɪç]	затишний / комфортний	cozy / snug	Im warmen Wohnzimmer herrscht eine behagliche Atmosphäre.	У теплій вітальні панує затишна атмосфера.	adjectives	adj_sensory	B2
 5910	beachtlich		beachtlicher, am beachtlichsten	[bəˈʔaxtlɪç]	помітний / неабиякий	considerable / remarkable	In sechs Monaten hat sie einen beachtlichen Wortschatz gelernt.	За шість місяців вона вивчила неабиякий запас слів.	adjectives	adj_size_time	B2
-5911	Fernsehsender	der	die Fernsehsender	[ˈfɛrnzeːˌzɛndɐ]	телеканал	TV station	Der regionale Fernsehsender berichtet täglich aus der Stadt.	Місцевий телеканал щодня робить репортажі про місто.	city	city_places	B1
+5911	Fernsehsender	der	die Fernsehsender	[ˈfɛrnzeːˌzɛndɐ]	телеканал	TV station	Der regionale Fernsehsender berichtet täglich aus der Stadt.	Місцевий телеканал щодня робить репортажі про місто.	society	society_media	B1
 5912	umsetzen		setzte um, hat umgesetzt	[ˈʊmzɛtsn̩]	реалізовувати / впроваджувати в життя	to implement / realize	Gute Ideen muss man konsequent in die Tat umsetzen.	Хороші ідеї треба послідовно втілювати в життя.	verbs	verbs_change	B2
 5913	zusammenarbeiten		arbeitete zusammen, hat zusammengearbeitet	[tsuˈzamənˌʔarbaɪ̯tn̩]	співпрацювати	to collaborate	In dieser Gruppe arbeiten alle wunderbar zusammen.	У цій групі всі чудово співпрацюють.	verbs	verbs_communication	B1
 5914	versorgen		versorgte, hat versorgt	[fɛɐ̯ˈzɔrɡn̩]	забезпечувати / доглядати / обробляти рану	to supply / take care of	Die Sanitäter versorgten sofort die kleine Schürfwunde.	Медики одразу обробили невелику подряпину.	verbs	verbs_daily	B1

@@ -27,8 +27,8 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
@@ -99,12 +99,11 @@ fun MainTopicsScreen(
 
     val showFavoritesOnly = selectedTab == MainTab.FAVORITES
 
-    val progressByTopic = remember(allProgress) {
-        val progressBySubtopic = allProgress.associateBy { it.subtopicId }
+    val progressByTopic = remember(allProgress, selectedLevel) {
         TopicCatalog.mainTopics.associate { topic ->
             val subtopicsCount = topic.subtopics.size
             val completedStages = topic.subtopics.sumOf { sub ->
-                progressBySubtopic[sub.id]?.completedStages ?: 0
+                viewModel.getCompletedStageSetForSubtopic(sub.id).size
             }
             val totalPossibleStages = subtopicsCount * VocabularyRepository.TOTAL_STAGES
             val ratio = if (totalPossibleStages > 0) (completedStages.toFloat() / totalPossibleStages).coerceIn(0f, 1f) else 0f
@@ -194,7 +193,7 @@ fun MainTopicsScreen(
                     onClick = { viewModel.selectMainTab(MainTab.TOPICS) },
                     icon = {
                         Icon(
-                            imageVector = Icons.Default.MenuBook,
+                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
                             contentDescription = "Теми"
                         )
                     },

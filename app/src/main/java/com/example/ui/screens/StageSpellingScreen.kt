@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,11 +56,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
@@ -326,9 +331,29 @@ fun StageSpellingScreen(
                             }
 
                             if (inputMode == Stage6InputMode.KEYBOARD) {
+                                var textFieldValue by remember(currentWord.id, currentIndex) {
+                                    mutableStateOf(
+                                        TextFieldValue(
+                                            text = currentInput,
+                                            selection = TextRange(currentInput.length)
+                                        )
+                                    )
+                                }
+                                LaunchedEffect(currentInput) {
+                                    if (textFieldValue.text != currentInput) {
+                                        textFieldValue = TextFieldValue(
+                                            text = currentInput,
+                                            selection = TextRange(currentInput.length)
+                                        )
+                                    }
+                                }
+
                                 OutlinedTextField(
-                                    value = currentInput,
-                                    onValueChange = { viewModel.updateStage6TypedText(it) },
+                                    value = textFieldValue,
+                                    onValueChange = { newValue ->
+                                        textFieldValue = newValue
+                                        viewModel.updateStage6TypedText(newValue.text)
+                                    },
                                     enabled = !isWordResolved,
                                     singleLine = true,
                                     placeholder = {
@@ -354,9 +379,11 @@ fun StageSpellingScreen(
                                         }
                                     ),
                                     keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Password,
                                         imeAction = ImeAction.Done,
                                         autoCorrectEnabled = false
                                     ),
+                                    visualTransformation = VisualTransformation.None,
                                     keyboardActions = KeyboardActions(
                                         onDone = { viewModel.submitStage6TypedAnswer() }
                                     ),
@@ -502,10 +529,10 @@ fun StageSpellingScreen(
                                     )
                                 }
                                 Stage6WordStatus.TYPING -> {
-                                    if (!errorHint.isNullOrBlank()) {
+                                    errorHint?.takeIf { it.isNotBlank() }?.let { hint ->
                                         Spacer(modifier = Modifier.height(6.dp))
                                         Text(
-                                            text = errorHint!!,
+                                            text = hint,
                                             color = StreakAmber,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp,

@@ -155,4 +155,7 @@ interface WordDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSubtopicProgress(progress: SubtopicProgressEntity)
+
+    @Query("DELETE FROM subtopic_progress")
+    suspend fun deleteAllSubtopicProgress()
 }

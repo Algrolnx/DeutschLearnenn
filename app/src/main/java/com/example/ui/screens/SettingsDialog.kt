@@ -46,8 +46,8 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -117,8 +117,15 @@ fun SettingsDialog(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.let { stream ->
-                viewModel.exportVocabularyJson(stream)
+            try {
+                val stream = context.contentResolver.openOutputStream(uri)
+                if (stream != null) {
+                    viewModel.exportVocabularyJson(stream)
+                } else {
+                    viewModel.reportIoError("Не вдалося відкрити файл для збереження JSON")
+                }
+            } catch (e: Exception) {
+                viewModel.reportIoError("Помилка доступу до файлу: ${e.message ?: "невідома помилка"}")
             }
         }
     }
@@ -127,8 +134,15 @@ fun SettingsDialog(
         contract = ActivityResultContracts.CreateDocument("text/tab-separated-values")
     ) { uri ->
         if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.let { stream ->
-                viewModel.exportVocabularyTsv(stream)
+            try {
+                val stream = context.contentResolver.openOutputStream(uri)
+                if (stream != null) {
+                    viewModel.exportVocabularyTsv(stream)
+                } else {
+                    viewModel.reportIoError("Не вдалося відкрити файл для збереження TSV")
+                }
+            } catch (e: Exception) {
+                viewModel.reportIoError("Помилка доступу до файлу: ${e.message ?: "невідома помилка"}")
             }
         }
     }
@@ -137,8 +151,15 @@ fun SettingsDialog(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            context.contentResolver.openInputStream(uri)?.let { stream ->
-                viewModel.importVocabularyStream(stream)
+            try {
+                val stream = context.contentResolver.openInputStream(uri)
+                if (stream != null) {
+                    viewModel.importVocabularyStream(stream)
+                } else {
+                    viewModel.reportIoError("Не вдалося відкрити вибраний файл для імпорту")
+                }
+            } catch (e: Exception) {
+                viewModel.reportIoError("Помилка читання файлу: ${e.message ?: "невідома помилка"}")
             }
         }
     }
@@ -518,21 +539,24 @@ fun SettingsDialog(
                         }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
-                } else if (!offlineState.statusMessage.isNullOrBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = SuccessGreen.copy(alpha = 0.13f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = offlineState.statusMessage!!,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
+                } else {
+                    val statusMsg = offlineState.statusMessage
+                    if (!statusMsg.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SuccessGreen.copy(alpha = 0.13f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = statusMsg,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1100,7 +1124,7 @@ fun SettingsDialog(
                             .height(48.dp)
                             .testTag("test_audio_button")
                     ) {
-                        Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Тест голосу", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
@@ -1223,18 +1247,18 @@ fun SettingsDialog(
                     Text("Імпортувати слова (JSON / TSV)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
 
-                if (ioStatus != null) {
+                ioStatus?.let { status ->
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = if (ioStatus!!.isError) ErrorRed.copy(alpha = 0.14f) else SuccessGreen.copy(alpha = 0.14f),
+                        color = if (status.isError) ErrorRed.copy(alpha = 0.14f) else SuccessGreen.copy(alpha = 0.14f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = ioStatus!!.text,
+                            text = status.text,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (ioStatus!!.isError) ErrorRed else SuccessGreen,
+                            color = if (status.isError) ErrorRed else SuccessGreen,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }

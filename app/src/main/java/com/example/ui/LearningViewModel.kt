@@ -17,6 +17,7 @@ import com.example.util.ReviewRating
 import com.example.util.SpacedRepetition
 import com.example.util.TtsManager
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -144,6 +145,7 @@ sealed class MixedReviewItem {
         override val word: WordEntity,
         override val srsStep: Int,
         val sentenceWithBlank: String,
+        val matchedToken: String,
         val translation: String,
         val options: List<String>,
         val correctOption: String,
@@ -193,10 +195,16 @@ data class PluralQ(
 data class FillBlankQ(
     val word: WordEntity,
     val sentenceWithBlank: String,
+    val matchedToken: String,
     val translation: String,
     val options: List<String>,
     val correctOption: String,
     val isRetry: Boolean = false
+)
+
+data class FillBlankMatch(
+    val sentenceWithBlank: String,
+    val matchedToken: String
 )
 
 sealed class KeyboardSpellingEvaluation {
@@ -274,8 +282,30 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val subtopicLevelCounts: StateFlow<List<SubtopicLevelCount>>
     val allProgress: StateFlow<List<SubtopicProgressEntity>>
 
-    private val _streakDays = MutableStateFlow(5)
+    private val _streakDays = MutableStateFlow(
+        computeCurrentStreak(
+            savedStreak = prefs.getInt("streak_days", 0),
+            lastActiveDate = prefs.getString("streak_last_active_date", null),
+            today = todayDateKey(),
+            yesterday = yesterdayDateKey()
+        )
+    )
     val streakDays: StateFlow<Int> = _streakDays.asStateFlow()
+
+    private fun recordDailyStudyActivity() {
+        val today = todayDateKey()
+        val yesterday = yesterdayDateKey()
+        val savedStreak = prefs.getInt("streak_days", 0)
+        val lastDate = prefs.getString("streak_last_active_date", null)
+        val updated = computeUpdatedStreak(savedStreak, lastDate, today, yesterday)
+        if (updated != savedStreak || lastDate != today) {
+            prefs.edit()
+                .putInt("streak_days", updated)
+                .putString("streak_last_active_date", today)
+                .apply()
+        }
+        _streakDays.value = updated
+    }
 
     // === Theme Selection ===
     private val initialTheme = AppThemeMode.entries.firstOrNull {
@@ -681,6 +711,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private fun todayDateKey(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
+    private fun yesterdayDateKey(): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+    }
+
     private fun loadDailyReviewLimit(): Int {
         val saved = prefs.getInt("daily_review_limit", DEFAULT_DAILY_REVIEW_LIMIT)
         return saved.coerceIn(20, 100)
@@ -787,11 +823,17 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _ioStatusMessage.value = null
     }
 
+    fun reportIoError(message: String) {
+        _ioStatusMessage.value = IoStatusMessage(message, isError = true)
+    }
+
     fun exportVocabularyJson(outputStream: OutputStream) {
         viewModelScope.launch {
             try {
                 val json = repository.exportWordsAsJson()
-                outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                withContext(Dispatchers.IO) {
+                    outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                }
                 val total = totalWordCount.value
                 _ioStatusMessage.value = IoStatusMessage("Експортовано $total слів у формат JSON")
             } catch (e: Exception) {
@@ -804,7 +846,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val tsv = repository.exportWordsAsTsv()
-                outputStream.use { it.write(tsv.toByteArray(Charsets.UTF_8)) }
+                withContext(Dispatchers.IO) {
+                    outputStream.use { it.write(tsv.toByteArray(Charsets.UTF_8)) }
+                }
                 val total = totalWordCount.value
                 _ioStatusMessage.value = IoStatusMessage("Експортовано $total слів у таблицю TSV")
             } catch (e: Exception) {
@@ -816,7 +860,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun importVocabularyStream(inputStream: InputStream) {
         viewModelScope.launch {
             try {
-                val text = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { it.readText() }
+                val text = withContext(Dispatchers.IO) {
+                    BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { it.readText() }
+                }
                 val summary = repository.importWordsFromString(text)
                 if (summary.importedCount == 0 && summary.updatedCount == 0) {
                     _ioStatusMessage.value = IoStatusMessage(
@@ -1053,7 +1099,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _screenStack.value = baseStack + screen
     }
 
+    private var stageLaunchJob: Job? = null
+
     fun navigateBack(): Boolean {
+        ttsManager.stop()
         if (_screenStack.value.size > 1) {
             _screenStack.value = _screenStack.value.dropLast(1)
             if (_screenStack.value.lastOrNull() == Screen.MainTopics) {
@@ -1075,6 +1124,22 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
         _hubWords.value = _hubWords.value.map {
             if (it.id == word.id && it.german == word.german) it.copy(isFavorite = newFav) else it
+        }
+        _mixedReviewItems.value = _mixedReviewItems.value.map { item ->
+            if (item.word.id == word.id && item.word.german == word.german) {
+                val updatedWord = item.word.copy(isFavorite = newFav)
+                when (item) {
+                    is MixedReviewItem.FlashcardReview -> item.copy(word = updatedWord)
+                    is MixedReviewItem.ListeningReview -> item.copy(word = updatedWord)
+                    is MixedReviewItem.MultipleChoiceReview -> item.copy(word = updatedWord)
+                    is MixedReviewItem.ArticleReview -> item.copy(word = updatedWord)
+                    is MixedReviewItem.PluralReview -> item.copy(word = updatedWord)
+                    is MixedReviewItem.FillBlankReview -> item.copy(word = updatedWord)
+                    is MixedReviewItem.SpellingReview -> item.copy(word = updatedWord)
+                }
+            } else {
+                item
+            }
         }
         viewModelScope.launch {
             repository.toggleFavorite(word.id, newFav)
@@ -1102,7 +1167,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 1: FLASHCARDS ===
     // ==========================================
     fun startStage1(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val isFirstPass = 1 !in getCompletedStageSetForSubtopic(subtopicId)
             val rawWords = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15)
             // Keep curated order on the initial Stage 1 pass; randomize on all subsequent repetitions
@@ -1136,6 +1202,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             } else {
                 _stage1Finished.value = true
                 _stage1AllowPhotoChange.value = false
+                recordDailyStudyActivity()
                 viewModelScope.launch {
                     val unlocked = repository.completeStage(
                         subtopicId = subtopicId,
@@ -1170,14 +1237,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 2: LISTENING QUIZ ===
     // ==========================================
     fun startStage2(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12).shuffled()
             val questions = words.map { target ->
                 val distractors = repository.getDistractorsForWord(target, count = 3)
-                val targetLabel = "${target.displayWithArticle} (${target.translationUk})"
-                val distractorLabels = distractors.map { "${it.displayWithArticle} (${it.translationUk})" }
+                val targetLabel = target.translationUk.trim()
+                val distractorLabels = distractors.map { it.translationUk.trim() }.filter { it.isNotBlank() }
                 val options = (distractorLabels + targetLabel).distinct().shuffled()
-                val correctIdx = options.indexOf(targetLabel)
+                val correctIdx = options.indexOf(targetLabel).coerceAtLeast(0)
                 ListeningQ(word = target, options = options, correctIndex = correctIdx)
             }
             _stage2Questions.value = questions
@@ -1222,6 +1290,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             speak(_stage2Questions.value[nextIdx].word.displayWithArticle)
         } else {
             _stage2Finished.value = true
+            recordDailyStudyActivity()
             viewModelScope.launch {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1241,14 +1310,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 3: MULTIPLE CHOICE QUIZ ===
     // ==========================================
     fun startStage3(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12).shuffled()
             val questions = words.map { target ->
                 val distractors = repository.getDistractorsForWord(target, count = 3)
                 val targetLabel = "${target.translationUk} · ${target.translationEn}"
                 val distractorLabels = distractors.map { "${it.translationUk} · ${it.translationEn}" }
                 val options = (distractorLabels + targetLabel).distinct().shuffled()
-                val correctIdx = options.indexOf(targetLabel)
+                val correctIdx = options.indexOf(targetLabel).coerceAtLeast(0)
                 MultipleChoiceQ(
                     word = target,
                     prompt = target.displayWithArticle,
@@ -1301,6 +1371,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             )
         } else {
             _stage3Finished.value = true
+            recordDailyStudyActivity()
             viewModelScope.launch {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1320,7 +1391,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 4: ARTIKEL TRAINER ===
     // ==========================================
     fun startStage4(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val allSub = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15)
             val nouns = allSub.filter { it.article.lowercase().trim() in listOf("der", "die", "das") }
             val pool = nouns.ifEmpty {
@@ -1379,6 +1451,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             )
         } else {
             _stage4Finished.value = true
+            recordDailyStudyActivity()
             viewModelScope.launch {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1398,7 +1471,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 5: PLURAL TRAINER (МНОЖИНА) ===
     // ==========================================
     fun startStage5Plural(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val allSub = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15)
             val pluralNouns = allSub.filter { isPluralizableNoun(it) }.shuffled()
             val questions = pluralNouns.map { word ->
@@ -1465,6 +1539,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             )
         } else {
             _stage5PluralFinished.value = true
+            recordDailyStudyActivity()
             viewModelScope.launch {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1484,20 +1559,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 6: FILL IN THE BLANK ===
     // ==========================================
     fun startStage5(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12)
-                .filter { it.exampleDe.isNotBlank() }
                 .shuffled()
-            val questions = words.map { target ->
-                val blankSentence = target.exampleDe.replace(
-                    Regex(Regex.escape(target.german), RegexOption.IGNORE_CASE),
-                    "_________"
-                )
+            val questions = words.mapNotNull { target ->
+                val blankMatch = buildFillBlankMatch(target) ?: return@mapNotNull null
                 val distractors = repository.getDistractorsForWord(target, count = 3).map { it.german }
                 val options = (distractors + target.german).distinct().shuffled()
                 FillBlankQ(
                     word = target,
-                    sentenceWithBlank = blankSentence,
+                    sentenceWithBlank = blankMatch.sentenceWithBlank,
+                    matchedToken = blankMatch.matchedToken,
                     translation = target.exampleUk,
                     options = options,
                     correctOption = target.german
@@ -1550,6 +1623,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _stage5SelectedOption.value = null
         } else {
             _stage5Finished.value = true
+            recordDailyStudyActivity()
             viewModelScope.launch {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1569,7 +1643,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 7: SPELLING & WRITING (WITH ARTICLE) ===
     // ==========================================
     fun startStage6(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12).shuffled()
             _stage6Words.value = words
             _stage6Index.value = 0
@@ -1579,6 +1654,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _lastCompletedUnlockedSrs.value = false
             prepareStage6Word(0)
             navigateToStage(Screen.Stage7Spelling(subtopicId))
+            if (words.isEmpty()) {
+                val unlocked = repository.completeStage(
+                    subtopicId = subtopicId,
+                    stage = 7,
+                    score = 0,
+                    enabledStages = _enabledStages.value,
+                    level = _selectedLevel.value,
+                    achieved100Percent = true
+                )
+                _lastCompletedUnlockedSrs.value = unlocked
+                refreshReviewDashboard()
+            }
         }
     }
 
@@ -1851,6 +1938,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             prepareStage6Word(nextIdx)
         } else {
             _stage6Finished.value = true
+            recordDailyStudyActivity()
             viewModelScope.launch {
                 val unlocked = repository.completeStage(
                     subtopicId = subtopicId,
@@ -1870,7 +1958,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === STAGE 8: FINAL MIX (GESAMTTEST — ALL STAGES COMBINED) ===
     // ==========================================
     fun startStage8FinalMix(subtopicId: String) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 15).shuffled()
             val activeStages = (_enabledStages.value intersect setOf(2, 3, 4, 5, 6, 7))
                 .ifEmpty { setOf(2, 3, 4, 5, 6, 7) }
@@ -1933,7 +2022,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // === MIXED-STAGE SPACED REPETITION REVIEW ===
     // ==========================================
     fun startMixedReviewSession(earlyPractice: Boolean = false) {
-        viewModelScope.launch {
+        stageLaunchJob?.cancel()
+        stageLaunchJob = viewModelScope.launch {
             val doneToday = loadReviewsDoneToday()
             _reviewsDoneToday.value = doneToday
             val remainingToday = (_dailyReviewLimit.value - doneToday).coerceAtLeast(0)
@@ -1995,8 +2085,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             1 -> MixedReviewItem.FlashcardReview(word = word, srsStep = srsStep)
             2 -> {
                 val distractors = repository.getDistractorsForWord(word, count = 3)
-                val targetLabel = "${word.displayWithArticle} (${word.translationUk})"
-                val options = (distractors.map { "${it.displayWithArticle} (${it.translationUk})" } + targetLabel)
+                val targetLabel = word.translationUk.trim()
+                val options = (distractors.map { it.translationUk.trim() }.filter { it.isNotBlank() } + targetLabel)
                     .distinct()
                     .shuffled()
                 MixedReviewItem.ListeningReview(
@@ -2031,20 +2121,32 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 correctPlural = word.plural.trim()
             )
             6 -> {
-                val blankSentence = word.exampleDe.replace(
-                    Regex(Regex.escape(word.german), RegexOption.IGNORE_CASE),
-                    "_________"
-                )
-                val distractors = repository.getDistractorsForWord(word, count = 3).map { it.german }
-                val options = (distractors + word.german).distinct().shuffled()
-                MixedReviewItem.FillBlankReview(
-                    word = word,
-                    srsStep = srsStep,
-                    sentenceWithBlank = blankSentence,
-                    translation = word.exampleUk,
-                    options = options,
-                    correctOption = word.german
-                )
+                val blankMatch = buildFillBlankMatch(word)
+                if (blankMatch != null) {
+                    val distractors = repository.getDistractorsForWord(word, count = 3).map { it.german }
+                    val options = (distractors + word.german).distinct().shuffled()
+                    MixedReviewItem.FillBlankReview(
+                        word = word,
+                        srsStep = srsStep,
+                        sentenceWithBlank = blankMatch.sentenceWithBlank,
+                        matchedToken = blankMatch.matchedToken,
+                        translation = word.exampleUk,
+                        options = options,
+                        correctOption = word.german
+                    )
+                } else {
+                    val distractors = repository.getDistractorsForWord(word, count = 3)
+                    val targetLabel = "${word.translationUk} · ${word.translationEn}"
+                    val options = (distractors.map { "${it.translationUk} · ${it.translationEn}" } + targetLabel)
+                        .distinct()
+                        .shuffled()
+                    MixedReviewItem.MultipleChoiceReview(
+                        word = word,
+                        srsStep = srsStep,
+                        options = options,
+                        correctIndex = options.indexOf(targetLabel).coerceAtLeast(0)
+                    )
+                }
             }
             else -> {
                 val targetLetters = word.german.trim().filter { it != ' ' && it != '-' }.toList()
@@ -2107,6 +2209,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun recordMixedOutcome(item: MixedReviewItem, isCorrect: Boolean) {
+        recordDailyStudyActivity()
         val isFinalMixStage = _mixedSessionSubtopicId.value != null
         if (isFinalMixStage) {
             if (isCorrect) {
@@ -2479,6 +2582,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             )
         } else {
             _mixedReviewFinished.value = true
+            recordDailyStudyActivity()
             val finalMixSubId = _mixedSessionSubtopicId.value
             if (finalMixSubId != null) {
                 viewModelScope.launch {
@@ -2501,6 +2605,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     override fun onCleared() {
         super.onCleared()
+        stageLaunchJob?.cancel()
         offlineDownloadJob?.cancel()
         ttsManager.shutdown()
     }
@@ -2514,6 +2619,39 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
         internal fun nextEnabledStage(enabledStages: Set<Int>, afterStage: Int): Int? {
             return enabledStages.filter { it in 1..8 && it > afterStage }.minOrNull()
+        }
+
+        internal fun computeEffectiveUnlockedStage(
+            completedStages: Set<Int>,
+            visibleStages: List<Int>
+        ): Int {
+            val firstVisible = visibleStages.firstOrNull() ?: 1
+            if (completedStages.isEmpty()) return firstVisible
+            val maxDone = completedStages.maxOrNull() ?: 0
+            return visibleStages.firstOrNull { it > maxDone } ?: VocabularyRepository.TOTAL_STAGES
+        }
+
+        internal fun computeCurrentStreak(
+            savedStreak: Int,
+            lastActiveDate: String?,
+            today: String,
+            yesterday: String
+        ): Int {
+            if (savedStreak <= 0 || lastActiveDate.isNullOrBlank()) return 0
+            return if (lastActiveDate == today || lastActiveDate == yesterday) savedStreak else 0
+        }
+
+        internal fun computeUpdatedStreak(
+            savedStreak: Int,
+            lastActiveDate: String?,
+            today: String,
+            yesterday: String
+        ): Int {
+            return when {
+                lastActiveDate == today -> savedStreak.coerceAtLeast(1)
+                lastActiveDate == yesterday -> savedStreak.coerceAtLeast(0) + 1
+                else -> 1
+            }
         }
 
         internal fun isPluralizableNoun(word: WordEntity): Boolean {
@@ -2664,13 +2802,122 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         internal fun computeKeyboardHintWithArticle(current: String, word: WordEntity): String {
             val fullTarget = spellingTargetFor(word)
             if (requiresArticleInSpelling(word)) {
-                val expectedPrefix = "${word.article.lowercase().trim()} "
-                val normalized = current.trimStart()
-                if (!normalized.startsWith(expectedPrefix, ignoreCase = true)) {
+                val expectedArticle = word.article.lowercase().trim()
+                val expectedPrefix = "$expectedArticle "
+                val normalized = normalizeSpellingSpaces(current)
+
+                if (normalized.isEmpty()) {
                     return expectedPrefix
                 }
+
+                // Already equals the right article (e.g. "die" or "die ") -> reveal first letter of the noun
+                if (normalized.equals(expectedArticle, ignoreCase = true)) {
+                    return computeNextHintInput(expectedPrefix, fullTarget)
+                }
+
+                // Already starts with the right article -> reveal next letter of the word
+                if (normalized.startsWith(expectedPrefix, ignoreCase = true)) {
+                    return computeNextHintInput(normalized, fullTarget)
+                }
+
+                // If user typed a wrong article followed by a word (e.g. "die Apfel"),
+                // replace ONLY the article and preserve the typed word!
+                val firstSpace = normalized.indexOf(' ')
+                if (firstSpace > 0) {
+                    val firstToken = normalized.substring(0, firstSpace).lowercase()
+                    val remainder = normalized.substring(firstSpace + 1).trim()
+                    if (firstToken in listOf("der", "die", "das")) {
+                        return if (remainder.isNotEmpty()) {
+                            "$expectedArticle $remainder"
+                        } else {
+                            expectedPrefix
+                        }
+                    }
+                    // Multi-word input without any article -> prepend the correct article
+                    return "$expectedArticle $normalized"
+                }
+
+                // Single token: if it's a wrong article or partial article ("d", "de", "da", "der", "die", "das"), replace with correct article
+                val low = normalized.lowercase()
+                if (low in listOf("der", "die", "das", "d", "de", "da")) {
+                    return expectedPrefix
+                }
+
+                // User typed the noun without an article (e.g. "Apfel" or "Apf") -> prepend the correct article and keep their word
+                return "$expectedArticle $normalized"
             }
             return computeNextHintInput(normalizeSpellingSpaces(current), fullTarget)
+        }
+
+        /**
+         * Builds a guaranteed-valid fill-in-the-blank sentence for Stage 6 / Final Mix / Mixed Review.
+         * Uses whole-word German letter boundaries so substrings like "Ei" inside "Ein" are never masked,
+         * and returns null if the example sentence does not actually contain the target word (or its clear inflection).
+         */
+        internal fun buildFillBlankMatch(word: WordEntity): FillBlankMatch? {
+            val example = word.exampleDe.trim()
+            val target = word.german.trim()
+            if (example.isEmpty() || target.isEmpty()) return null
+
+            val leftBoundary = "(?<![A-Za-zÄÖÜäöüß])"
+            val rightBoundary = "(?![A-Za-zÄÖÜäöüß])"
+
+            // 1. Exact whole-word match (case-insensitive)
+            val exactRegex = Regex("$leftBoundary${Regex.escape(target)}$rightBoundary", RegexOption.IGNORE_CASE)
+            exactRegex.find(example)?.let { match ->
+                val blanked = example.replaceRange(match.range, "_________")
+                if (blanked.contains("_________")) {
+                    return FillBlankMatch(sentenceWithBlank = blanked, matchedToken = match.value)
+                }
+            }
+
+            // 2. Exact plural noun match (e.g., Zahn -> Zähne, Hand -> Hände, Glocke -> Glocken)
+            val rawPlural = word.plural.trim()
+            if (rawPlural.startsWith("die ", ignoreCase = true) && rawPlural.length > 4) {
+                val pluralForm = rawPlural.substring(4).trim()
+                if (pluralForm.isNotEmpty() && !pluralForm.contains(" ")) {
+                    val pluralRegex = Regex("$leftBoundary${Regex.escape(pluralForm)}$rightBoundary", RegexOption.IGNORE_CASE)
+                    pluralRegex.find(example)?.let { match ->
+                        val blanked = example.replaceRange(match.range, "_________")
+                        if (blanked.contains("_________")) {
+                            return FillBlankMatch(sentenceWithBlank = blanked, matchedToken = match.value)
+                        }
+                    }
+                }
+            }
+
+            // 3. Simple German inflection (noun/adjective ending -e/-en/-er/-es/-em/-n/-s on stems >= 3 chars, or verb conjugation)
+            if (!target.contains(" ") && target.length >= 3) {
+                val inflectedRegex = Regex(
+                    "$leftBoundary${Regex.escape(target)}(?:e|en|er|es|em|n|s)$rightBoundary",
+                    RegexOption.IGNORE_CASE
+                )
+                inflectedRegex.find(example)?.let { match ->
+                    val blanked = example.replaceRange(match.range, "_________")
+                    if (blanked.contains("_________")) {
+                        return FillBlankMatch(sentenceWithBlank = blanked, matchedToken = match.value)
+                    }
+                }
+
+                // Regular verb conjugation (e.g. gehen -> gehe/geht/ging, sprechen -> spreche, kaufen -> kaufe)
+                if (word.article.isBlank() && target.length >= 4 && target.endsWith("en")) {
+                    val stem = target.dropLast(2)
+                    if (stem.length >= 3) {
+                        val verbRegex = Regex(
+                            "$leftBoundary${Regex.escape(stem)}(?:e|st|t|en|te|ten|test|tet|est|et)$rightBoundary",
+                            RegexOption.IGNORE_CASE
+                        )
+                        verbRegex.find(example)?.let { match ->
+                            val blanked = example.replaceRange(match.range, "_________")
+                            if (blanked.contains("_________")) {
+                                return FillBlankMatch(sentenceWithBlank = blanked, matchedToken = match.value)
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null
         }
 
         /**
@@ -2688,10 +2935,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (3 in enabledPracticeStages) eligible.add(3)
             if (4 in enabledPracticeStages && requiresArticleInSpelling(word)) eligible.add(4)
             if (5 in enabledPracticeStages && isPluralizableNoun(word)) eligible.add(5)
-            if (6 in enabledPracticeStages &&
-                word.exampleDe.isNotBlank() &&
-                word.exampleDe.contains(word.german, ignoreCase = true)
-            ) {
+            if (6 in enabledPracticeStages && buildFillBlankMatch(word) != null) {
                 eligible.add(6)
             }
             if (7 in enabledPracticeStages && word.german.trim().length in 2..24) eligible.add(7)
@@ -2718,10 +2962,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             if (5 in enabledStages && isPluralizableNoun(word)) {
                 eligible.add(5)
             }
-            if (6 in enabledStages &&
-                word.exampleDe.isNotBlank() &&
-                word.exampleDe.contains(word.german, ignoreCase = true)
-            ) {
+            if (6 in enabledStages && buildFillBlankMatch(word) != null) {
                 eligible.add(6)
             }
             if (7 in enabledStages && word.german.trim().length in 2..24) {

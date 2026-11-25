@@ -201,7 +201,9 @@ fun SubtopicsListScreen(
 
             items(mainTopic.subtopics, key = { it.id }) { subtopic ->
                 val progress = allProgress.firstOrNull { it.subtopicId == subtopic.id }
-                val completedStages = progress?.completedStages ?: 0
+                val completedStages = remember(allProgress, selectedLevel, subtopic.id) {
+                    viewModel.getCompletedStageSetForSubtopic(subtopic.id).size
+                }
                 val stars = progress?.stars ?: 0
                 val wordsCount = countMap.first[subtopic.id] ?: countMap.second[subtopic.id] ?: 12
 

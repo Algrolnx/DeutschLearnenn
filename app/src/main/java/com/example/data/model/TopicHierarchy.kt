@@ -95,7 +95,7 @@ object TopicCatalog {
             containerColor = Color(0xFFF3E8FF),
             subtopics = listOf(
                 Subtopic("people_family", "people", "Familie & Verwandte", "Сім'я та родичі", "Family Members", "Mutter, Vater, Schwester, Bruder, Kind, Oma, Opa, Tante", "family", "A1"),
-                Subtopic("people_appearance", "people", "Kleidung & Stil", "Одяг та стиль", "Clothing & Style", "Hemd, Hose, Kleid, Rock, Jacke, Mantel, Schuhe, Pullover", "clothes", "A1"),
+                Subtopic("people_appearance", "people", "Aussehen & Stil", "Зовнішність та стиль", "Appearance & Style", "Hemd, Hose, Kleid, Augenfarbe, Haarfarbe, Größe, Stil", "clothes", "A1"),
                 Subtopic("people_character", "people", "Charakter & Wesen", "Характер та риси", "Character Traits", "Charakter, Ehrlichkeit, Höflichkeit, Humor, Freundlichkeit, Mut", "personality", "A2"),
                 Subtopic("people_relationships", "people", "Freunde & Beziehungen", "Друзі та стосунки", "Relationships", "Bester Freund, Partner, Kollege, Nachbar, Vertrauen", "social", "A2"),
                 Subtopic("people_emotions", "people", "Gefühle & Bindung", "Почуття та емоції", "Feelings & Bonding", "Liebe, Zuneigung, Freude, Treue, Mitgefühl, Herzlichkeit", "heart", "A2")

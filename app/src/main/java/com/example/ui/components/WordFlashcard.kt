@@ -24,10 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FlipCameraAndroid
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -322,7 +322,7 @@ fun WordFlashcard(
                                             if (onSpeakPlural != null) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Icon(
-                                                    imageVector = Icons.Default.VolumeUp,
+                                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                                     contentDescription = "Вимовити множину",
                                                     tint = extended.warningYellow,
                                                     modifier = Modifier.size(15.dp)
@@ -511,7 +511,7 @@ fun WordFlashcard(
                                     .background(extended.subtleFill)
                             ) {
                                 Icon(
-                                    Icons.Default.VolumeUp,
+                                    Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = "Вимовити слово",
                                     tint = genderAccent,
                                     modifier = Modifier.size(20.dp)
@@ -650,7 +650,7 @@ fun WordFlashcard(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.VolumeUp,
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                             contentDescription = "Прослухати приклад",
                                             tint = genderAccent,
                                             modifier = Modifier.size(18.dp)

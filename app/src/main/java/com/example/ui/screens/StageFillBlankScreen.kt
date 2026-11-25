@@ -45,9 +45,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -212,10 +218,22 @@ fun StageFillBlankScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            val displaySentence = if (selectedOption != null) {
-                                currentQ.word.exampleDe
-                            } else {
-                                currentQ.sentenceWithBlank
+                            val primaryColor = MaterialTheme.colorScheme.primary
+                            val displaySentence = remember(
+                                selectedOption,
+                                currentQ.sentenceWithBlank,
+                                currentQ.word.exampleDe,
+                                currentQ.matchedToken,
+                                primaryColor
+                            ) {
+                                buildFillBlankAnnotatedSentence(
+                                    sentenceWithBlank = currentQ.sentenceWithBlank,
+                                    fullSentence = currentQ.word.exampleDe,
+                                    matchedToken = currentQ.matchedToken,
+                                    isAnswered = selectedOption != null,
+                                    blankColor = primaryColor,
+                                    filledColor = SuccessGreen
+                                )
                             }
 
                             Text(
@@ -343,3 +361,61 @@ fun StageFillBlankScreen(
         }
     }
 }
+
+internal fun buildFillBlankAnnotatedSentence(
+    sentenceWithBlank: String,
+    fullSentence: String,
+    matchedToken: String,
+    isAnswered: Boolean,
+    blankColor: Color,
+    filledColor: Color
+): AnnotatedString = buildAnnotatedString {
+    if (!isAnswered) {
+        val blankMarker = "_________"
+        val blankIndex = sentenceWithBlank.indexOf(blankMarker)
+        if (blankIndex >= 0) {
+            append(sentenceWithBlank.substring(0, blankIndex))
+            withStyle(
+                SpanStyle(
+                    color = blankColor,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            ) {
+                append(blankMarker)
+            }
+            append(sentenceWithBlank.substring(blankIndex + blankMarker.length))
+        } else {
+            append(sentenceWithBlank)
+        }
+    } else {
+        val token = matchedToken.trim()
+        val matchRange = if (token.isNotEmpty()) {
+            val pattern = Regex(
+                "(?<![A-Za-zÄÖÜäöüß])${Regex.escape(token)}(?![A-Za-zÄÖÜäöüß])",
+                RegexOption.IGNORE_CASE
+            )
+            pattern.find(fullSentence)?.range ?: run {
+                val idx = fullSentence.indexOf(token, ignoreCase = true)
+                if (idx >= 0) idx until (idx + token.length) else null
+            }
+        } else {
+            null
+        }
+        if (matchRange != null) {
+            append(fullSentence.substring(0, matchRange.first))
+            withStyle(
+                SpanStyle(
+                    color = filledColor,
+                    fontWeight = FontWeight.ExtraBold,
+                    textDecoration = TextDecoration.Underline
+                )
+            ) {
+                append(fullSentence.substring(matchRange.first, matchRange.last + 1))
+            }
+            append(fullSentence.substring(matchRange.last + 1))
+        } else {
+            append(fullSentence)
+        }
+    }
+}
+

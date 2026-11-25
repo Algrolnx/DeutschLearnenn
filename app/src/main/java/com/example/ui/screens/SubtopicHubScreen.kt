@@ -115,8 +115,9 @@ fun SubtopicHubScreen(
     }
 
     val visibleStages = remember(enabledStages) { enabledStages.sorted() }
-    val firstEnabledStage = visibleStages.firstOrNull() ?: 1
-    val effectiveUnlockedStage = maxOf(progress.unlockedStage, firstEnabledStage)
+    val effectiveUnlockedStage = remember(completedStageSet, visibleStages) {
+        LearningViewModel.computeEffectiveUnlockedStage(completedStageSet, visibleStages)
+    }
     val nextStage = visibleStages.firstOrNull { it !in completedStageSet && it <= effectiveUnlockedStage }
         ?: visibleStages.firstOrNull { it >= effectiveUnlockedStage }
         ?: visibleStages.lastOrNull()

@@ -130,7 +130,7 @@ class VocabularyRepository(
     suspend fun initializePrepopulatedDataIfNeeded() = withContext(Dispatchers.IO) {
         val count = wordDao.getWordCount()
         val prefs = appContext?.getSharedPreferences("deutschlern_prefs", Context.MODE_PRIVATE)
-        val seededCount = prefs?.getInt("vocab_seeded_v6_6000", -1) ?: -1
+        val seededCount = prefs?.getInt(SEEDED_VOCAB_PREF_KEY, -1) ?: -1
         if (count >= 6000 && count >= seededCount && seededCount > 0) {
             return@withContext
         }
@@ -159,16 +159,16 @@ class VocabularyRepository(
             }
         }
 
-        // Preserve any custom user-imported words that aren't in the base dataset
+        // Preserve any custom user-imported words (id > 6000) that aren't in the base dataset
         val baseKeys = initialWords.mapTo(HashSet()) { it.german.lowercase() }
         var nextCustomId = (merged.maxOfOrNull { it.id } ?: 6000) + 1
         val customExtras = currentByGerman.values
-            .filter { it.german.lowercase() !in baseKeys }
+            .filter { it.id > 6000 && it.german.lowercase() !in baseKeys }
             .map { it.copy(id = nextCustomId++) }
 
         val fullList = merged + customExtras
         wordDao.replaceAllWords(fullList)
-        prefs?.edit()?.putInt("vocab_seeded_v6_6000", fullList.size)?.apply()
+        prefs?.edit()?.putInt(SEEDED_VOCAB_PREF_KEY, fullList.size)?.apply()
     }
 
     suspend fun exportWordsAsJson(): String = withContext(Dispatchers.IO) {
@@ -368,7 +368,7 @@ class VocabularyRepository(
         toInsert.chunked(500).forEach { wordDao.insertAll(it) }
         val newTotal = wordDao.getWordCount()
         appContext?.getSharedPreferences("deutschlern_prefs", Context.MODE_PRIVATE)
-            ?.edit()?.putInt("vocab_seeded_v6_6000", newTotal)?.apply()
+            ?.edit()?.putInt(SEEDED_VOCAB_PREF_KEY, newTotal)?.apply()
 
         ImportSummary(imported, updated, skipped)
     }
@@ -441,6 +441,11 @@ class VocabularyRepository(
     private fun stageSetKey(subtopicId: String, level: String): String =
         "stages_${subtopicId}_${level.uppercase()}"
 
+    private fun hasAnyPerLevelStageKey(subtopicId: String): Boolean {
+        val prefix = "stages_${subtopicId}_"
+        return subtopicStagesPrefs?.all?.keys?.any { it.startsWith(prefix) } == true
+    }
+
     fun getCompletedStageSet(
         subtopicId: String,
         level: String,
@@ -452,6 +457,11 @@ class VocabularyRepository(
                 .mapNotNull { it.trim().toIntOrNull() }
                 .filter { it in 1..TOTAL_STAGES }
                 .toSet()
+        }
+        // Only apply legacy cross-level Room fallback to A1 when no per-level keys exist yet
+        // so completing stages in A1 never leaks into A2 / B1 / B2.
+        if (!level.equals("A1", ignoreCase = true) || hasAnyPerLevelStageKey(subtopicId)) {
+            return emptySet()
         }
         val legacyCount = fallbackProgress?.completedStages ?: 0
         return if (legacyCount >= TOTAL_STAGES) {
@@ -562,15 +572,18 @@ class VocabularyRepository(
 
     suspend fun resetAllProgress() = withContext(Dispatchers.IO) {
         val initialWords = InitialVocabulary.getInitialWords(appContext)
-        wordDao.deleteAllWords()
-        initialWords.chunked(500).forEach { chunk ->
-            wordDao.insertAll(chunk)
+        if (initialWords.isNotEmpty()) {
+            wordDao.replaceAllWords(initialWords)
+        } else {
+            wordDao.deleteAllWords()
         }
+        wordDao.deleteAllSubtopicProgress()
         srsPrefs?.edit()?.clear()?.apply()
         subtopicStagesPrefs?.edit()?.clear()?.apply()
     }
 
     companion object {
+        private const val SEEDED_VOCAB_PREF_KEY = "vocab_seeded_v8_6000"
         const val TOTAL_STAGES: Int = 8
         val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7, 8)
 

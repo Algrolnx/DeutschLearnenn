@@ -22,11 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,7 +54,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import com.example.ui.LearningViewModel
+import com.example.ui.components.GenderBadge
 import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.LocalAppExtendedColors
 import com.example.ui.theme.LoraFontFamily
@@ -210,7 +214,7 @@ fun StageListeningScreen(
                                 Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Прослухайте та оберіть правильне слово:",
+                                    text = "Прослухайте та оберіть правильний переклад:",
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -227,7 +231,7 @@ fun StageListeningScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.VolumeUp,
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = "Прослухати",
                                     tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(38.dp)
@@ -248,6 +252,53 @@ fun StageListeningScreen(
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
                                     Text("Повільно (0.75x)", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+                            if (selectedAnswer != null) {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = extended.subtleFill,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("stage2_revealed_german")
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            if (currentQ.word.article.isNotBlank()) {
+                                                GenderBadge(article = currentQ.word.article)
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                            }
+                                            Text(
+                                                text = currentQ.word.german,
+                                                fontFamily = LoraFontFamily,
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                        if (currentQ.word.transcription.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = currentQ.word.transcription,
+                                                fontFamily = MonoFontFamily,
+                                                fontStyle = FontStyle.Italic,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

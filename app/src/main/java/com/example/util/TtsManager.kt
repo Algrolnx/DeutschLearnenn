@@ -39,6 +39,7 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -92,6 +93,7 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
 
     private val cacheDir = File(context.applicationContext.cacheDir, "tts_hd").apply { mkdirs() }
     private val cachedAudioKeys = ConcurrentHashMap<String, Boolean>()
+    private val tempFileSeq = AtomicLong(0L)
 
     private var tts: TextToSpeech? = try {
         TextToSpeech(context.applicationContext, this)
@@ -322,7 +324,7 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
             return@withContext targetFile
         }
 
-        val tempFile = File(cacheDir, "$key.${Thread.currentThread().id}.tmp")
+        val tempFile = File(cacheDir, "$key.${tempFileSeq.incrementAndGet()}.tmp")
         try {
             val encoded = URLEncoder.encode(text, "UTF-8")
             val url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=de&client=tw-ob&q=$encoded"
@@ -338,9 +340,23 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
                 if (!resp.isSuccessful) return@withContext null
                 val bytes = resp.body?.bytes() ?: return@withContext null
                 if (bytes.size < 512) return@withContext null
+                if (targetFile.exists() && targetFile.length() > 512L) {
+                    cachedAudioKeys[key] = true
+                    return@withContext targetFile
+                }
                 tempFile.writeBytes(bytes)
-                if (targetFile.exists()) targetFile.delete()
-                val saved = if (tempFile.renameTo(targetFile)) targetFile else tempFile
+                val saved = when {
+                    tempFile.renameTo(targetFile) -> targetFile
+                    targetFile.exists() && targetFile.length() > 512L -> {
+                        tempFile.delete()
+                        targetFile
+                    }
+                    else -> {
+                        tempFile.copyTo(targetFile, overwrite = true)
+                        tempFile.delete()
+                        targetFile
+                    }
+                }
                 cachedAudioKeys[key] = true
                 saved
             }
