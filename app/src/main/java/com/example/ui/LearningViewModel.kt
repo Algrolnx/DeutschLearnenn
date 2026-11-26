@@ -95,8 +95,13 @@ enum class FillBlankInputMode {
 
 data class ReviewDashboardState(
     val dueCount: Int = 0,
+    val dueLaterTodayCount: Int = 0,
+    val nextBatchCount: Int = 0,
     val enrolledCount: Int = 0,
+    val reviewedInCycleCount: Int = 0,
     val mastered16Count: Int = 0,
+    val totalCycleStepsDone: Int = 0,
+    val totalCycleStepsTarget: Int = 0,
     val nextReviewTimestamp: Long? = null,
     val reviewsDoneToday: Int = 0,
     val dailyLimit: Int = LearningViewModel.DEFAULT_DAILY_REVIEW_LIMIT,
@@ -104,7 +109,18 @@ data class ReviewDashboardState(
 ) {
     val remainingDailyQuota: Int get() = (dailyLimit - reviewsDoneToday).coerceAtLeast(0)
     val availableTodayCount: Int get() = minOf(dueCount, remainingDailyQuota)
-    val deferredToTomorrowCount: Int get() = (dueCount - remainingDailyQuota).coerceAtLeast(0)
+    val remainingScheduledTodayCount: Int get() = minOf(dueCount + dueLaterTodayCount, remainingDailyQuota)
+    val todayPlanTotal: Int get() = minOf(reviewsDoneToday + dueCount + dueLaterTodayCount, dailyLimit)
+    val deferredToTomorrowCount: Int get() = ((dueCount + dueLaterTodayCount) - remainingDailyQuota).coerceAtLeast(0)
+    val isDailyLimitCapped: Boolean get() = remainingDailyQuota == 0 && (dueCount + dueLaterTodayCount) > 0
+    val isTodayPlanComplete: Boolean get() = enrolledCount > 0 && remainingScheduledTodayCount == 0
+    val remainingUnreviewedCount: Int get() = (enrolledCount - reviewedInCycleCount).coerceAtLeast(0)
+    val cycleProgressFraction: Float
+        get() = if (totalCycleStepsTarget > 0) {
+            (totalCycleStepsDone.toFloat() / totalCycleStepsTarget).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
 }
 
 sealed class MixedReviewItem {
@@ -898,8 +914,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             val snap = repository.getReviewDashboardSnapshot()
             _reviewDashboard.value = ReviewDashboardState(
                 dueCount = snap.dueCount,
+                dueLaterTodayCount = snap.dueLaterTodayCount,
+                nextBatchCount = snap.nextBatchCount,
                 enrolledCount = snap.enrolledCount,
+                reviewedInCycleCount = snap.reviewedInCycleCount,
                 mastered16Count = snap.mastered16Count,
+                totalCycleStepsDone = snap.totalCycleStepsDone,
+                totalCycleStepsTarget = snap.totalCycleStepsTarget,
                 nextReviewTimestamp = snap.nextReviewTimestamp,
                 reviewsDoneToday = doneToday,
                 dailyLimit = _dailyReviewLimit.value,
@@ -2272,7 +2293,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // ==========================================
     // === MIXED-STAGE SPACED REPETITION REVIEW ===
     // ==========================================
-    fun startMixedReviewSession(earlyPractice: Boolean = false) {
+    fun startMixedReviewSession() {
         stageLaunchJob?.cancel()
         stageLaunchJob = viewModelScope.launch {
             val doneToday = loadReviewsDoneToday()
@@ -2283,12 +2304,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 return@launch
             }
 
-            val roundCap = if (earlyPractice) minOf(10, remainingToday) else minOf(MIXED_ROUND_SIZE, remainingToday)
-            val rawWords = if (earlyPractice) {
-                repository.getEarlyWordsForMixedReview(roundCap)
-            } else {
-                repository.getDueWordsForMixedReview(limit = roundCap)
-            }
+            val roundCap = minOf(MIXED_ROUND_SIZE, remainingToday)
+            val rawWords = repository.getDueWordsForMixedReview(limit = roundCap)
             if (rawWords.isEmpty()) {
                 refreshReviewDashboard()
                 return@launch
@@ -2312,7 +2329,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _mixedReviewIndex.value = 0
             _mixedReviewScore.value = 0
             _mixedReviewFinished.value = false
-            _mixedReviewIsEarlyPractice.value = earlyPractice
+            _mixedReviewIsEarlyPractice.value = false
             resetMixedItemState()
             stockPhotoRepository.prefetchWordsAsync(
                 builtItems.filter {
@@ -2526,6 +2543,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     else -> "Слово додано в кінець цієї сесії · наступний раз $intervalText"
                 }
             }
+            refreshReviewDashboard()
         }
     }
 

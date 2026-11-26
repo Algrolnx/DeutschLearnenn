@@ -11,6 +11,8 @@ import com.example.data.model.WordEntity
 import com.example.util.ReviewRating
 import com.example.util.SpacedRepetition
 import com.example.util.SrsStepResult
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -26,8 +28,13 @@ data class ImportSummary(
 
 data class ReviewDashboardSnapshot(
     val dueCount: Int = 0,
+    val dueLaterTodayCount: Int = 0,
+    val nextBatchCount: Int = 0,
     val enrolledCount: Int = 0,
+    val reviewedInCycleCount: Int = 0,
     val mastered16Count: Int = 0,
+    val totalCycleStepsDone: Int = 0,
+    val totalCycleStepsTarget: Int = 0,
     val nextReviewTimestamp: Long? = null
 )
 
@@ -400,13 +407,64 @@ class VocabularyRepository(
 
     suspend fun getReviewDashboardSnapshot(now: Long = System.currentTimeMillis()): ReviewDashboardSnapshot =
         withContext(Dispatchers.IO) {
+            val enrolledWords = wordDao.getEnrolledWordsOnce()
+            val endOfToday = endOfLocalDayTimestamp(now)
+            var dueNowCount = 0
+            var dueLaterTodayCount = 0
+            var reviewedInCycleCount = 0
+            var mastered16Count = 0
+            var totalStepsDone = 0
+            var nextReviewTs: Long? = null
+
+            for (word in enrolledWords) {
+                val step = getWordSrsStep(word)
+                totalStepsDone += step
+                if (step >= 1) reviewedInCycleCount++
+                if (step >= SpacedRepetition.TARGET_REPETITIONS) mastered16Count++
+
+                val ts = word.nextReviewTimestamp
+                if (ts <= now) {
+                    dueNowCount++
+                } else {
+                    if (ts <= endOfToday) {
+                        dueLaterTodayCount++
+                    }
+                    if (nextReviewTs == null || ts < nextReviewTs) {
+                        nextReviewTs = ts
+                    }
+                }
+            }
+
+            val nextBatchCount = if (nextReviewTs != null) {
+                val batchWindowEnd = nextReviewTs + TimeUnit.MINUTES.toMillis(15L)
+                enrolledWords.count { it.nextReviewTimestamp in nextReviewTs..batchWindowEnd }
+            } else {
+                0
+            }
+
+            val enrolledCount = enrolledWords.size
             ReviewDashboardSnapshot(
-                dueCount = wordDao.countDueEnrolledWords(now),
-                enrolledCount = wordDao.countEnrolledWords(),
-                mastered16Count = countMastered16StepWords(),
-                nextReviewTimestamp = wordDao.getNextUpcomingReviewTimestamp(now)
+                dueCount = dueNowCount,
+                dueLaterTodayCount = dueLaterTodayCount,
+                nextBatchCount = nextBatchCount,
+                enrolledCount = enrolledCount,
+                reviewedInCycleCount = reviewedInCycleCount,
+                mastered16Count = mastered16Count,
+                totalCycleStepsDone = totalStepsDone,
+                totalCycleStepsTarget = enrolledCount * SpacedRepetition.TARGET_REPETITIONS,
+                nextReviewTimestamp = nextReviewTs
             )
         }
+
+    private fun endOfLocalDayTimestamp(now: Long): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
 
     suspend fun getDueWordsForMixedReview(
         now: Long = System.currentTimeMillis(),

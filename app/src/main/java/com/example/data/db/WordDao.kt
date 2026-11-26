@@ -71,6 +71,9 @@ interface WordDao {
     @Query("SELECT COUNT(*) FROM words WHERE nextReviewTimestamp > 0")
     suspend fun countEnrolledWords(): Int
 
+    @Query("SELECT * FROM words WHERE nextReviewTimestamp > 0")
+    suspend fun getEnrolledWordsOnce(): List<WordEntity>
+
     @Query("SELECT COUNT(*) FROM words WHERE nextReviewTimestamp > 0")
     fun observeEnrolledWordCount(): Flow<Int>
 

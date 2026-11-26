@@ -463,17 +463,46 @@ class ExampleUnitTest {
         assertEquals(12L, mistake.intervalHours)
         assertFalse(mistake.isMastered)
 
-        // Daily anti-overload quota calculation
+        // Daily anti-overload quota & cycle progress calculation (overload case: 135 due, capped at 60)
         val dashboard = ReviewDashboardState(
             dueCount = 135,
-            enrolledCount = 200,
-            mastered16Count = 12,
+            dueLaterTodayCount = 0,
+            enrolledCount = 22,
+            reviewedInCycleCount = 10,
+            mastered16Count = 2,
+            totalCycleStepsDone = 44,
+            totalCycleStepsTarget = 22 * 16,
             reviewsDoneToday = 15,
             dailyLimit = 60
         )
         assertEquals(45, dashboard.remainingDailyQuota)
         assertEquals(45, dashboard.availableTodayCount)
+        assertEquals(60, dashboard.todayPlanTotal)
         assertEquals(90, dashboard.deferredToTomorrowCount)
+        assertEquals(12, dashboard.remainingUnreviewedCount)
+        assertEquals(0.125f, dashboard.cycleProgressFraction, 0.001f)
+
+        // Realistic 22-word day (10 done + 12 scheduled later today): plan is 22, NOT 60!
+        val smallPlan = ReviewDashboardState(
+            dueCount = 0,
+            dueLaterTodayCount = 12,
+            enrolledCount = 22,
+            reviewedInCycleCount = 10,
+            reviewsDoneToday = 10,
+            dailyLimit = 60
+        )
+        assertEquals(22, smallPlan.todayPlanTotal)
+        assertEquals(12, smallPlan.remainingScheduledTodayCount)
+        assertEquals(0, smallPlan.deferredToTomorrowCount)
+        assertFalse(smallPlan.isDailyLimitCapped)
+        assertFalse(smallPlan.isTodayPlanComplete)
+
+        // After finishing all 22 scheduled words for today -> 22/22 complete!
+        val completedDay = smallPlan.copy(dueLaterTodayCount = 0, reviewedInCycleCount = 22, reviewsDoneToday = 22)
+        assertEquals(22, completedDay.todayPlanTotal)
+        assertEquals(0, completedDay.remainingScheduledTodayCount)
+        assertTrue(completedDay.isTodayPlanComplete)
+        assertFalse(completedDay.isDailyLimitCapped)
 
         // Enabled stage skipping (8-stage flow)
         val customStages = setOf(1, 3, 5, 8)

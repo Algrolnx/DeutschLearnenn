@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
@@ -76,12 +75,14 @@ fun ReviewTabContent(
         viewModel.refreshReviewDashboard()
     }
 
-    val dailyProgress = if (dashboard.dailyLimit > 0) {
-        (dashboard.reviewsDoneToday.toFloat() / dashboard.dailyLimit).coerceIn(0f, 1f)
+    val todayPlanTotal = dashboard.todayPlanTotal
+    val todayProgress = if (todayPlanTotal > 0) {
+        (dashboard.reviewsDoneToday.toFloat() / todayPlanTotal).coerceIn(0f, 1f)
     } else {
         0f
     }
-    val dailyGoalReached = dashboard.remainingDailyQuota <= 0
+    val dailyLimitCapped = dashboard.isDailyLimitCapped
+    val todayDone = dashboard.isTodayPlanComplete && !dailyLimitCapped
     val nextRoundCount = minOf(LearningViewModel.MIXED_ROUND_SIZE, dashboard.availableTodayCount)
 
     LazyColumn(
@@ -114,9 +115,12 @@ fun ReviewTabContent(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Інтервальний мікс усіх етапів без перевантаження",
+                    text = "Інтервальний мікс за розкладом · макс. ${dashboard.dailyLimit}/день",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { viewModel.openSettings() }
                 )
             }
         }
@@ -128,7 +132,7 @@ fun ReviewTabContent(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(
                     width = 1.dp,
-                    color = if (dashboard.availableTodayCount > 0 && !dailyGoalReached) {
+                    color = if (dashboard.availableTodayCount > 0 && !dailyLimitCapped) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                     } else {
                         extended.cardBorder
@@ -143,6 +147,12 @@ fun ReviewTabContent(
                         .fillMaxWidth()
                         .padding(20.dp)
                 ) {
+                    val nextTs = dashboard.nextReviewTimestamp
+                    val nextBatchLabel = if (dashboard.nextBatchCount > 0) {
+                        "${formatWordsCountUk(dashboard.nextBatchCount)} · "
+                    } else {
+                        ""
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -155,7 +165,7 @@ fun ReviewTabContent(
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(
                                         when {
-                                            dailyGoalReached -> SuccessGreen.copy(alpha = 0.14f)
+                                            dailyLimitCapped || todayDone -> SuccessGreen.copy(alpha = 0.14f)
                                             dashboard.availableTodayCount > 0 -> MaterialTheme.colorScheme.primaryContainer
                                             else -> extended.subtleFill
                                         }
@@ -164,13 +174,13 @@ fun ReviewTabContent(
                             ) {
                                 Icon(
                                     imageVector = when {
-                                        dailyGoalReached -> Icons.Default.CheckCircle
+                                        dailyLimitCapped || todayDone -> Icons.Default.CheckCircle
                                         dashboard.availableTodayCount > 0 -> Icons.Default.Shuffle
                                         else -> Icons.Default.Schedule
                                     },
                                     contentDescription = null,
                                     tint = when {
-                                        dailyGoalReached -> SuccessGreen
+                                        dailyLimitCapped || todayDone -> SuccessGreen
                                         dashboard.availableTodayCount > 0 -> MaterialTheme.colorScheme.primary
                                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     },
@@ -182,8 +192,9 @@ fun ReviewTabContent(
                                 Text(
                                     text = when {
                                         dashboard.enrolledCount == 0 -> "Ще немає слів у повторенні"
-                                        dailyGoalReached -> "Денну норму виконано!"
+                                        dailyLimitCapped -> "Денний ліміт виконано"
                                         dashboard.availableTodayCount > 0 -> "Готово до повторення: ${dashboard.availableTodayCount}"
+                                        todayDone -> "На сьогодні усе повторено!"
                                         else -> "На зараз усе повторено"
                                     },
                                     fontFamily = LoraFontFamily,
@@ -191,13 +202,12 @@ fun ReviewTabContent(
                                     fontSize = 18.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                val nextTs = dashboard.nextReviewTimestamp
                                 Text(
                                     text = when {
                                         dashboard.enrolledCount == 0 -> "Пройдіть усі 8 етапів першої підтеми на 100% — слова з'являться тут через 6 годин"
-                                        dailyGoalReached -> "Мозку потрібен час на закріплення. Нова порція завтра!"
+                                        dailyLimitCapped -> "Щоб не перевтомлюватись, решта слів спокійно чекатиме завтра (ліміт ${dashboard.dailyLimit}/день)"
                                         dashboard.availableTodayCount > 0 -> "Короткий раунд до $nextRoundCount слів у перемішку з різними етапами"
-                                        nextTs != null -> "Наступна порція: ${SpacedRepetition.formatTimeUntilUk(nextTs)}"
+                                        nextTs != null -> "Наступна порція: $nextBatchLabel${SpacedRepetition.formatTimeUntilUk(nextTs)}"
                                         else -> "Усі слова чекають свого інтервалу"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
@@ -207,38 +217,72 @@ fun ReviewTabContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Calm Daily Cap Progress
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Сьогодні повторено",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${dashboard.reviewsDoneToday} / ${dashboard.dailyLimit} слів",
-                            fontFamily = MonoFontFamily,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (dailyGoalReached) SuccessGreen else MaterialTheme.colorScheme.primary
+                    if (todayPlanTotal > 0) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Сьогодні за планом",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${dashboard.reviewsDoneToday} / $todayPlanTotal слів",
+                                fontFamily = MonoFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (todayDone || dailyLimitCapped) SuccessGreen else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { todayProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(7.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = if (todayDone || dailyLimitCapped) SuccessGreen else MaterialTheme.colorScheme.primary,
+                            trackColor = extended.subtleFill
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = { dailyProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(7.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = if (dailyGoalReached) SuccessGreen else MaterialTheme.colorScheme.primary,
-                        trackColor = extended.subtleFill
-                    )
+
+                    if (dashboard.enrolledCount > 0) {
+                        val cyclePercent = (dashboard.cycleProgressFraction * 100f).toInt()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Прогрес циклу (16 кроків)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${dashboard.totalCycleStepsDone} / ${dashboard.totalCycleStepsTarget} ($cyclePercent%)",
+                                fontFamily = MonoFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SuccessGreen
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { dashboard.cycleProgressFraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = SuccessGreen,
+                            trackColor = extended.subtleFill
+                        )
+                    }
 
                     if (dashboard.deferredToTomorrowCount > 0) {
                         Spacer(modifier = Modifier.height(10.dp))
@@ -248,7 +292,7 @@ fun ReviewTabContent(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "Щоб не перевантажувати пам'ять, ще ${dashboard.deferredToTomorrowCount} слів спокійно перенесено на наступні дні.",
+                                text = "Щоб не перевантажувати пам'ять (ліміт ${dashboard.dailyLimit}/день), ще ${formatWordsCountUk(dashboard.deferredToTomorrowCount)} спокійно перенесено на наступні дні.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
@@ -279,9 +323,9 @@ fun ReviewTabContent(
                             }
                         }
 
-                        !dailyGoalReached && dashboard.availableTodayCount > 0 -> {
+                        !dailyLimitCapped && dashboard.availableTodayCount > 0 -> {
                             Button(
-                                onClick = { viewModel.startMixedReviewSession(earlyPractice = false) },
+                                onClick = { viewModel.startMixedReviewSession() },
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -291,7 +335,7 @@ fun ReviewTabContent(
                                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Почати повторення ($nextRoundCount слів)",
+                                    text = "Почати повторення (${formatWordsCountUk(nextRoundCount)})",
                                     fontFamily = LoraFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
@@ -299,33 +343,7 @@ fun ReviewTabContent(
                             }
                         }
 
-                        !dailyGoalReached && dashboard.enrolledCount > 0 -> {
-                            OutlinedButton(
-                                onClick = { viewModel.startMixedReviewSession(earlyPractice = true) },
-                                shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .testTag("start_early_review_button")
-                            ) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Додаткове тренування (до 10 слів)",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        else -> {
+                        dailyLimitCapped -> {
                             OutlinedButton(
                                 onClick = { viewModel.openSettings() },
                                 shape = RoundedCornerShape(14.dp),
@@ -344,6 +362,43 @@ fun ReviewTabContent(
                                 )
                             }
                         }
+
+                        else -> {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = extended.subtleFill,
+                                border = BorderStroke(1.dp, extended.cardBorder),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("review_scheduled_wait_banner")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (nextTs != null) {
+                                            "Повторення за розкладом: $nextBatchLabel${SpacedRepetition.formatTimeUntilUk(nextTs)}"
+                                        } else {
+                                            "Усі слова повторено за графіком"
+                                        },
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -358,24 +413,32 @@ fun ReviewTabContent(
                     .fillMaxWidth()
             ) {
                 ReviewMetricTile(
-                    value = "${dashboard.enrolledCount}",
-                    label = "У циклі",
+                    value = if (dashboard.enrolledCount > 0) {
+                        "${dashboard.reviewedInCycleCount}/${dashboard.enrolledCount}"
+                    } else {
+                        "0"
+                    },
+                    label = "Пройдено\nз циклу",
                     accent = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("review_metric_reviewed_in_cycle")
+                )
+                ReviewMetricTile(
+                    value = "${dashboard.remainingScheduledTodayCount}",
+                    label = "Ще на\nсьогодні",
+                    accent = if (dashboard.remainingScheduledTodayCount > 0) StreakAmber else SuccessGreen,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("review_metric_remaining_today")
                 )
                 ReviewMetricTile(
                     value = "${dashboard.mastered16Count}",
-                    label = "Закріплено\n(16/16)",
+                    label = "Вивчено\n(16/16)",
                     accent = SuccessGreen,
-                    modifier = Modifier.weight(1f)
-                )
-                ReviewMetricTile(
-                    value = "${dashboard.dailyLimit}",
-                    label = "Ліміт / день",
-                    accent = StreakAmber,
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { viewModel.openSettings() }
+                        .testTag("review_metric_mastered")
                 )
             }
         }
@@ -536,8 +599,9 @@ private fun ReviewMetricTile(
             Text(
                 text = value,
                 fontFamily = MonoFontFamily,
-                fontSize = 20.sp,
+                fontSize = if (value.length >= 6) 16.sp else 20.sp,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
@@ -562,4 +626,16 @@ fun shortStageNameUk(stage: Int): String = when (stage) {
     7 -> "7. Правопис"
     8 -> "8. Фінальний мікс"
     else -> "Етап $stage"
+}
+
+private fun formatWordsCountUk(count: Int): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    val suffix = when {
+        mod100 in 11..14 -> "слів"
+        mod10 == 1 -> "слово"
+        mod10 in 2..4 -> "слова"
+        else -> "слів"
+    }
+    return "$count $suffix"
 }

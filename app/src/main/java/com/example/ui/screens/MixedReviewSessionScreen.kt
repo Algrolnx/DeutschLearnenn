@@ -266,9 +266,9 @@ fun MixedReviewSessionScreen(
                             score = minOf(score, uniqueTotal),
                             total = uniqueTotal,
                             reviewsDoneToday = dashboard.reviewsDoneToday,
-                            dailyLimit = dashboard.dailyLimit,
+                            todayPlanTotal = dashboard.todayPlanTotal.coerceAtLeast(dashboard.reviewsDoneToday),
                             canStartAnotherRound = dashboard.remainingDailyQuota > 0 && dashboard.dueCount > 0,
-                            onNextRound = { viewModel.startMixedReviewSession(earlyPractice = false) },
+                            onNextRound = { viewModel.startMixedReviewSession() },
                             onDone = { viewModel.navigateBack() }
                         )
                         Spacer(modifier = Modifier.weight(0.75f))
@@ -1442,7 +1442,7 @@ private fun MixedReviewCompletedCard(
     score: Int,
     total: Int,
     reviewsDoneToday: Int,
-    dailyLimit: Int,
+    todayPlanTotal: Int,
     canStartAnotherRound: Boolean,
     onNextRound: () -> Unit,
     onDone: () -> Unit
@@ -1479,7 +1479,7 @@ private fun MixedReviewCompletedCard(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Результат: $score з $total · Сьогодні повторено: $reviewsDoneToday / $dailyLimit слів",
+                text = "Результат: $score з $total · Сьогодні за планом: $reviewsDoneToday / $todayPlanTotal слів",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
