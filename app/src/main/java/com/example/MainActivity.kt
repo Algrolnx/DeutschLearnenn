@@ -20,6 +20,7 @@ import com.example.ui.screens.GrammarGuideScreen
 import com.example.ui.screens.MainTopicsScreen
 import com.example.ui.screens.MixedReviewSessionScreen
 import com.example.ui.screens.ProgressScreen
+import com.example.ui.screens.SentenceSituationScreen
 import com.example.ui.screens.StageArticleScreen
 import com.example.ui.screens.StageFillBlankScreen
 import com.example.ui.screens.StageFlashcardsScreen
@@ -94,6 +95,11 @@ class MainActivity : ComponentActivity() {
                             is Screen.GrammarGuide -> GrammarGuideScreen(
                                 viewModel = viewModel,
                                 initialTopicId = screen.initialTopicId
+                            )
+                            is Screen.SentenceSituation -> SentenceSituationScreen(
+                                level = screen.level,
+                                situationId = screen.situationId,
+                                viewModel = viewModel
                             )
                         }
                     }

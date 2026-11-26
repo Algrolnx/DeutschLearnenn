@@ -22,17 +22,19 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
@@ -64,19 +66,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.MainTopic
+import com.example.data.model.SentenceSituationGroup
 import com.example.data.model.TopicCatalog
 import com.example.data.repository.VocabularyRepository
 import com.example.ui.LearningViewModel
 import com.example.ui.MainTab
 import com.example.ui.Screen
+import com.example.ui.TopicsContentMode
 import com.example.ui.components.TopicPixelIcon
 import com.example.ui.theme.LocalAppExtendedColors
 import com.example.ui.theme.LoraFontFamily
 import com.example.ui.theme.ManropeFontFamily
 import com.example.ui.theme.MonoFontFamily
 import com.example.ui.theme.StreakAmber
+import com.example.ui.theme.SuccessGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,8 +102,29 @@ fun MainTopicsScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedMainTab.collectAsStateWithLifecycle()
     val reviewDashboard by viewModel.reviewDashboard.collectAsStateWithLifecycle()
+    val topicsContentMode by viewModel.topicsContentMode.collectAsStateWithLifecycle()
+    val learnedSentenceIds by viewModel.learnedSentenceIds.collectAsStateWithLifecycle()
+    val favoriteSentenceIds by viewModel.favoriteSentenceIds.collectAsStateWithLifecycle()
 
     val showFavoritesOnly = selectedTab == MainTab.FAVORITES
+    val isSentencesMode = !showFavoritesOnly && topicsContentMode == TopicsContentMode.SENTENCES
+
+    val levelSituationGroups = remember(selectedLevel) {
+        viewModel.getSituationGroupsForLevel(selectedLevel)
+    }
+    val levelSentencesCount = remember(levelSituationGroups) {
+        levelSituationGroups.sumOf { it.sentences.size }
+    }
+    val levelLearnedSentencesCount = remember(levelSituationGroups, learnedSentenceIds) {
+        levelSituationGroups.sumOf { group -> group.sentences.count { it.id in learnedSentenceIds } }
+    }
+    val sentenceSearchResults = remember(searchQuery, selectedLevel, isSentencesMode) {
+        if (isSentencesMode && searchQuery.trim().length >= 2) {
+            viewModel.searchSentences(searchQuery, selectedLevel)
+        } else {
+            emptyList()
+        }
+    }
 
     val progressByTopic = remember(allProgress, selectedLevel) {
         TopicCatalog.mainTopics.associate { topic ->
@@ -303,14 +330,18 @@ fun MainTopicsScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Instant Search Bar across all 6,000+ words (SQL indexed)
+            // Instant Search Bar (words or essential sentences depending on mode)
             item {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.updateSearchQuery(it) },
                     placeholder = {
                         Text(
-                            text = "Пошук серед $totalWordCount слів (DE / UA / EN)...",
+                            text = if (isSentencesMode) {
+                                "Пошук серед 600 важливих речень (DE / UA)..."
+                            } else {
+                                "Пошук серед $totalWordCount слів (DE / UA / EN)..."
+                            },
                             fontSize = 14.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -349,7 +380,21 @@ fun MainTopicsScreen(
                 )
             }
 
-            // Section Header + Level Pill + Topics / Favorites Filter
+            // 2-Button Segmented Switcher inside Теми: Слова (default) | Речення
+            if (!showFavoritesOnly) {
+                item {
+                    TopicsContentModeSwitcher(
+                        mode = topicsContentMode,
+                        level = selectedLevel,
+                        onSelectMode = { viewModel.setTopicsContentMode(it) },
+                        modifier = Modifier
+                            .widthIn(max = 600.dp)
+                            .fillMaxWidth()
+                    )
+                }
+            }
+
+            // Section Header + Level Pill
             item {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -365,8 +410,10 @@ fun MainTopicsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = when {
+                                    isSearching && isSentencesMode -> "Знайдено речень (${sentenceSearchResults.size})"
                                     isSearching -> "Знайдено слів (${searchResults.size})"
                                     showFavoritesOnly -> "Обрані слова (${favoriteWords.size})"
+                                    isSentencesMode -> "Важливі речення · $selectedLevel"
                                     else -> "Програма за темами"
                                 },
                                 fontFamily = LoraFontFamily,
@@ -375,8 +422,10 @@ fun MainTopicsScreen(
                             )
                             Text(
                                 text = when {
+                                    isSearching && isSentencesMode -> "Натисніть на речення, щоб прослухати вимову"
                                     isSearching -> "Оберіть слово, щоб відкрити його тему"
                                     showFavoritesOnly -> "Збережені картки для швидкого повторення"
+                                    isSentencesMode -> "$levelSentencesCount практичних фраз у ${levelSituationGroups.size} життєвих ситуаціях"
                                     else -> "16 тематичних розділів один за одним"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
@@ -410,6 +459,35 @@ fun MainTopicsScreen(
             }
 
             when {
+                isSearching && isSentencesMode -> {
+                    if (sentenceSearchResults.isEmpty()) {
+                        item {
+                            EmptyWordsPlaceholderCard(
+                                title = "Речень не знайдено",
+                                subtitle = "Спробуйте інше слово німецькою або українською (наприклад: Termin, лікар, оренда)",
+                                modifier = Modifier.widthIn(max = 600.dp)
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = sentenceSearchResults,
+                            key = { _, s -> "search_sent_${s.id}" }
+                        ) { idx, sentence ->
+                            ImportantSentenceCard(
+                                index = idx + 1,
+                                sentence = sentence,
+                                isLearned = sentence.id in learnedSentenceIds,
+                                isFavorite = sentence.id in favoriteSentenceIds,
+                                onSpeak = { slow -> viewModel.speak(sentence.german, slow) },
+                                onToggleLearned = { viewModel.toggleSentenceLearned(sentence.id) },
+                                onToggleFavorite = { viewModel.toggleSentenceFavorite(sentence.id) },
+                                showMetaBadges = true,
+                                modifier = Modifier.widthIn(max = 600.dp)
+                            )
+                        }
+                    }
+                }
+
                 isSearching -> {
                     if (searchResults.isEmpty()) {
                         item {
@@ -465,6 +543,75 @@ fun MainTopicsScreen(
                                 modifier = Modifier.widthIn(max = 600.dp)
                             )
                         }
+                    }
+                }
+
+                isSentencesMode -> {
+                    item {
+                        val levelRatio = if (levelSentencesCount > 0) {
+                            (levelLearnedSentencesCount.toFloat() / levelSentencesCount).coerceIn(0f, 1f)
+                        } else 0f
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, extended.cardBorder),
+                            modifier = Modifier
+                                .widthIn(max = 600.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Вивчено на рівні $selectedLevel",
+                                        fontFamily = ManropeFontFamily,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "$levelLearnedSentencesCount / $levelSentencesCount",
+                                        fontFamily = MonoFontFamily,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (levelLearnedSentencesCount == levelSentencesCount && levelSentencesCount > 0) SuccessGreen else MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                LinearProgressIndicator(
+                                    progress = { levelRatio },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = if (levelLearnedSentencesCount == levelSentencesCount && levelSentencesCount > 0) SuccessGreen else MaterialTheme.colorScheme.primary,
+                                    trackColor = extended.subtleFill
+                                )
+                            }
+                        }
+                    }
+
+                    itemsIndexed(
+                        items = levelSituationGroups,
+                        key = { _, group -> "${group.level}_${group.situationId}" }
+                    ) { idx, group ->
+                        val learnedInGroup = group.sentences.count { it.id in learnedSentenceIds }
+                        EditorialSentenceSituationCard(
+                            index = idx + 1,
+                            group = group,
+                            learnedCount = learnedInGroup,
+                            onClick = {
+                                viewModel.navigateTo(Screen.SentenceSituation(group.level, group.situationId))
+                            },
+                            modifier = Modifier.widthIn(max = 600.dp)
+                        )
                     }
                 }
 
@@ -665,6 +812,220 @@ fun EditorialTopicRowCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = mainTopic.color
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TopicsContentModeSwitcher(
+    mode: TopicsContentMode,
+    level: String,
+    onSelectMode: (TopicsContentMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val extended = LocalAppExtendedColors.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = extended.subtleFill,
+        border = BorderStroke(1.dp, extended.cardBorder),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val wordsSelected = mode == TopicsContentMode.WORDS
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (wordsSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                shadowElevation = if (wordsSelected) 1.dp else 0.dp,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onSelectMode(TopicsContentMode.WORDS) }
+                    .testTag("topics_mode_words")
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Style,
+                        contentDescription = null,
+                        tint = if (wordsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Слова",
+                        fontFamily = ManropeFontFamily,
+                        fontSize = 14.sp,
+                        fontWeight = if (wordsSelected) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (wordsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            val sentencesSelected = mode == TopicsContentMode.SENTENCES
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (sentencesSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                shadowElevation = if (sentencesSelected) 1.dp else 0.dp,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onSelectMode(TopicsContentMode.SENTENCES) }
+                    .testTag("topics_mode_sentences")
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = null,
+                        tint = if (sentencesSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Речення · $level",
+                        fontFamily = ManropeFontFamily,
+                        fontSize = 14.sp,
+                        fontWeight = if (sentencesSelected) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (sentencesSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorialSentenceSituationCard(
+    index: Int,
+    group: SentenceSituationGroup,
+    learnedCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val extended = LocalAppExtendedColors.current
+    val total = group.sentences.size.coerceAtLeast(1)
+    val progress = (learnedCount.toFloat() / total).coerceIn(0f, 1f)
+    val isDone = learnedCount >= total
+    val accent = if (isDone) SuccessGreen else MaterialTheme.colorScheme.primary
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        border = BorderStroke(1.dp, if (isDone) SuccessGreen.copy(alpha = 0.4f) else extended.cardBorder),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .testTag("sentence_situation_${group.situationId}")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = index.toString().padStart(2, '0'),
+                    fontFamily = MonoFontFamily,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = group.titleDe,
+                        fontFamily = LoraFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${group.sentences.size} речень",
+                        fontFamily = MonoFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = group.titleUk,
+                    fontFamily = ManropeFontFamily,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = accent,
+                        trackColor = accent.copy(alpha = 0.14f)
+                    )
+                    Text(
+                        text = "$learnedCount/$total",
+                        fontFamily = MonoFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
                     )
                 }
             }

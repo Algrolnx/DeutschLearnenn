@@ -82,6 +82,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.FillBlankInputMode
 import com.example.ui.LearningViewModel
 import com.example.ui.MixedReviewItem
 import com.example.ui.Screen
@@ -123,6 +124,11 @@ fun MixedReviewSessionScreen(
     val spellingStatus by viewModel.mixedSpellingStatus.collectAsStateWithLifecycle()
     val spellingAttemptsLeft by viewModel.mixedSpellingAttemptsLeft.collectAsStateWithLifecycle()
     val spellingInputMode by viewModel.stage6InputMode.collectAsStateWithLifecycle()
+    val fillBlankInputMode by viewModel.stage5InputMode.collectAsStateWithLifecycle()
+    val fillBlankInput by viewModel.mixedFillBlankInput.collectAsStateWithLifecycle()
+    val fillBlankStatus by viewModel.mixedFillBlankStatus.collectAsStateWithLifecycle()
+    val fillBlankAttemptsLeft by viewModel.mixedFillBlankAttemptsLeft.collectAsStateWithLifecycle()
+    val fillBlankErrorHint by viewModel.mixedFillBlankErrorHint.collectAsStateWithLifecycle()
     val lastFeedback by viewModel.mixedLastFeedback.collectAsStateWithLifecycle()
     val dashboard by viewModel.reviewDashboard.collectAsStateWithLifecycle()
     val unlockedSrs by viewModel.lastCompletedUnlockedSrs.collectAsStateWithLifecycle()
@@ -288,6 +294,11 @@ fun MixedReviewSessionScreen(
                                 onSpeakExample = {
                                     if (currentItem.word.exampleDe.isNotBlank()) {
                                         viewModel.speak(currentItem.word.exampleDe)
+                                    }
+                                },
+                                onSpeakExampleText = { sentence ->
+                                    if (sentence.isNotBlank()) {
+                                        viewModel.speak(sentence)
                                     }
                                 },
                                 onToggleFavorite = { viewModel.toggleFavorite(currentItem.word) },
@@ -730,106 +741,144 @@ fun MixedReviewSessionScreen(
                         }
 
                         is MixedReviewItem.FillBlankReview -> {
-                            Card(
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, extended.cardBorder, RoundedCornerShape(20.dp))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Доповніть речення:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Spacer(modifier = Modifier.height(14.dp))
-                                    val primaryColor = MaterialTheme.colorScheme.primary
-                                    val annotatedSentence = remember(
-                                        selectedString,
-                                        currentItem.sentenceWithBlank,
-                                        currentItem.word.exampleDe,
-                                        currentItem.matchedToken,
-                                        primaryColor
-                                    ) {
-                                        buildFillBlankAnnotatedSentence(
-                                            sentenceWithBlank = currentItem.sentenceWithBlank,
-                                            fullSentence = currentItem.word.exampleDe,
-                                            matchedToken = currentItem.matchedToken,
-                                            isAnswered = selectedString != null,
-                                            blankColor = primaryColor,
-                                            filledColor = SuccessGreen
-                                        )
-                                    }
-                                    Text(
-                                        text = annotatedSentence,
-                                        fontFamily = LoraFontFamily,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center,
-                                        lineHeight = 27.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = currentItem.translation,
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    if (selectedString != null) {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        SpeakerButton(
-                                            onSpeak = { slow -> viewModel.speak(currentItem.word.exampleDe, slow) },
-                                            size = 44.dp
-                                        )
-                                    }
-                                }
-                            }
+                            val isFillBlankAnswered = selectedString != null || fillBlankStatus.isResolved
+                            FillBlankModeToggle(
+                                mode = fillBlankInputMode,
+                                onSelectMode = { viewModel.setStage5InputMode(it) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             Column(
-                                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                currentItem.options.forEach { option ->
-                                    val isSelected = selectedString == option
-                                    val isCorrect = option.equals(currentItem.correctOption, ignoreCase = true)
-                                    val (bgColor, borderColor, textColor) = when {
-                                        selectedString == null -> Triple(MaterialTheme.colorScheme.surface, extended.cardBorder, MaterialTheme.colorScheme.onSurface)
-                                        isCorrect -> Triple(SuccessGreen.copy(alpha = 0.14f), SuccessGreen, SuccessGreen)
-                                        isSelected -> Triple(ErrorRed.copy(alpha = 0.14f), ErrorRed, ErrorRed)
-                                        else -> Triple(MaterialTheme.colorScheme.surface, extended.cardBorder.copy(alpha = 0.5f), MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(56.dp)
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(bgColor)
-                                            .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
-                                            .clickable(enabled = selectedString == null) { viewModel.answerMixedFillBlank(option) }
-                                            .padding(horizontal = 16.dp),
-                                        contentAlignment = Alignment.CenterStart
+                                Card(
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, extended.cardBorder, RoundedCornerShape(20.dp))
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = option,
-                                                fontFamily = LoraFontFamily,
-                                                fontSize = 17.sp,
-                                                fontWeight = if (isSelected || (selectedString != null && isCorrect)) FontWeight.Bold else FontWeight.Medium,
-                                                color = textColor
+                                                text = if (fillBlankInputMode == FillBlankInputMode.KEYBOARD) {
+                                                    "Впишіть пропущене слово:"
+                                                } else {
+                                                    "Доповніть речення:"
+                                                },
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            if (selectedString != null) {
-                                                if (isCorrect) Icon(Icons.Default.Check, contentDescription = null, tint = SuccessGreen)
-                                                else if (isSelected) Icon(Icons.Default.Close, contentDescription = null, tint = ErrorRed)
+                                        }
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                        val primaryColor = MaterialTheme.colorScheme.primary
+                                        val annotatedSentence = remember(
+                                            isFillBlankAnswered,
+                                            currentItem.sentenceWithBlank,
+                                            currentItem.fullSentence,
+                                            currentItem.matchedToken,
+                                            primaryColor
+                                        ) {
+                                            buildFillBlankAnnotatedSentence(
+                                                sentenceWithBlank = currentItem.sentenceWithBlank,
+                                                fullSentence = currentItem.fullSentence,
+                                                matchedToken = currentItem.matchedToken,
+                                                isAnswered = isFillBlankAnswered,
+                                                blankColor = primaryColor,
+                                                filledColor = SuccessGreen
+                                            )
+                                        }
+                                        Text(
+                                            text = annotatedSentence,
+                                            fontFamily = LoraFontFamily,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center,
+                                            lineHeight = 27.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = currentItem.translation,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        if (isFillBlankAnswered) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            SpeakerButton(
+                                                onSpeak = { slow -> viewModel.speak(currentItem.fullSentence, slow) },
+                                                size = 44.dp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (fillBlankInputMode == FillBlankInputMode.KEYBOARD) {
+                                    FillBlankKeyboardPanel(
+                                        currentInput = fillBlankInput,
+                                        status = fillBlankStatus,
+                                        attemptsLeft = fillBlankAttemptsLeft,
+                                        errorHint = fillBlankErrorHint,
+                                        correctAnswerDisplay = currentItem.matchedToken.ifBlank { currentItem.word.german },
+                                        baseWordHint = currentItem.word.translationUk,
+                                        onInputChange = { viewModel.updateMixedFillBlankInput(it) },
+                                        onInsertChar = { viewModel.insertMixedFillBlankChar(it) },
+                                        onHint = { viewModel.useMixedFillBlankHint() },
+                                        onSubmit = { viewModel.submitMixedFillBlankAnswer() }
+                                    )
+                                } else {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        currentItem.options.forEach { option ->
+                                            val isSelected = selectedString == option
+                                            val isCorrect = option.equals(currentItem.correctOption, ignoreCase = true)
+                                            val (bgColor, borderColor, textColor) = when {
+                                                !isFillBlankAnswered -> Triple(MaterialTheme.colorScheme.surface, extended.cardBorder, MaterialTheme.colorScheme.onSurface)
+                                                isCorrect -> Triple(SuccessGreen.copy(alpha = 0.14f), SuccessGreen, SuccessGreen)
+                                                isSelected -> Triple(ErrorRed.copy(alpha = 0.14f), ErrorRed, ErrorRed)
+                                                else -> Triple(MaterialTheme.colorScheme.surface, extended.cardBorder.copy(alpha = 0.5f), MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(56.dp)
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .background(bgColor)
+                                                    .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
+                                                    .clickable(enabled = !isFillBlankAnswered) { viewModel.answerMixedFillBlank(option) }
+                                                    .padding(horizontal = 16.dp),
+                                                contentAlignment = Alignment.CenterStart
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = option,
+                                                        fontFamily = LoraFontFamily,
+                                                        fontSize = 17.sp,
+                                                        fontWeight = if (isSelected || (isFillBlankAnswered && isCorrect)) FontWeight.Bold else FontWeight.Medium,
+                                                        color = textColor
+                                                    )
+                                                    if (isFillBlankAnswered) {
+                                                        if (isCorrect) Icon(Icons.Default.Check, contentDescription = null, tint = SuccessGreen)
+                                                        else if (isSelected) Icon(Icons.Default.Close, contentDescription = null, tint = ErrorRed)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -837,7 +886,7 @@ fun MixedReviewSessionScreen(
                             }
 
                             MixedNextFooter(
-                                isAnswered = selectedString != null,
+                                isAnswered = isFillBlankAnswered,
                                 feedback = lastFeedback,
                                 isLast = currentIndex + 1 >= items.size,
                                 onNext = { viewModel.nextMixedReviewItem() }

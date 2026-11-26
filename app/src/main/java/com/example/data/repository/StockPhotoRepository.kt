@@ -159,6 +159,7 @@ class StockPhotoRepository private constructor(context: Context) {
     init {
         migrateAdjectivePhotoCacheOnce()
         migrateHomonymPhotoCacheOnce()
+        migrateFahrradPhotoCacheOnce()
     }
 
     /**
@@ -247,6 +248,16 @@ class StockPhotoRepository private constructor(context: Context) {
         }
         staleExactKeys.forEach { key -> localPhotoFileForKey(key).delete() }
         editor.putBoolean(KEY_HOMONYM_CACHE_MIGRATED_V2, true).apply()
+    }
+
+    private fun migrateFahrradPhotoCacheOnce() {
+        if (prefs.getBoolean(KEY_FAHRRAD_FIX_V3, false)) return
+        val key = "travel_transport_fahrrad"
+        prefs.edit()
+            .remove(key)
+            .putBoolean(KEY_FAHRRAD_FIX_V3, true)
+            .apply()
+        localPhotoFileForKey(key).delete()
     }
 
     private val pixabayApiKey: String
@@ -969,6 +980,7 @@ class StockPhotoRepository private constructor(context: Context) {
         private const val PREFS_NAME = "deutschlern_stock_photo_cache_v4"
         private const val KEY_ADJ_CACHE_MIGRATED_V1 = "__adj_photo_cache_migrated_v1"
         private const val KEY_HOMONYM_CACHE_MIGRATED_V2 = "__homonym_photo_cache_migrated_v2"
+        private const val KEY_FAHRRAD_FIX_V3 = "__fahrrad_photo_fix_v3"
         private const val DEFAULT_RATE_LIMIT_COOLDOWN_MS = 15_000L
         private const val MIN_VALID_PHOTO_BYTES = 1024L
         private const val TARGET_ASPECT_RATIO = 4f / 3f

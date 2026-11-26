@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -46,10 +48,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.WordEntity
@@ -57,6 +63,7 @@ import com.example.ui.theme.LocalAppExtendedColors
 import com.example.ui.theme.LoraFontFamily
 import com.example.ui.theme.ManropeFontFamily
 import com.example.ui.theme.MonoFontFamily
+import com.example.util.WordExampleGenerator
 
 /**
  * Tactile Flashcard with Full-Bleed Real Word Photography as Background.
@@ -74,6 +81,7 @@ fun WordFlashcard(
     onSpeakExample: () -> Unit,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
+    onSpeakExampleText: ((String) -> Unit)? = null,
     onSpeakPlural: (() -> Unit)? = null,
     showNavigationArrows: Boolean = false,
     onPrev: () -> Unit = {},
@@ -535,11 +543,16 @@ fun WordFlashcard(
                         }
                     }
 
-                    // Center: Crisp Translation Block (Zero emojis -> typographic UA / EN tags)
+                    // Center: Crisp Translation Block + 3 Contextual Example Sentences (scrollable)
+                    val examples = remember(word.id, word.german, word.exampleDe, word.exampleUk) {
+                        WordExampleGenerator.buildExamplesForWord(word)
+                    }
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .weight(1f, fill = false)
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                             .padding(vertical = 8.dp)
                     ) {
                         Surface(
@@ -557,24 +570,24 @@ fun WordFlashcard(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
                             text = word.translationUk,
                             fontFamily = LoraFontFamily,
-                            fontSize = if (word.translationUk.length > 18) 25.sp else 31.sp,
+                            fontSize = if (word.translationUk.length > 18) 23.sp else 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
-                            lineHeight = 36.sp
+                            lineHeight = 32.sp
                         )
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         HorizontalDivider(
                             modifier = Modifier.width(64.dp),
                             color = extended.cardBorder
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -597,64 +610,118 @@ fun WordFlashcard(
                             Text(
                                 text = word.translationEn,
                                 fontFamily = ManropeFontFamily,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                         }
 
-                        if (word.exampleDe.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = extended.subtleFill,
-                                border = BorderStroke(1.dp, extended.cardBorder),
+                        if (examples.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable { onSpeakExample() }
+                                    .padding(bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "„${word.exampleDe}“",
-                                            fontFamily = LoraFontFamily,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            lineHeight = 21.sp
-                                        )
-                                        if (word.exampleUk.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = word.exampleUk,
-                                                fontFamily = ManropeFontFamily,
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                lineHeight = 17.sp
-                                            )
-                                        }
+                                Text(
+                                    text = "Приклади вживання (${examples.size})",
+                                    fontFamily = MonoFontFamily,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Натисніть, щоб послухати",
+                                    fontFamily = ManropeFontFamily,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                )
+                            }
+
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("flashcard_examples_list")
+                            ) {
+                                examples.forEachIndexed { idx, ex ->
+                                    val highlighted = remember(ex.de, word.german, genderAccent) {
+                                        highlightWordInSentence(ex.de, word.german, genderAccent)
                                     }
-
-                                    Spacer(modifier = Modifier.width(10.dp))
-
-                                    Box(
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = extended.subtleFill,
+                                        border = BorderStroke(1.dp, extended.cardBorder),
                                         modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(CircleShape)
-                                            .background(genderBg),
-                                        contentAlignment = Alignment.Center
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                if (onSpeakExampleText != null) {
+                                                    onSpeakExampleText(ex.de)
+                                                } else if (idx == 0) {
+                                                    onSpeakExample()
+                                                } else {
+                                                    onSpeakExample()
+                                                }
+                                            }
+                                            .testTag("flashcard_example_item_$idx")
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                            contentDescription = "Прослухати приклад",
-                                            tint = genderAccent,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = highlighted,
+                                                    fontFamily = LoraFontFamily,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    lineHeight = 19.sp
+                                                )
+                                                if (ex.uk.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(3.dp))
+                                                    Text(
+                                                        text = ex.uk,
+                                                        fontFamily = ManropeFontFamily,
+                                                        fontSize = 11.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        lineHeight = 15.sp
+                                                    )
+                                                }
+                                            }
+
+                                            IconButton(
+                                                onClick = {
+                                                    if (onSpeakExampleText != null) {
+                                                        onSpeakExampleText(ex.de)
+                                                    } else {
+                                                        onSpeakExample()
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .size(48.dp)
+                                                    .testTag("flashcard_example_speak_$idx")
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(34.dp)
+                                                        .clip(CircleShape)
+                                                        .background(genderBg),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                                        contentDescription = "Прослухати приклад ${idx + 1}",
+                                                        tint = genderAccent,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -719,4 +786,30 @@ fun WordFlashcard(
             }
         }
     }
+}
+
+private fun highlightWordInSentence(
+    sentence: String,
+    targetWord: String,
+    accentColor: Color
+): AnnotatedString = buildAnnotatedString {
+    val cleanTarget = targetWord.trim()
+    if (cleanTarget.isEmpty()) {
+        append(sentence)
+        return@buildAnnotatedString
+    }
+    val pattern = Regex(
+        "(?<![A-Za-zÄÖÜäöüß])${Regex.escape(cleanTarget)}(?:e|en|er|es|em|n|s)?(?![A-Za-zÄÖÜäöüß])",
+        RegexOption.IGNORE_CASE
+    )
+    val match = pattern.find(sentence)
+    if (match == null) {
+        append(sentence)
+        return@buildAnnotatedString
+    }
+    append(sentence.substring(0, match.range.first))
+    withStyle(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold)) {
+        append(sentence.substring(match.range.first, match.range.last + 1))
+    }
+    append(sentence.substring(match.range.last + 1))
 }

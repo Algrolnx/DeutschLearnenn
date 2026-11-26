@@ -9,7 +9,9 @@ import com.example.data.repository.PhotoCandidate
 import com.example.data.repository.StockPhotoProvider
 import com.example.data.repository.StockPhotoQueryBuilder
 import com.example.data.repository.StockPhotoRepository
+import com.example.data.repository.ImportantSentencesRepository
 import com.example.data.repository.VocabularyRepository
+import com.example.ui.FillBlankKeyboardEvaluation
 import com.example.ui.KeyboardSpellingEvaluation
 import com.example.ui.LearningViewModel
 import com.example.ui.ReviewDashboardState
@@ -18,6 +20,7 @@ import com.example.ui.components.illustrations.WordArtworkResolver
 import com.example.util.GrammarGuideCatalog
 import com.example.util.GrammarRuleExplainer
 import com.example.util.SpacedRepetition
+import com.example.util.WordExampleGenerator
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1117,5 +1120,189 @@ class ExampleUnitTest {
         )
         assertEquals("knee joint anatomy sport", gelenk.steps.first().query)
         assertEquals("health", gelenk.steps.first().pixabayCategory)
+
+        // 6. travel_transport Fahrrad picks an actual bicycle instead of a bicycle traffic light
+        val fahrrad = WordEntity(
+            german = "Fahrrad",
+            article = "das",
+            translationUk = "велосипед",
+            translationEn = "bicycle",
+            categoryId = "travel",
+            subtopicId = "travel_transport"
+        )
+        val fahrradPlan = StockPhotoQueryBuilder.build(fahrrad)
+        assertEquals("bicycle road bike", fahrradPlan.steps.first().query)
+        val fahrradPick = StockPhotoRepository.pickBestLandscapeCandidate(
+            listOf(
+                PhotoCandidate("https://example.com/bike_traffic_light.jpg", 800, 600, "a", listOf("bicycle", "traffic", "signal", "stoplight", "sign"), likes = 120),
+                PhotoCandidate("https://example.com/road_bicycle.jpg", 800, 600, "b", listOf("bicycle", "bike", "cycling", "road", "vehicle"), likes = 50)
+            ),
+            fahrradPlan.scoringProfile
+        )
+        assertEquals("https://example.com/road_bicycle.jpg", fahrradPick?.url)
+    }
+
+    @Test
+    fun compoundNounGenderExplainerDetectsKompositaAndAvoidsFalseSplits() {
+        val fahrrad = WordEntity(
+            german = "Fahrrad", article = "das", plural = "die Fahrräder",
+            translationUk = "велосипед", translationEn = "bicycle",
+            categoryId = "travel", subtopicId = "travel_transport"
+        )
+        val fahrradRule = GrammarRuleExplainer.explainArticle(fahrrad)
+        assertNotNull(fahrradRule)
+        assertEquals("das · Kompositum", fahrradRule!!.badge)
+        assertTrue(fahrradRule.ruleTitle.contains("Fahr- + das Rad"))
+        assertTrue(fahrradRule.explanation.contains("das Rad"))
+
+        val krankenhaus = WordEntity(
+            german = "Krankenhaus", article = "das", plural = "die Krankenhäuser",
+            translationUk = "лікарня", translationEn = "hospital",
+            categoryId = "city", subtopicId = "city_places"
+        )
+        val krankenhausRule = GrammarRuleExplainer.explainArticle(krankenhaus)
+        assertEquals("das · Kompositum", krankenhausRule?.badge)
+        assertTrue(krankenhausRule?.explanation?.contains("das Haus") == true)
+
+        val apfelsaft = WordEntity(
+            german = "Apfelsaft", article = "der", plural = "die Apfelsäfte",
+            translationUk = "яблучний сік", translationEn = "apple juice",
+            categoryId = "food", subtopicId = "food_drinks"
+        )
+        val apfelsaftRule = GrammarRuleExplainer.explainArticle(apfelsaft)
+        assertEquals("der · Kompositum", apfelsaftRule?.badge)
+        assertTrue(apfelsaftRule?.explanation?.contains("der Saft") == true)
+
+        val strassenbahn = WordEntity(
+            german = "Straßenbahn", article = "die", plural = "die Straßenbahnen",
+            translationUk = "трамвай", translationEn = "tram",
+            categoryId = "travel", subtopicId = "travel_transport"
+        )
+        val strassenbahnRule = GrammarRuleExplainer.explainArticle(strassenbahn)
+        assertEquals("die · Kompositum", strassenbahnRule?.badge)
+        assertTrue(strassenbahnRule?.explanation?.contains("die Bahn") == true)
+
+        // Simple root nouns and short consonant prefixes must NOT be falsely split
+        val haus = WordEntity(
+            german = "Haus", article = "das", plural = "die Häuser",
+            translationUk = "будинок", translationEn = "house",
+            categoryId = "home", subtopicId = "home_rooms"
+        )
+        assertEquals("das", GrammarRuleExplainer.explainArticle(haus)?.badge)
+
+        val gleis = WordEntity(
+            german = "Gleis", article = "das", plural = "die Gleise",
+            translationUk = "колія", translationEn = "track",
+            categoryId = "travel", subtopicId = "travel_station"
+        )
+        assertFalse(GrammarRuleExplainer.explainArticle(gleis)?.badge?.contains("Kompositum") == true)
+    }
+
+    @Test
+    fun wordExampleGeneratorProducesThreeDistinctFillBlankCompatibleSentences() {
+        val sampleWords = listOf(
+            WordEntity(
+                german = "Fahrrad", article = "das", plural = "die Fahrräder",
+                translationUk = "велосипед", translationEn = "bicycle",
+                exampleDe = "Ich fahre jeden Tag mit dem Fahrrad.",
+                exampleUk = "Я щодня їжджу на велосипеді.",
+                categoryId = "travel", subtopicId = "travel_transport"
+            ),
+            WordEntity(
+                german = "Apfel", article = "der", plural = "die Äpfel",
+                translationUk = "яблуко", translationEn = "apple",
+                exampleDe = "Ich esse einen frischen Apfel.",
+                exampleUk = "Я їм свіже яблуко.",
+                categoryId = "food", subtopicId = "food_fruits"
+            ),
+            WordEntity(
+                german = "Wohnung", article = "die", plural = "die Wohnungen",
+                translationUk = "квартира", translationEn = "apartment",
+                exampleDe = "Unsere Wohnung ist sehr hell.",
+                exampleUk = "Наша квартира дуже світла.",
+                categoryId = "home", subtopicId = "home_rooms"
+            ),
+            WordEntity(
+                german = "kochen", article = "", plural = "",
+                translationUk = "готувати", translationEn = "to cook",
+                exampleDe = "Wir kochen heute Abend zusammen.",
+                exampleUk = "Ми готуємо сьогодні ввечері разом.",
+                categoryId = "verbs", subtopicId = "verbs_daily"
+            ),
+            WordEntity(
+                german = "schnell", article = "", plural = "",
+                translationUk = "швидкий", translationEn = "fast",
+                exampleDe = "Der Zug ist sehr schnell.",
+                exampleUk = "Поїзд дуже швидкий.",
+                categoryId = "adjectives", subtopicId = "adj_qualities"
+            )
+        )
+
+        for (word in sampleWords) {
+            val examples = WordExampleGenerator.buildExamplesForWord(word)
+            assertEquals("Expected 3 examples for ${word.german}", 3, examples.size)
+            assertEquals(
+                "All 3 German examples for ${word.german} must be distinct",
+                3,
+                examples.map { it.de.lowercase() }.distinct().size
+            )
+            for (example in examples) {
+                assertTrue(example.de.isNotBlank())
+                assertTrue(example.uk.isNotBlank())
+                assertNotNull(
+                    "Example '${example.de}' for ${word.german} must support fill-in-the-blank",
+                    LearningViewModel.buildFillBlankMatch(word, example.de)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun stage6FillBlankKeyboardEvaluationSupportsExactLenientAndPrefixRetention() {
+        assertTrue(
+            LearningViewModel.evaluateFillBlankKeyboardAnswer("Fahrrad", "Fahrrad", "Fahrrad")
+                is FillBlankKeyboardEvaluation.ExactMatch
+        )
+        assertTrue(
+            LearningViewModel.evaluateFillBlankKeyboardAnswer("fahrrad", "Fahrrad", "Fahrrad")
+                is FillBlankKeyboardEvaluation.ExactMatch
+        )
+        // Accepting base infinitive / nominative when sentence uses inflected form
+        assertTrue(
+            LearningViewModel.evaluateFillBlankKeyboardAnswer("gehen", "gehe", "gehen")
+                is FillBlankKeyboardEvaluation.ExactMatch
+        )
+        // Lenient umlaut / Eszett match
+        val lenient = LearningViewModel.evaluateFillBlankKeyboardAnswer("Strassenbahn", "Straßenbahn", "Straßenbahn")
+        assertTrue(lenient is FillBlankKeyboardEvaluation.LenientUmlautMatch)
+        assertEquals("Straßenbahn", (lenient as FillBlankKeyboardEvaluation.LenientUmlautMatch).canonical)
+
+        // Wrong input retains matching prefix
+        val wrong = LearningViewModel.evaluateFillBlankKeyboardAnswer("Fahrxxx", "Fahrrad", "Fahrrad")
+        assertTrue(wrong is FillBlankKeyboardEvaluation.WrongInput)
+        assertEquals("Fahr", (wrong as FillBlankKeyboardEvaluation.WrongInput).keptPrefix)
+    }
+
+    @Test
+    fun importantSentencesCatalogHas600UniqueSentencesAcrossLevelsAndSituations() {
+        val all = ImportantSentencesRepository.loadSentencesFromAssets(null)
+        assertEquals("Expected 600 curated important sentences", 600, all.size)
+        assertEquals("All sentence IDs must be unique", 600, all.map { it.id }.distinct().size)
+        assertEquals(
+            "All German sentences must be unique",
+            600,
+            all.map { it.german.trim().lowercase() }.distinct().size
+        )
+
+        val repo = ImportantSentencesRepository(null)
+        for (level in listOf("A1", "A2", "B1", "B2")) {
+            val byLevel = repo.getSentencesByLevel(level)
+            assertEquals("Level $level must contain exactly 150 sentences", 150, byLevel.size)
+            val groups = repo.getSituationGroupsByLevel(level)
+            assertEquals("Level $level must have 8 practical situation groups", 8, groups.size)
+            assertTrue(groups.all { it.titleDe.isNotBlank() && it.titleUk.isNotBlank() && it.sentences.isNotEmpty() })
+        }
+
+        assertTrue(all.all { it.german.isNotBlank() && it.ukrainian.isNotBlank() && it.situationId.isNotBlank() })
     }
 }

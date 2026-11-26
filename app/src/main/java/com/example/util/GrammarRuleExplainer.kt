@@ -249,6 +249,8 @@ object GrammarRuleExplainer {
         val german = word.german.trim()
         val low = german.lowercase()
 
+        // Check 100% deterministic derivational suffixes first, then compound noun heads (Komposita),
+        // then soft endings (-e, -er, Ge-, -en), and finally root-noun fallback.
         when (article) {
             "die" -> {
                 val sureSuffix = listOf(
@@ -276,6 +278,7 @@ object GrammarRuleExplainer {
                         topicId = "articles"
                     )
                 }
+                explainCompoundNounGender(german, article)?.let { return it }
                 if (low.endsWith("in") && low.length > 4) {
                     return WordGrammarHint(
                         badge = "die · -in",
@@ -319,6 +322,7 @@ object GrammarRuleExplainer {
                         topicId = "articles"
                     )
                 }
+                explainCompoundNounGender(german, article)?.let { return it }
                 if (low.startsWith("ge") && low.length > 4) {
                     return WordGrammarHint(
                         badge = "das · Ge-",
@@ -352,19 +356,23 @@ object GrammarRuleExplainer {
                     "or" to "-or (майже завжди der)",
                     "ist" to "-ist (професії/особи — der)",
                     "ant" to "-ant (зазвичай der)",
-                    "ent" to "-ent (зазвичай der)",
-                    "er" to "-er (~70% der)"
+                    "ent" to "-ent (зазвичай der)"
                 ).firstOrNull { low.endsWith(it.first) && low.length > it.first.length + 1 }
 
                 if (sureSuffix != null) {
                     return WordGrammarHint(
                         badge = "der · -${sureSuffix.first}",
                         ruleTitle = "Суфікс ${sureSuffix.second}",
-                        explanation = if (sureSuffix.first == "er") {
-                            "Більшість іменників на -er (особливо назви професій, приладів та діячів) належать до чоловічого роду (der)."
-                        } else {
-                            "Іменники із суфіксом -${sureSuffix.first} у німецькій мові належать до чоловічого роду (der)."
-                        },
+                        explanation = "Іменники із закінченням -${sureSuffix.first} у німецькій мові зазвичай мають чоловічий рід (der).",
+                        topicId = "articles"
+                    )
+                }
+                explainCompoundNounGender(german, article)?.let { return it }
+                if (low.endsWith("er") && low.length > 3) {
+                    return WordGrammarHint(
+                        badge = "der · -er",
+                        ruleTitle = "Суфікс -er (~70% der)",
+                        explanation = "Близько 70% іменників із закінченням -er (особливо професії та прилади) мають чоловічий рід (der).",
                         topicId = "articles"
                     )
                 }
@@ -375,6 +383,337 @@ object GrammarRuleExplainer {
                     topicId = "articles"
                 )
             }
+        }
+        return null
+    }
+
+    private data class CompoundHeadInfo(
+        val headLower: String,
+        val headDisplay: String,
+        val article: String,
+        val meaningUk: String
+    )
+
+    private val inseparablePrefixes = setOf(
+        "be", "ge", "er", "ver", "zer", "ent", "emp", "miss", "miß"
+    )
+
+    private val compoundNounHeads: List<CompoundHeadInfo> = listOf(
+        // Neutral (das) heads
+        CompoundHeadInfo("fahrrad", "Fahrrad", "das", "велосипед"),
+        CompoundHeadInfo("krankenhaus", "Krankenhaus", "das", "лікарня"),
+        CompoundHeadInfo("lebensmittel", "Lebensmittel", "das", "продукт харчування"),
+        CompoundHeadInfo("flugzeug", "Flugzeug", "das", "літак"),
+        CompoundHeadInfo("fahrzeug", "Fahrzeug", "das", "транспортний засіб"),
+        CompoundHeadInfo("werkzeug", "Werkzeug", "das", "інструмент"),
+        CompoundHeadInfo("spielzeug", "Spielzeug", "das", "іграшка"),
+        CompoundHeadInfo("geschäft", "Geschäft", "das", "магазин / справа"),
+        CompoundHeadInfo("gespräch", "Gespräch", "das", "розмова"),
+        CompoundHeadInfo("getränk", "Getränk", "das", "напій"),
+        CompoundHeadInfo("gericht", "Gericht", "das", "страва / суд"),
+        CompoundHeadInfo("gebäude", "Gebäude", "das", "будівля"),
+        CompoundHeadInfo("programm", "Programm", "das", "програма"),
+        CompoundHeadInfo("telefon", "Telefon", "das", "телефон"),
+        CompoundHeadInfo("zentrum", "Zentrum", "das", "центр"),
+        CompoundHeadInfo("konzert", "Konzert", "das", "концерт"),
+        CompoundHeadInfo("problem", "Problem", "das", "проблема"),
+        CompoundHeadInfo("studium", "Studium", "das", "навчання у виші"),
+        CompoundHeadInfo("system", "System", "das", "система"),
+        CompoundHeadInfo("ticket", "Ticket", "das", "квиток"),
+        CompoundHeadInfo("zimmer", "Zimmer", "das", "кімната"),
+        CompoundHeadInfo("fenster", "Fenster", "das", "вікно"),
+        CompoundHeadInfo("wasser", "Wasser", "das", "вода"),
+        CompoundHeadInfo("wetter", "Wetter", "das", "погода"),
+        CompoundHeadInfo("messer", "Messer", "das", "ніж"),
+        CompoundHeadInfo("papier", "Papier", "das", "папір"),
+        CompoundHeadInfo("mittel", "Mittel", "das", "засіб"),
+        CompoundHeadInfo("muster", "Muster", "das", "зразок / візерунок"),
+        CompoundHeadInfo("fleisch", "Fleisch", "das", "м'ясо"),
+        CompoundHeadInfo("gericht", "Gericht", "das", "страва"),
+        CompoundHeadInfo("schiff", "Schiff", "das", "корабель"),
+        CompoundHeadInfo("schild", "Schild", "das", "вивіска / знак"),
+        CompoundHeadInfo("schloss", "Schloss", "das", "замок"),
+        CompoundHeadInfo("stück", "Stück", "das", "шматок / частина"),
+        CompoundHeadInfo("gerät", "Gerät", "das", "прилад"),
+        CompoundHeadInfo("gesetz", "Gesetz", "das", "закон"),
+        CompoundHeadInfo("gebiet", "Gebiet", "das", "область / район"),
+        CompoundHeadInfo("gewicht", "Gewicht", "das", "вага"),
+        CompoundHeadInfo("gesicht", "Gesicht", "das", "обличчя"),
+        CompoundHeadInfo("gepäck", "Gepäck", "das", "багаж"),
+        CompoundHeadInfo("hotel", "Hotel", "das", "готель"),
+        CompoundHeadInfo("konto", "Konto", "das", "рахунок"),
+        CompoundHeadInfo("kleid", "Kleid", "das", "сукня"),
+        CompoundHeadInfo("kreuz", "Kreuz", "das", "хрест"),
+        CompoundHeadInfo("licht", "Licht", "das", "світло"),
+        CompoundHeadInfo("recht", "Recht", "das", "право"),
+        CompoundHeadInfo("spiel", "Spiel", "das", "гра"),
+        CompoundHeadInfo("brett", "Brett", "das", "дошка"),
+        CompoundHeadInfo("blatt", "Blatt", "das", "листок"),
+        CompoundHeadInfo("leder", "Leder", "das", "шкіра"),
+        CompoundHeadInfo("metall", "Metall", "das", "метал"),
+        CompoundHeadInfo("eisen", "Eisen", "das", "залізо"),
+        CompoundHeadInfo("haus", "Haus", "das", "будинок"),
+        CompoundHeadInfo("buch", "Buch", "das", "книга"),
+        CompoundHeadInfo("geld", "Geld", "das", "гроші"),
+        CompoundHeadInfo("brot", "Brot", "das", "хліб"),
+        CompoundHeadInfo("bild", "Bild", "das", "картина / зображення"),
+        CompoundHeadInfo("bett", "Bett", "das", "ліжко"),
+        CompoundHeadInfo("auto", "Auto", "das", "автомобіль"),
+        CompoundHeadInfo("boot", "Boot", "das", "човен"),
+        CompoundHeadInfo("büro", "Büro", "das", "офіс"),
+        CompoundHeadInfo("glas", "Glas", "das", "скло / склянка"),
+        CompoundHeadInfo("holz", "Holz", "das", "дерево (матеріал)"),
+        CompoundHeadInfo("salz", "Salz", "das", "сіль"),
+        CompoundHeadInfo("bier", "Bier", "das", "пиво"),
+        CompoundHeadInfo("hemd", "Hemd", "das", "сорочка"),
+        CompoundHeadInfo("heft", "Heft", "das", "зошит"),
+        CompoundHeadInfo("tuch", "Tuch", "das", "хустка / рушник"),
+        CompoundHeadInfo("kind", "Kind", "das", "дитина"),
+        CompoundHeadInfo("tier", "Tier", "das", "тварина"),
+        CompoundHeadInfo("wort", "Wort", "das", "слово"),
+        CompoundHeadInfo("werk", "Werk", "das", "завод / твір"),
+        CompoundHeadInfo("land", "Land", "das", "країна / земля"),
+        CompoundHeadInfo("jahr", "Jahr", "das", "рік"),
+        CompoundHeadInfo("fest", "Fest", "das", "свято"),
+        CompoundHeadInfo("lied", "Lied", "das", "пісня"),
+        CompoundHeadInfo("meer", "Meer", "das", "море"),
+        CompoundHeadInfo("netz", "Netz", "das", "мережа / сітка"),
+        CompoundHeadInfo("ziel", "Ziel", "das", "ціль / мета"),
+        CompoundHeadInfo("ende", "Ende", "das", "кінець"),
+        CompoundHeadInfo("auge", "Auge", "das", "око"),
+        CompoundHeadInfo("herz", "Herz", "das", "серце"),
+        CompoundHeadInfo("zeug", "Zeug", "das", "річ / спорядження"),
+        CompoundHeadInfo("dach", "Dach", "das", "дах"),
+        CompoundHeadInfo("fach", "Fach", "das", "предмет / відділення"),
+        CompoundHeadInfo("feld", "Feld", "das", "поле"),
+        CompoundHeadInfo("dorf", "Dorf", "das", "село"),
+        CompoundHeadInfo("volk", "Volk", "das", "народ"),
+        CompoundHeadInfo("band", "Band", "das", "стрічка"),
+        CompoundHeadInfo("rad", "Rad", "das", "колесо"),
+        CompoundHeadInfo("bad", "Bad", "das", "ванна / басейн"),
+        CompoundHeadInfo("amt", "Amt", "das", "відомство / установа"),
+        CompoundHeadInfo("tor", "Tor", "das", "ворота"),
+        CompoundHeadInfo("eis", "Eis", "das", "морозиво / лід"),
+
+        // Masculine (der) heads
+        CompoundHeadInfo("computer", "Computer", "der", "комп'ютер"),
+        CompoundHeadInfo("schlüssel", "Schlüssel", "der", "ключ"),
+        CompoundHeadInfo("bahnhof", "Bahnhof", "der", "вокзал"),
+        CompoundHeadInfo("flughafen", "Flughafen", "der", "аеропорт"),
+        CompoundHeadInfo("automat", "Automat", "der", "автомат"),
+        CompoundHeadInfo("ausweis", "Ausweis", "der", "посвідчення"),
+        CompoundHeadInfo("vertrag", "Vertrag", "der", "договір"),
+        CompoundHeadInfo("schmerz", "Schmerz", "der", "біль"),
+        CompoundHeadInfo("schrank", "Schrank", "der", "шафа"),
+        CompoundHeadInfo("betrieb", "Betrieb", "der", "підприємство"),
+        CompoundHeadInfo("bericht", "Bericht", "der", "звіт"),
+        CompoundHeadInfo("spiegel", "Spiegel", "der", "дзеркало"),
+        CompoundHeadInfo("drucker", "Drucker", "der", "принтер"),
+        CompoundHeadInfo("meister", "Meister", "der", "майстер"),
+        CompoundHeadInfo("direktor", "Direktor", "der", "директор"),
+        CompoundHeadInfo("lehrer", "Lehrer", "der", "вчитель"),
+        CompoundHeadInfo("fahrer", "Fahrer", "der", "водій"),
+        CompoundHeadInfo("freund", "Freund", "der", "друг"),
+        CompoundHeadInfo("kuchen", "Kuchen", "der", "пиріг"),
+        CompoundHeadInfo("kaffee", "Kaffee", "der", "кава"),
+        CompoundHeadInfo("zucker", "Zucker", "der", "цукор"),
+        CompoundHeadInfo("teller", "Teller", "der", "тарілка"),
+        CompoundHeadInfo("löffel", "Löffel", "der", "ложка"),
+        CompoundHeadInfo("becher", "Becher", "der", "кухоль / стаканчик"),
+        CompoundHeadInfo("koffer", "Koffer", "der", "валіза"),
+        CompoundHeadInfo("garten", "Garten", "der", "сад"),
+        CompoundHeadInfo("strand", "Strand", "der", "пляж"),
+        CompoundHeadInfo("schnee", "Schnee", "der", "сніг"),
+        CompoundHeadInfo("schirm", "Schirm", "der", "екран / парасолька"),
+        CompoundHeadInfo("fehler", "Fehler", "der", "помилка"),
+        CompoundHeadInfo("schutz", "Schutz", "der", "захист"),
+        CompoundHeadInfo("dienst", "Dienst", "der", "служба / послуга"),
+        CompoundHeadInfo("schein", "Schein", "der", "довідка / квиток / купюра"),
+        CompoundHeadInfo("urlaub", "Urlaub", "der", "відпустка"),
+        CompoundHeadInfo("morgen", "Morgen", "der", "ранок"),
+        CompoundHeadInfo("anfang", "Anfang", "der", "початок"),
+        CompoundHeadInfo("verein", "Verein", "der", "клуб / об'єднання"),
+        CompoundHeadInfo("mensch", "Mensch", "der", "людина"),
+        CompoundHeadInfo("mantel", "Mantel", "der", "пальто"),
+        CompoundHeadInfo("stiefel", "Stiefel", "der", "чобіт"),
+        CompoundHeadInfo("finger", "Finger", "der", "палець"),
+        CompoundHeadInfo("rücken", "Rücken", "der", "спина"),
+        CompoundHeadInfo("boden", "Boden", "der", "підлога / ґрунт"),
+        CompoundHeadInfo("wagen", "Wagen", "der", "візок / вагон / авто"),
+        CompoundHeadInfo("hafen", "Hafen", "der", "порт / гавань"),
+        CompoundHeadInfo("regen", "Regen", "der", "дощ"),
+        CompoundHeadInfo("vogel", "Vogel", "der", "птах"),
+        CompoundHeadInfo("apfel", "Apfel", "der", "яблуко"),
+        CompoundHeadInfo("salat", "Salat", "der", "салат"),
+        CompoundHeadInfo("fisch", "Fisch", "der", "риба"),
+        CompoundHeadInfo("tisch", "Tisch", "der", "стіл"),
+        CompoundHeadInfo("stuhl", "Stuhl", "der", "стілець"),
+        CompoundHeadInfo("platz", "Platz", "der", "місце / площа"),
+        CompoundHeadInfo("markt", "Markt", "der", "ринок"),
+        CompoundHeadInfo("laden", "Laden", "der", "крамниця"),
+        CompoundHeadInfo("sport", "Sport", "der", "спорт"),
+        CompoundHeadInfo("schuh", "Schuh", "der", "черевик / взуття"),
+        CompoundHeadInfo("stein", "Stein", "der", "камінь"),
+        CompoundHeadInfo("strom", "Strom", "der", "струм / потік"),
+        CompoundHeadInfo("stoff", "Stoff", "der", "тканина / речовина"),
+        CompoundHeadInfo("stift", "Stift", "der", "олівець / ручка"),
+        CompoundHeadInfo("stock", "Stock", "der", "поверх / палиця"),
+        CompoundHeadInfo("steig", "Steig", "der", "платформа / стежка"),
+        CompoundHeadInfo("preis", "Preis", "der", "ціна / приз"),
+        CompoundHeadInfo("punkt", "Punkt", "der", "пункт / точка"),
+        CompoundHeadInfo("grund", "Grund", "der", "причина / підстава"),
+        CompoundHeadInfo("abend", "Abend", "der", "вечір"),
+        CompoundHeadInfo("monat", "Monat", "der", "місяць"),
+        CompoundHeadInfo("brief", "Brief", "der", "лист"),
+        CompoundHeadInfo("fluss", "Fluss", "der", "річка"),
+        CompoundHeadInfo("druck", "Druck", "der", "тиск / друк"),
+        CompoundHeadInfo("kreis", "Kreis", "der", "коло / округ"),
+        CompoundHeadInfo("saft", "Saft", "der", "сік"),
+        CompoundHeadInfo("raum", "Raum", "der", "приміщення / простір"),
+        CompoundHeadInfo("baum", "Baum", "der", "дерево"),
+        CompoundHeadInfo("mann", "Mann", "der", "чоловік"),
+        CompoundHeadInfo("arzt", "Arzt", "der", "лікар"),
+        CompoundHeadInfo("pass", "Pass", "der", "паспорт"),
+        CompoundHeadInfo("satz", "Satz", "der", "речення / набір"),
+        CompoundHeadInfo("plan", "Plan", "der", "план"),
+        CompoundHeadInfo("wein", "Wein", "der", "вино"),
+        CompoundHeadInfo("käse", "Käse", "der", "сир"),
+        CompoundHeadInfo("kohl", "Kohl", "der", "капуста"),
+        CompoundHeadInfo("topf", "Topf", "der", "каструля / горщик"),
+        CompoundHeadInfo("turm", "Turm", "der", "вежа"),
+        CompoundHeadInfo("park", "Park", "der", "парк"),
+        CompoundHeadInfo("wald", "Wald", "der", "ліс"),
+        CompoundHeadInfo("berg", "Berg", "der", "гора"),
+        CompoundHeadInfo("wind", "Wind", "der", "вітер"),
+        CompoundHeadInfo("kurs", "Kurs", "der", "курс"),
+        CompoundHeadInfo("film", "Film", "der", "фільм"),
+        CompoundHeadInfo("kopf", "Kopf", "der", "голова"),
+        CompoundHeadInfo("zahn", "Zahn", "der", "зуб"),
+        CompoundHeadInfo("saal", "Saal", "der", "зал"),
+        CompoundHeadInfo("club", "Club", "der", "клуб"),
+        CompoundHeadInfo("gast", "Gast", "der", "гість"),
+        CompoundHeadInfo("wert", "Wert", "der", "цінність / значення"),
+        CompoundHeadInfo("grad", "Grad", "der", "градус / ступінь"),
+        CompoundHeadInfo("flug", "Flug", "der", "політ / рейс"),
+        CompoundHeadInfo("gang", "Gang", "der", "коридор / хід"),
+        CompoundHeadInfo("ring", "Ring", "der", "кільце / обручка"),
+        CompoundHeadInfo("fall", "Fall", "der", "випадок"),
+        CompoundHeadInfo("teil", "Teil", "der", "частина"),
+        CompoundHeadInfo("fuß", "Fuß", "der", "нога / стопа"),
+        CompoundHeadInfo("tag", "Tag", "der", "день"),
+        CompoundHeadInfo("weg", "Weg", "der", "шлях / дорога"),
+        CompoundHeadInfo("hof", "Hof", "der", "двір"),
+        CompoundHeadInfo("zug", "Zug", "der", "поїзд"),
+        CompoundHeadInfo("bus", "Bus", "der", "автобус"),
+        CompoundHeadInfo("tee", "Tee", "der", "чай"),
+        CompoundHeadInfo("bau", "Bau", "der", "будівництво / споруда"),
+
+        // Feminine (die) heads
+        CompoundHeadInfo("kartoffel", "Kartoffel", "die", "картопля"),
+        CompoundHeadInfo("kontrolle", "Kontrolle", "die", "контроль"),
+        CompoundHeadInfo("maschine", "Maschine", "die", "машина / апарат"),
+        CompoundHeadInfo("station", "Station", "die", "станція"),
+        CompoundHeadInfo("sprache", "Sprache", "die", "мова"),
+        CompoundHeadInfo("medizin", "Medizin", "die", "медицина / ліки"),
+        CompoundHeadInfo("straße", "Straße", "die", "вулиця"),
+        CompoundHeadInfo("schule", "Schule", "die", "школа"),
+        CompoundHeadInfo("tasche", "Tasche", "die", "сумка / кишеня"),
+        CompoundHeadInfo("brille", "Brille", "die", "окуляри"),
+        CompoundHeadInfo("nummer", "Nummer", "die", "номер"),
+        CompoundHeadInfo("stelle", "Stelle", "die", "місце / посада"),
+        CompoundHeadInfo("speise", "Speise", "die", "страва"),
+        CompoundHeadInfo("pfanne", "Pfanne", "die", "сковорода"),
+        CompoundHeadInfo("brücke", "Brücke", "die", "міст"),
+        CompoundHeadInfo("kirche", "Kirche", "die", "церква"),
+        CompoundHeadInfo("stunde", "Stunde", "die", "година / урок"),
+        CompoundHeadInfo("bürste", "Bürste", "die", "щітка"),
+        CompoundHeadInfo("anlage", "Anlage", "die", "система / установка"),
+        CompoundHeadInfo("praxis", "Praxis", "die", "практика / кабінет лікаря"),
+        CompoundHeadInfo("klinik", "Klinik", "die", "клініка"),
+        CompoundHeadInfo("person", "Person", "die", "особа"),
+        CompoundHeadInfo("gruppe", "Gruppe", "die", "група"),
+        CompoundHeadInfo("flasche", "Flasche", "die", "пляшка"),
+        CompoundHeadInfo("pflanze", "Pflanze", "die", "рослина"),
+        CompoundHeadInfo("stimme", "Stimme", "die", "голос"),
+        CompoundHeadInfo("kasse", "Kasse", "die", "каса"),
+        CompoundHeadInfo("karte", "Karte", "die", "картка / квиток / мапа"),
+        CompoundHeadInfo("torte", "Torte", "die", "торт"),
+        CompoundHeadInfo("blume", "Blume", "die", "квітка"),
+        CompoundHeadInfo("jacke", "Jacke", "die", "куртка"),
+        CompoundHeadInfo("liste", "Liste", "die", "список"),
+        CompoundHeadInfo("milch", "Milch", "die", "молоко"),
+        CompoundHeadInfo("suppe", "Suppe", "die", "суп"),
+        CompoundHeadInfo("wurst", "Wurst", "die", "ковбаса / сосиска"),
+        CompoundHeadInfo("beere", "Beere", "die", "ягода"),
+        CompoundHeadInfo("bohne", "Bohne", "die", "квасоля / боб"),
+        CompoundHeadInfo("tasse", "Tasse", "die", "чашка"),
+        CompoundHeadInfo("gabel", "Gabel", "die", "виделка"),
+        CompoundHeadInfo("lampe", "Lampe", "die", "лампа"),
+        CompoundHeadInfo("decke", "Decke", "die", "ковдра / стеля"),
+        CompoundHeadInfo("sonne", "Sonne", "die", "сонце"),
+        CompoundHeadInfo("pause", "Pause", "die", "перерва / пауза"),
+        CompoundHeadInfo("woche", "Woche", "die", "тиждень"),
+        CompoundHeadInfo("nacht", "Nacht", "die", "ніч"),
+        CompoundHeadInfo("musik", "Musik", "die", "музика"),
+        CompoundHeadInfo("kunst", "Kunst", "die", "мистецтво"),
+        CompoundHeadInfo("seife", "Seife", "die", "мило"),
+        CompoundHeadInfo("creme", "Creme", "die", "крем"),
+        CompoundHeadInfo("kraft", "Kraft", "die", "сила / енергія"),
+        CompoundHeadInfo("halle", "Halle", "die", "зал / павільйон"),
+        CompoundHeadInfo("seite", "Seite", "die", "сторона / сторінка"),
+        CompoundHeadInfo("fahrt", "Fahrt", "die", "поїздка"),
+        CompoundHeadInfo("reise", "Reise", "die", "подорож"),
+        CompoundHeadInfo("kette", "Kette", "die", "ланцюжок / мережа"),
+        CompoundHeadInfo("wolle", "Wolle", "die", "вовна"),
+        CompoundHeadInfo("seide", "Seide", "die", "шовк"),
+        CompoundHeadInfo("farbe", "Farbe", "die", "колір / фарба"),
+        CompoundHeadInfo("stadt", "Stadt", "die", "місто"),
+        CompoundHeadInfo("arbeit", "Arbeit", "die", "робота"),
+        CompoundHeadInfo("bahn", "Bahn", "die", "залізниця / трамвай / колія"),
+        CompoundHeadInfo("zeit", "Zeit", "die", "час"),
+        CompoundHeadInfo("welt", "Welt", "die", "світ"),
+        CompoundHeadInfo("hose", "Hose", "die", "штани"),
+        CompoundHeadInfo("frau", "Frau", "die", "жінка"),
+        CompoundHeadInfo("post", "Post", "die", "пошта"),
+        CompoundHeadInfo("bank", "Bank", "die", "банк / лавка"),
+        CompoundHeadInfo("nuss", "Nuss", "die", "горіх"),
+        CompoundHeadInfo("wand", "Wand", "die", "стіна"),
+        CompoundHeadInfo("note", "Note", "die", "оцінка / нота"),
+        CompoundHeadInfo("hand", "Hand", "die", "рука / долоня"),
+        CompoundHeadInfo("zahl", "Zahl", "die", "число / цифра"),
+        CompoundHeadInfo("tür", "Tür", "die", "двері"),
+        CompoundHeadInfo("uhr", "Uhr", "die", "годинник / година")
+    ).sortedByDescending { it.headLower.length }
+
+    private fun explainCompoundNounGender(german: String, article: String): WordGrammarHint? {
+        val trimmed = german.trim()
+        val low = trimmed.lowercase()
+        val articleGenderUk = when (article) {
+            "der" -> "чоловічий рід (der)"
+            "die" -> "жіночий рід (die)"
+            "das" -> "середній рід (das)"
+            else -> return null
+        }
+
+        for (candidate in compoundNounHeads) {
+            if (candidate.article != article) continue
+            if (!low.endsWith(candidate.headLower)) continue
+            val prefixLen = low.length - candidate.headLower.length
+            val minPrefix = if (candidate.headLower.length <= 3) 3 else 2
+            if (prefixLen < minPrefix) continue
+
+            val prefixRaw = trimmed.substring(0, prefixLen)
+            val prefixLow = prefixRaw.lowercase()
+            if (prefixLow in inseparablePrefixes) continue
+            // Ensure prefix contains at least one vowel so we don't split consonant clusters like "Schrank"
+            if (prefixLow.none { it in "aeiouäöüy" }) continue
+
+            return WordGrammarHint(
+                badge = "$article · Kompositum",
+                ruleTitle = "Складне слово: $prefixRaw- + ${candidate.article} ${candidate.headDisplay}",
+                explanation = "У німецьких складних іменниках рід ЗАВЖДИ визначає останнє слово: «${candidate.article} ${candidate.headDisplay}» (${candidate.meaningUk}) → тому «$article $trimmed» має $articleGenderUk.",
+                topicId = "articles"
+            )
         }
         return null
     }

@@ -8,15 +8,21 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.BoxCount
 import com.example.data.db.LevelStats
 import com.example.data.db.SubtopicLevelCount
+import com.example.data.model.ImportantSentence
+import com.example.data.model.SentenceSituationGroup
 import com.example.data.model.SubtopicProgressEntity
 import com.example.data.model.TopicCatalog
 import com.example.data.model.WordEntity
+import com.example.data.repository.ImportantSentencesRepository
 import com.example.data.repository.StockPhotoRepository
 import com.example.data.repository.VocabularyRepository
 import com.example.ui.theme.AppThemeMode
 import com.example.util.ReviewRating
 import com.example.util.SpacedRepetition
 import com.example.util.TtsManager
+import com.example.util.WordExampleGenerator
+import com.example.util.WordExampleSentence
+import java.util.concurrent.ConcurrentHashMap
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -67,6 +73,7 @@ sealed class Screen {
     object MixedReview : Screen()
     object Progress : Screen()
     data class GrammarGuide(val initialTopicId: String? = null) : Screen()
+    data class SentenceSituation(val level: String, val situationId: String) : Screen()
 }
 
 enum class MainTab {
@@ -74,6 +81,16 @@ enum class MainTab {
     REVIEW,
     GRAMMAR,
     FAVORITES
+}
+
+enum class TopicsContentMode {
+    WORDS,
+    SENTENCES
+}
+
+enum class FillBlankInputMode {
+    OPTIONS,
+    KEYBOARD
 }
 
 data class ReviewDashboardState(
@@ -151,6 +168,7 @@ sealed class MixedReviewItem {
         val translation: String,
         val options: List<String>,
         val correctOption: String,
+        val fullSentence: String = word.exampleDe,
         override val isRetry: Boolean = false
     ) : MixedReviewItem() {
         override val stageType: Int = 6
@@ -201,6 +219,7 @@ data class FillBlankQ(
     val translation: String,
     val options: List<String>,
     val correctOption: String,
+    val fullSentence: String = word.exampleDe,
     val isRetry: Boolean = false
 )
 
@@ -208,6 +227,12 @@ data class FillBlankMatch(
     val sentenceWithBlank: String,
     val matchedToken: String
 )
+
+sealed class FillBlankKeyboardEvaluation {
+    data class ExactMatch(val canonical: String) : FillBlankKeyboardEvaluation()
+    data class LenientUmlautMatch(val canonical: String) : FillBlankKeyboardEvaluation()
+    data class WrongInput(val keptPrefix: String) : FillBlankKeyboardEvaluation()
+}
 
 sealed class KeyboardSpellingEvaluation {
     data class ExactMatch(val canonical: String) : KeyboardSpellingEvaluation()
@@ -265,6 +290,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val prefs = application.getSharedPreferences("deutschlern_prefs", Context.MODE_PRIVATE)
     private val repository: VocabularyRepository
     private val stockPhotoRepository: StockPhotoRepository = StockPhotoRepository.getInstance(application)
+    private val sentencesRepository: ImportantSentencesRepository = ImportantSentencesRepository(application)
+    private val wordExampleRotation = ConcurrentHashMap<String, Int>()
     val ttsManager: TtsManager = TtsManager(application)
 
     private val _screenStack = MutableStateFlow<List<Screen>>(listOf(Screen.MainTopics))
@@ -347,7 +374,20 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _ioStatusMessage.value = null
     }
 
-    // === Stage 6 Input Mode (Letter Tiles vs Keyboard) ===
+    // === Stage 6 (Fill Blank) Input Mode (Options vs Keyboard) ===
+    private val initialStage5Mode = FillBlankInputMode.entries.firstOrNull {
+        it.name == prefs.getString("stage5_fillblank_input_mode", FillBlankInputMode.OPTIONS.name)
+    } ?: FillBlankInputMode.OPTIONS
+
+    private val _stage5InputMode = MutableStateFlow(initialStage5Mode)
+    val stage5InputMode: StateFlow<FillBlankInputMode> = _stage5InputMode.asStateFlow()
+
+    fun setStage5InputMode(mode: FillBlankInputMode) {
+        _stage5InputMode.value = mode
+        prefs.edit().putString("stage5_fillblank_input_mode", mode.name).apply()
+    }
+
+    // === Stage 7 (Spelling) Input Mode (Letter Tiles vs Keyboard) ===
     private val initialStage6Mode = Stage6InputMode.entries.firstOrNull {
         it.name == prefs.getString("stage6_input_mode", Stage6InputMode.LETTER_TILES.name)
     } ?: Stage6InputMode.LETTER_TILES
@@ -358,6 +398,77 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun setStage6InputMode(mode: Stage6InputMode) {
         _stage6InputMode.value = mode
         prefs.edit().putString("stage6_input_mode", mode.name).apply()
+    }
+
+    // === Topics Tab Content Mode (Слова vs Речення) & Important Sentences ===
+    private val _topicsContentMode = MutableStateFlow(TopicsContentMode.WORDS)
+    val topicsContentMode: StateFlow<TopicsContentMode> = _topicsContentMode.asStateFlow()
+
+    fun setTopicsContentMode(mode: TopicsContentMode) {
+        _topicsContentMode.value = mode
+    }
+
+    private val _learnedSentenceIds = MutableStateFlow(sentencesRepository.getLearnedIds())
+    val learnedSentenceIds: StateFlow<Set<Int>> = _learnedSentenceIds.asStateFlow()
+
+    private val _favoriteSentenceIds = MutableStateFlow(sentencesRepository.getFavoriteIds())
+    val favoriteSentenceIds: StateFlow<Set<Int>> = _favoriteSentenceIds.asStateFlow()
+
+    fun getSentencesForLevel(level: String): List<ImportantSentence> =
+        sentencesRepository.getSentencesByLevel(level)
+
+    fun getSituationGroupsForLevel(level: String): List<SentenceSituationGroup> =
+        sentencesRepository.getSituationGroupsByLevel(level)
+
+    fun getSituationGroup(level: String, situationId: String): SentenceSituationGroup? =
+        sentencesRepository.getSituationGroupsByLevel(level).firstOrNull { it.situationId == situationId }
+
+    fun searchSentences(query: String, preferredLevel: String): List<ImportantSentence> {
+        val q = query.trim().lowercase()
+        if (q.length < 2) return emptyList()
+        val normLevel = preferredLevel.uppercase()
+        val matches = sentencesRepository.getAllSentences().filter { s ->
+            s.german.lowercase().contains(q) ||
+                s.ukrainian.lowercase().contains(q) ||
+                s.situationUk.lowercase().contains(q) ||
+                s.situationDe.lowercase().contains(q) ||
+                s.noteUk.lowercase().contains(q)
+        }
+        return matches.sortedBy { if (it.level == normLevel) 0 else 1 }.take(40)
+    }
+
+    fun toggleSentenceLearned(sentenceId: Int) {
+        val current = _learnedSentenceIds.value
+        val updated = if (sentenceId in current) {
+            current - sentenceId
+        } else {
+            recordDailyStudyActivity()
+            current + sentenceId
+        }
+        _learnedSentenceIds.value = updated
+        sentencesRepository.saveLearnedIds(updated)
+    }
+
+    fun toggleSentenceFavorite(sentenceId: Int) {
+        val current = _favoriteSentenceIds.value
+        val updated = if (sentenceId in current) current - sentenceId else current + sentenceId
+        _favoriteSentenceIds.value = updated
+        sentencesRepository.saveFavoriteIds(updated)
+    }
+
+    private fun nextRotatedFillBlankSentence(word: WordEntity): Pair<WordExampleSentence, FillBlankMatch>? {
+        val examples = WordExampleGenerator.buildExamplesForWord(word)
+        if (examples.isEmpty()) return null
+        val key = "${word.id}_${word.german.lowercase()}"
+        val startIdx = wordExampleRotation.compute(key) { _, prev ->
+            if (prev == null) 0 else (prev + 1) % examples.size
+        } ?: 0
+        for (offset in examples.indices) {
+            val candidate = examples[(startIdx + offset) % examples.size]
+            val match = buildFillBlankMatch(word, candidate.de)
+            if (match != null) return candidate to match
+        }
+        return null
     }
 
     // === Offline Level Preload (Photos + HD Pronunciation) ===
@@ -826,6 +937,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val mixedSpellingStatus: StateFlow<Stage6WordStatus> = _mixedSpellingStatus.asStateFlow()
     private val _mixedSpellingAttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
     val mixedSpellingAttemptsLeft: StateFlow<Int> = _mixedSpellingAttemptsLeft.asStateFlow()
+    private val _mixedFillBlankInput = MutableStateFlow("")
+    val mixedFillBlankInput: StateFlow<String> = _mixedFillBlankInput.asStateFlow()
+    private val _mixedFillBlankStatus = MutableStateFlow(Stage6WordStatus.TYPING)
+    val mixedFillBlankStatus: StateFlow<Stage6WordStatus> = _mixedFillBlankStatus.asStateFlow()
+    private val _mixedFillBlankAttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
+    val mixedFillBlankAttemptsLeft: StateFlow<Int> = _mixedFillBlankAttemptsLeft.asStateFlow()
+    private val _mixedFillBlankErrorHint = MutableStateFlow<String?>(null)
+    val mixedFillBlankErrorHint: StateFlow<String?> = _mixedFillBlankErrorHint.asStateFlow()
     private val _mixedLastFeedback = MutableStateFlow<String?>(null)
     val mixedLastFeedback: StateFlow<String?> = _mixedLastFeedback.asStateFlow()
 
@@ -986,6 +1105,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     val stage5Index: StateFlow<Int> = _stage5Index.asStateFlow()
     private val _stage5SelectedOption = MutableStateFlow<String?>(null)
     val stage5SelectedOption: StateFlow<String?> = _stage5SelectedOption.asStateFlow()
+    private val _stage5KeyboardInput = MutableStateFlow("")
+    val stage5KeyboardInput: StateFlow<String> = _stage5KeyboardInput.asStateFlow()
+    private val _stage5KeyboardStatus = MutableStateFlow(Stage6WordStatus.TYPING)
+    val stage5KeyboardStatus: StateFlow<Stage6WordStatus> = _stage5KeyboardStatus.asStateFlow()
+    private val _stage5KeyboardAttemptsLeft = MutableStateFlow(MAX_STAGE6_ATTEMPTS)
+    val stage5KeyboardAttemptsLeft: StateFlow<Int> = _stage5KeyboardAttemptsLeft.asStateFlow()
+    private val _stage5KeyboardErrorHint = MutableStateFlow<String?>(null)
+    val stage5KeyboardErrorHint: StateFlow<String?> = _stage5KeyboardErrorHint.asStateFlow()
     private val _stage5Score = MutableStateFlow(0)
     val stage5Score: StateFlow<Int> = _stage5Score.asStateFlow()
     private val _stage5Finished = MutableStateFlow(false)
@@ -1572,27 +1699,56 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     // ==========================================
     // === STAGE 6: FILL IN THE BLANK ===
     // ==========================================
+    private fun resetStage5QuestionInput() {
+        _stage5SelectedOption.value = null
+        _stage5KeyboardInput.value = ""
+        _stage5KeyboardStatus.value = Stage6WordStatus.TYPING
+        _stage5KeyboardAttemptsLeft.value = MAX_STAGE6_ATTEMPTS
+        _stage5KeyboardErrorHint.value = null
+    }
+
+    private fun buildRetryFillBlankQ(currentQ: FillBlankQ): FillBlankQ {
+        val nextPair = nextRotatedFillBlankSentence(currentQ.word)
+        return if (nextPair != null) {
+            currentQ.copy(
+                sentenceWithBlank = nextPair.second.sentenceWithBlank,
+                matchedToken = nextPair.second.matchedToken,
+                translation = nextPair.first.uk,
+                fullSentence = nextPair.first.de,
+                options = currentQ.options.shuffled(),
+                isRetry = true
+            )
+        } else {
+            currentQ.copy(
+                options = currentQ.options.shuffled(),
+                isRetry = true
+            )
+        }
+    }
+
     fun startStage5(subtopicId: String) {
         stageLaunchJob?.cancel()
         stageLaunchJob = viewModelScope.launch {
             val words = repository.getWordsBySubtopicAndLevelOnce(subtopicId, _selectedLevel.value, 12)
                 .shuffled()
             val questions = words.mapNotNull { target ->
-                val blankMatch = buildFillBlankMatch(target) ?: return@mapNotNull null
+                val rotated = nextRotatedFillBlankSentence(target) ?: return@mapNotNull null
+                val (example, blankMatch) = rotated
                 val distractors = repository.getDistractorsForWord(target, count = 3).map { it.german }
                 val options = (distractors + target.german).distinct().shuffled()
                 FillBlankQ(
                     word = target,
                     sentenceWithBlank = blankMatch.sentenceWithBlank,
                     matchedToken = blankMatch.matchedToken,
-                    translation = target.exampleUk,
+                    translation = example.uk,
                     options = options,
-                    correctOption = target.german
+                    correctOption = target.german,
+                    fullSentence = example.de
                 )
             }
             _stage5Questions.value = questions
             _stage5Index.value = 0
-            _stage5SelectedOption.value = null
+            resetStage5QuestionInput()
             _stage5Score.value = 0
             _stage5Finished.value = questions.isEmpty()
             _lastCompletedUnlockedSrs.value = false
@@ -1613,20 +1769,101 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun answerStage5(subtopicId: String, option: String) {
-        if (_stage5SelectedOption.value != null) return
+        if (_stage5SelectedOption.value != null || _stage5KeyboardStatus.value.isResolved) return
         _stage5SelectedOption.value = option
         val currentQ = _stage5Questions.value.getOrNull(_stage5Index.value) ?: return
         if (option.equals(currentQ.correctOption, ignoreCase = true)) {
             _stage5Score.value += 1
-            speak(currentQ.word.exampleDe)
+            speak(currentQ.fullSentence)
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
         } else {
-            _stage5Questions.value = _stage5Questions.value + currentQ.copy(
-                options = currentQ.options.shuffled(),
-                isRetry = true
-            )
-            speak(currentQ.word.exampleDe)
+            _stage5Questions.value = _stage5Questions.value + buildRetryFillBlankQ(currentQ)
+            speak(currentQ.fullSentence)
             viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
+        }
+    }
+
+    fun updateStage5KeyboardInput(raw: String) {
+        if (_stage5KeyboardStatus.value.isResolved || _stage5SelectedOption.value != null) return
+        _stage5KeyboardInput.value = raw
+        _stage5KeyboardErrorHint.value = null
+        _stage5KeyboardStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun insertStage5KeyboardChar(char: Char) {
+        if (_stage5KeyboardStatus.value.isResolved || _stage5SelectedOption.value != null) return
+        _stage5KeyboardInput.value += char
+        _stage5KeyboardErrorHint.value = null
+        _stage5KeyboardStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun clearStage5KeyboardInput() {
+        if (_stage5KeyboardStatus.value.isResolved || _stage5SelectedOption.value != null) return
+        _stage5KeyboardInput.value = ""
+        _stage5KeyboardErrorHint.value = null
+        _stage5KeyboardStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun useStage5KeyboardHint() {
+        if (_stage5KeyboardStatus.value.isResolved || _stage5SelectedOption.value != null) return
+        val currentQ = _stage5Questions.value.getOrNull(_stage5Index.value) ?: return
+        val target = currentQ.matchedToken.ifBlank { currentQ.word.german }.trim()
+        val nextInput = computeNextHintInput(_stage5KeyboardInput.value, target)
+        _stage5KeyboardInput.value = nextInput
+        _stage5KeyboardErrorHint.value = null
+        if (nextInput.equals(target, ignoreCase = true)) {
+            _stage5KeyboardInput.value = target
+            _stage5KeyboardStatus.value = Stage6WordStatus.CORRECT
+            _stage5SelectedOption.value = currentQ.correctOption
+            _stage5Score.value += 1
+            speak(currentQ.fullSentence)
+            viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
+        } else {
+            _stage5KeyboardStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun submitStage5KeyboardAnswer() {
+        if (_stage5KeyboardStatus.value.isResolved || _stage5SelectedOption.value != null) return
+        val currentQ = _stage5Questions.value.getOrNull(_stage5Index.value) ?: return
+        val raw = _stage5KeyboardInput.value.trim()
+        if (raw.isEmpty()) return
+
+        when (val eval = evaluateFillBlankKeyboardAnswer(raw, currentQ.matchedToken, currentQ.word.german)) {
+            is FillBlankKeyboardEvaluation.ExactMatch -> {
+                _stage5KeyboardInput.value = eval.canonical
+                _stage5KeyboardErrorHint.value = null
+                _stage5KeyboardStatus.value = Stage6WordStatus.CORRECT
+                _stage5SelectedOption.value = currentQ.correctOption
+                _stage5Score.value += 1
+                speak(currentQ.fullSentence)
+                viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
+            }
+            is FillBlankKeyboardEvaluation.LenientUmlautMatch -> {
+                _stage5KeyboardInput.value = eval.canonical
+                _stage5KeyboardErrorHint.value = null
+                _stage5KeyboardStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+                _stage5SelectedOption.value = currentQ.correctOption
+                _stage5Score.value += 1
+                speak(currentQ.fullSentence)
+                viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.GOOD) }
+            }
+            is FillBlankKeyboardEvaluation.WrongInput -> {
+                val remaining = (_stage5KeyboardAttemptsLeft.value - 1).coerceAtLeast(0)
+                _stage5KeyboardAttemptsLeft.value = remaining
+                if (remaining > 0) {
+                    _stage5KeyboardInput.value = eval.keptPrefix
+                    _stage5KeyboardStatus.value = Stage6WordStatus.WRONG_TRY
+                    _stage5KeyboardErrorHint.value = "Спробуйте ще раз · залишилось спроб: $remaining"
+                } else {
+                    _stage5KeyboardStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+                    _stage5SelectedOption.value = "__wrong_keyboard__"
+                    _stage5KeyboardErrorHint.value = null
+                    _stage5Questions.value = _stage5Questions.value + buildRetryFillBlankQ(currentQ)
+                    speak(currentQ.fullSentence)
+                    viewModelScope.launch { repository.recordReview(currentQ.word.id, ReviewRating.AGAIN) }
+                }
+            }
         }
     }
 
@@ -1634,7 +1871,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val nextIdx = _stage5Index.value + 1
         if (nextIdx < _stage5Questions.value.size) {
             _stage5Index.value = nextIdx
-            _stage5SelectedOption.value = null
+            resetStage5QuestionInput()
         } else {
             _stage5Finished.value = true
             recordDailyStudyActivity()
@@ -2135,8 +2372,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 correctPlural = word.plural.trim()
             )
             6 -> {
-                val blankMatch = buildFillBlankMatch(word)
-                if (blankMatch != null) {
+                val rotated = nextRotatedFillBlankSentence(word)
+                if (rotated != null) {
+                    val (example, blankMatch) = rotated
                     val distractors = repository.getDistractorsForWord(word, count = 3).map { it.german }
                     val options = (distractors + word.german).distinct().shuffled()
                     MixedReviewItem.FillBlankReview(
@@ -2144,9 +2382,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         srsStep = srsStep,
                         sentenceWithBlank = blankMatch.sentenceWithBlank,
                         matchedToken = blankMatch.matchedToken,
-                        translation = word.exampleUk,
+                        translation = example.uk,
                         options = options,
-                        correctOption = word.german
+                        correctOption = word.german,
+                        fullSentence = example.de
                     )
                 } else {
                     val distractors = repository.getDistractorsForWord(word, count = 3)
@@ -2183,6 +2422,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _mixedSpellingErrorHint.value = null
         _mixedSpellingStatus.value = Stage6WordStatus.TYPING
         _mixedSpellingAttemptsLeft.value = MAX_STAGE6_ATTEMPTS
+        _mixedFillBlankInput.value = ""
+        _mixedFillBlankStatus.value = Stage6WordStatus.TYPING
+        _mixedFillBlankAttemptsLeft.value = MAX_STAGE6_ATTEMPTS
+        _mixedFillBlankErrorHint.value = null
         _mixedLastFeedback.value = null
     }
 
@@ -2216,7 +2459,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             }
             is MixedReviewItem.ArticleReview -> item.copy(isRetry = true)
             is MixedReviewItem.PluralReview -> item.copy(options = item.options.shuffled(), isRetry = true)
-            is MixedReviewItem.FillBlankReview -> item.copy(options = item.options.shuffled(), isRetry = true)
+            is MixedReviewItem.FillBlankReview -> {
+                val nextPair = nextRotatedFillBlankSentence(item.word)
+                if (nextPair != null) {
+                    item.copy(
+                        sentenceWithBlank = nextPair.second.sentenceWithBlank,
+                        matchedToken = nextPair.second.matchedToken,
+                        translation = nextPair.first.uk,
+                        fullSentence = nextPair.first.de,
+                        options = item.options.shuffled(),
+                        isRetry = true
+                    )
+                } else {
+                    item.copy(options = item.options.shuffled(), isRetry = true)
+                }
+            }
             is MixedReviewItem.SpellingReview -> item.copy(letterPool = item.letterPool.shuffled(), isRetry = true)
         }
         _mixedReviewItems.value = _mixedReviewItems.value + retryItem
@@ -2316,13 +2573,95 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun answerMixedFillBlank(option: String) {
-        if (_mixedSelectedString.value != null) return
+        if (_mixedSelectedString.value != null || _mixedFillBlankStatus.value.isResolved) return
         val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.FillBlankReview
             ?: return
         _mixedSelectedString.value = option
         val isCorrect = option.equals(item.correctOption, ignoreCase = true)
-        speak(item.word.exampleDe)
+        speak(item.fullSentence)
         recordMixedOutcome(item, isCorrect)
+    }
+
+    fun updateMixedFillBlankInput(raw: String) {
+        if (_mixedFillBlankStatus.value.isResolved || _mixedSelectedString.value != null) return
+        _mixedFillBlankInput.value = raw
+        _mixedFillBlankErrorHint.value = null
+        _mixedFillBlankStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun insertMixedFillBlankChar(char: Char) {
+        if (_mixedFillBlankStatus.value.isResolved || _mixedSelectedString.value != null) return
+        _mixedFillBlankInput.value += char
+        _mixedFillBlankErrorHint.value = null
+        _mixedFillBlankStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun clearMixedFillBlankInput() {
+        if (_mixedFillBlankStatus.value.isResolved || _mixedSelectedString.value != null) return
+        _mixedFillBlankInput.value = ""
+        _mixedFillBlankErrorHint.value = null
+        _mixedFillBlankStatus.value = Stage6WordStatus.TYPING
+    }
+
+    fun useMixedFillBlankHint() {
+        if (_mixedFillBlankStatus.value.isResolved || _mixedSelectedString.value != null) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.FillBlankReview
+            ?: return
+        val target = item.matchedToken.ifBlank { item.word.german }.trim()
+        val nextInput = computeNextHintInput(_mixedFillBlankInput.value, target)
+        _mixedFillBlankInput.value = nextInput
+        _mixedFillBlankErrorHint.value = null
+        if (nextInput.equals(target, ignoreCase = true)) {
+            _mixedFillBlankInput.value = target
+            _mixedFillBlankStatus.value = Stage6WordStatus.CORRECT
+            _mixedSelectedString.value = item.correctOption
+            speak(item.fullSentence)
+            recordMixedOutcome(item, isCorrect = true)
+        } else {
+            _mixedFillBlankStatus.value = Stage6WordStatus.TYPING
+        }
+    }
+
+    fun submitMixedFillBlankAnswer() {
+        if (_mixedFillBlankStatus.value.isResolved || _mixedSelectedString.value != null) return
+        val item = _mixedReviewItems.value.getOrNull(_mixedReviewIndex.value) as? MixedReviewItem.FillBlankReview
+            ?: return
+        val raw = _mixedFillBlankInput.value.trim()
+        if (raw.isEmpty()) return
+
+        when (val eval = evaluateFillBlankKeyboardAnswer(raw, item.matchedToken, item.word.german)) {
+            is FillBlankKeyboardEvaluation.ExactMatch -> {
+                _mixedFillBlankInput.value = eval.canonical
+                _mixedFillBlankErrorHint.value = null
+                _mixedFillBlankStatus.value = Stage6WordStatus.CORRECT
+                _mixedSelectedString.value = item.correctOption
+                speak(item.fullSentence)
+                recordMixedOutcome(item, isCorrect = true)
+            }
+            is FillBlankKeyboardEvaluation.LenientUmlautMatch -> {
+                _mixedFillBlankInput.value = eval.canonical
+                _mixedFillBlankErrorHint.value = null
+                _mixedFillBlankStatus.value = Stage6WordStatus.CORRECT_UMLAUT_WARNING
+                _mixedSelectedString.value = item.correctOption
+                speak(item.fullSentence)
+                recordMixedOutcome(item, isCorrect = true)
+            }
+            is FillBlankKeyboardEvaluation.WrongInput -> {
+                val remaining = (_mixedFillBlankAttemptsLeft.value - 1).coerceAtLeast(0)
+                _mixedFillBlankAttemptsLeft.value = remaining
+                if (remaining > 0) {
+                    _mixedFillBlankInput.value = eval.keptPrefix
+                    _mixedFillBlankStatus.value = Stage6WordStatus.WRONG_TRY
+                    _mixedFillBlankErrorHint.value = "Спробуйте ще раз · залишилось спроб: $remaining"
+                } else {
+                    _mixedFillBlankStatus.value = Stage6WordStatus.OUT_OF_ATTEMPTS
+                    _mixedSelectedString.value = "__wrong_keyboard__"
+                    _mixedFillBlankErrorHint.value = null
+                    speak(item.fullSentence)
+                    recordMixedOutcome(item, isCorrect = false)
+                }
+            }
+        }
     }
 
     private fun handleMixedSpellingWrongAttempt(
@@ -2877,12 +3216,52 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
 
         /**
+         * Evaluates keyboard typing in Stage 6 (Lückentext / Fill-in-the-blank).
+         * Accepts both the exact inflected token inside the sentence (`matchedToken`)
+         * and the base dictionary form (`baseGerman`), with lenient umlaut handling.
+         */
+        internal fun evaluateFillBlankKeyboardAnswer(
+            rawInput: String,
+            matchedToken: String,
+            baseGerman: String
+        ): FillBlankKeyboardEvaluation {
+            val cleaned = normalizeSpellingSpaces(rawInput)
+            val tokenTarget = matchedToken.trim().ifEmpty { baseGerman.trim() }
+            val baseTarget = baseGerman.trim()
+
+            if (cleaned.equals(tokenTarget, ignoreCase = true)) {
+                return FillBlankKeyboardEvaluation.ExactMatch(tokenTarget)
+            }
+            if (baseTarget.isNotEmpty() && cleaned.equals(baseTarget, ignoreCase = true)) {
+                return FillBlankKeyboardEvaluation.ExactMatch(tokenTarget)
+            }
+            if (matchesWithLenientUmlauts(cleaned, tokenTarget)) {
+                return FillBlankKeyboardEvaluation.LenientUmlautMatch(tokenTarget)
+            }
+            if (baseTarget.isNotEmpty() && matchesWithLenientUmlauts(cleaned, baseTarget)) {
+                return FillBlankKeyboardEvaluation.LenientUmlautMatch(tokenTarget)
+            }
+
+            val prefixToken = keepCorrectPrefix(cleaned, tokenTarget, allowLenientUmlauts = true)
+            val prefixBase = if (baseTarget.isNotEmpty()) {
+                keepCorrectPrefix(cleaned, baseTarget, allowLenientUmlauts = true)
+            } else {
+                ""
+            }
+            val bestPrefix = if (prefixToken.length >= prefixBase.length) prefixToken else prefixBase
+            return FillBlankKeyboardEvaluation.WrongInput(bestPrefix)
+        }
+
+        /**
          * Builds a guaranteed-valid fill-in-the-blank sentence for Stage 6 / Final Mix / Mixed Review.
          * Uses whole-word German letter boundaries so substrings like "Ei" inside "Ein" are never masked,
          * and returns null if the example sentence does not actually contain the target word (or its clear inflection).
          */
-        internal fun buildFillBlankMatch(word: WordEntity): FillBlankMatch? {
-            val example = word.exampleDe.trim()
+        internal fun buildFillBlankMatch(
+            word: WordEntity,
+            exampleSentence: String = word.exampleDe
+        ): FillBlankMatch? {
+            val example = exampleSentence.trim()
             val target = word.german.trim()
             if (example.isEmpty() || target.isEmpty()) return null
 

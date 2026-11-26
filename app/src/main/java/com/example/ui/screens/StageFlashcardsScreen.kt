@@ -235,6 +235,11 @@ fun StageFlashcardsScreen(
                                 viewModel.speak(currentWord.exampleDe)
                             }
                         },
+                        onSpeakExampleText = { sentence ->
+                            if (sentence.isNotBlank()) {
+                                viewModel.speak(sentence)
+                            }
+                        },
                         onToggleFavorite = { viewModel.toggleFavorite(currentWord) },
                         showNavigationArrows = false,
                         showSlowSpeedButton = true,

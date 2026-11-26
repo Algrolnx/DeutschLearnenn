@@ -178,6 +178,7 @@ object StockPhotoQueryBuilder {
         "punsch" to listOf("mulled wine mug", "hot fruit punch"),
         "limette" to listOf("green lime citrus", "fresh lime fruit"),
         "fahrkarte" to listOf("train ticket"),
+        "fahrrad" to listOf("bicycle road bike", "cycling bicycle outdoor"),
 
         // Travel & abstract station/service terms
         "haltestelle" to listOf("bus stop shelter", "city bus stop"),
@@ -1040,7 +1041,12 @@ object StockPhotoQueryBuilder {
                 setOf("portrait", "woman", "man", "girl", "boy", "child", "selfie", "bathroom", "car", "machine", "computer"),
                 false
             )
-            word.subtopicId in setOf("travel_transport", "travel_city_nav", "travel_vacation") -> Triple(
+            word.subtopicId == "travel_transport" -> Triple(
+                setOf("transport", "vehicle", "travel", "road", "railway", "aviation", "bicycle", "train", "bus", "car", "ship", "airplane"),
+                setOf("selfie", "baby", "cat", "dog", "food", "traffic", "signal", "stoplight", "semaphore", "sign", "icon"),
+                false
+            )
+            word.subtopicId in setOf("travel_city_nav", "travel_vacation") -> Triple(
                 setOf("transport", "vehicle", "travel", "road", "railway", "aviation", "street", "bridge", "vacation", "luggage", "journey", "tourism"),
                 setOf("selfie", "baby", "cat", "dog", "food"),
                 false
