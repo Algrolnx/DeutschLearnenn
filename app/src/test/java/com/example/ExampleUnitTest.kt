@@ -1052,4 +1052,70 @@ class ExampleUnitTest {
             }
         }
     }
+
+    @Test
+    fun homonymDisambiguationAndPixabayCategoryPreventOffDomainPhotos() {
+        // 1. die Vorspeise ("starter") must NEVER search bare "starter" or pick a car starter motor
+        val vorspeise = WordEntity(
+            german = "Vorspeise",
+            article = "die",
+            translationUk = "закуска",
+            translationEn = "starter",
+            categoryId = "food",
+            subtopicId = "food_restaurant"
+        )
+        val vorspeisePlan = StockPhotoQueryBuilder.build(vorspeise)
+        assertEquals("appetizer food dish", vorspeisePlan.steps.first().query)
+        assertEquals("food", vorspeisePlan.steps.first().pixabayCategory)
+        assertTrue(vorspeisePlan.steps.none { it.query.equals("starter", ignoreCase = true) })
+
+        val vorspeisePick = StockPhotoRepository.pickBestLandscapeCandidate(
+            listOf(
+                PhotoCandidate("https://example.com/bosch_starter.jpg", 800, 600, "a", listOf("starter", "motor", "car", "engine", "auto"), likes = 100),
+                PhotoCandidate("https://example.com/appetizer_dish.jpg", 800, 600, "b", listOf("appetizer", "food", "restaurant", "dish", "plate"), likes = 40)
+            ),
+            vorspeisePlan.scoringProfile
+        )
+        assertEquals("https://example.com/appetizer_dish.jpg", vorspeisePick?.url)
+
+        // 2. work_tools homonyms: Mutter (hex nut), Hobel (wood plane), Feile (metal rasp)
+        val mutterTool = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Mutter", article = "die", translationUk = "гайка", translationEn = "nut", categoryId = "work", subtopicId = "work_tools")
+        )
+        assertEquals("metal hex nut bolt", mutterTool.steps.first().query)
+        assertEquals("industry", mutterTool.steps.first().pixabayCategory)
+
+        val hobel = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Hobel", article = "der", translationUk = "рубанок", translationEn = "plane", categoryId = "work", subtopicId = "work_tools")
+        )
+        assertEquals("carpenter hand plane wood", hobel.steps.first().query)
+        assertTrue(hobel.steps.none { it.query.equals("plane", ignoreCase = true) })
+
+        // 3. health_illness Tablette ("tablet" -> pills, NOT iPad) and Pflaster ("plaster" -> bandaid, NOT wall)
+        val tablette = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Tablette", article = "die", translationUk = "таблетка", translationEn = "tablet", categoryId = "body", subtopicId = "health_illness")
+        )
+        assertEquals("medicine pills capsule", tablette.steps.first().query)
+        assertEquals("health", tablette.steps.first().pixabayCategory)
+
+        // 4. travel_station Haltestelle ("stop" -> bus stop, NOT red stop sign)
+        val haltestelle = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Haltestelle", article = "die", translationUk = "зупинка", translationEn = "stop", categoryId = "travel", subtopicId = "travel_station")
+        )
+        assertEquals("bus stop shelter", haltestelle.steps.first().query)
+        assertEquals("travel", haltestelle.steps.first().pixabayCategory)
+
+        // 5. tech_internet Cookie ("cookie" -> web privacy, NOT chocolate cookie) & body_parts Gelenk ("joint")
+        val cookie = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Cookie", article = "das", translationUk = "кукі", translationEn = "cookie", categoryId = "tech", subtopicId = "tech_internet")
+        )
+        assertEquals("internet privacy computer", cookie.steps.first().query)
+        assertEquals("computer", cookie.steps.first().pixabayCategory)
+
+        val gelenk = StockPhotoQueryBuilder.build(
+            WordEntity(german = "Gelenk", article = "das", translationUk = "суглоб", translationEn = "joint", categoryId = "body", subtopicId = "body_parts")
+        )
+        assertEquals("knee joint anatomy sport", gelenk.steps.first().query)
+        assertEquals("health", gelenk.steps.first().pixabayCategory)
+    }
 }

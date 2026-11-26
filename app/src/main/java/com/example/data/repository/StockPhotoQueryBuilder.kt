@@ -5,7 +5,8 @@ import com.example.data.model.WordEntity
 data class PixabaySearchStep(
     val query: String,
     val lang: String = "en",
-    val isSubtopicFallback: Boolean = false
+    val isSubtopicFallback: Boolean = false,
+    val pixabayCategory: String? = null
 )
 
 data class PhotoScoringProfile(
@@ -164,9 +165,25 @@ object StockPhotoQueryBuilder {
         "rechnung" to listOf("restaurant bill", "invoice paper"),
         "trinkgeld" to listOf("tip coins", "money jar"),
         "besteck" to listOf("cutlery fork knife", "silverware"),
+        "vorspeise" to listOf("appetizer dish", "starter salad food"),
+        "hauptgericht" to listOf("main course dish", "restaurant dinner plate"),
+        "hauptspeise" to listOf("main course dish", "restaurant dinner plate"),
+        "nachtisch" to listOf("dessert cake plate", "sweet dessert"),
+        "nachspeise" to listOf("dessert cake plate", "sweet dessert"),
+        "tagesgericht" to listOf("restaurant daily dish", "chalkboard menu food"),
+        "guten appetit" to listOf("friends dining dinner", "delicious meal table"),
+        "torte" to listOf("cream layer cake", "birthday cake"),
+        "bonbon" to listOf("colorful candy sweets", "hard candy"),
+        "marmelade" to listOf("fruit jam jar", "strawberry jam bread"),
+        "punsch" to listOf("mulled wine mug", "hot fruit punch"),
+        "limette" to listOf("green lime citrus", "fresh lime fruit"),
         "fahrkarte" to listOf("train ticket"),
 
         // Travel & abstract station/service terms
+        "haltestelle" to listOf("bus stop shelter", "city bus stop"),
+        "sitzplatz" to listOf("train passenger seat", "airplane seat"),
+        "übernachtung" to listOf("hotel bedroom bed", "cozy hotel room"),
+        "wlan" to listOf("wifi router signal", "laptop coffee wifi"),
         "verspätung" to listOf("train clock", "train station"),
         "abfahrt" to listOf("train departure", "train station"),
         "ankunft" to listOf("airport arrival", "airport terminal"),
@@ -185,6 +202,13 @@ object StockPhotoQueryBuilder {
         "reisepass" to listOf("passport"),
         "krankenwagen" to listOf("ambulance"),
         "feuerwehr" to listOf("fire truck"),
+        "links" to listOf("left arrow sign", "road sign left"),
+        "rechts" to listOf("right arrow sign", "road sign right"),
+        "geradeaus" to listOf("straight highway road", "road ahead"),
+        "richtung" to listOf("direction signpost", "wooden signpost arrows"),
+        "norden" to listOf("compass north needle", "compass map"),
+        "osten" to listOf("sunrise compass east", "compass map"),
+        "süden" to listOf("compass south map", "sunny coast south"),
 
         // Vegetables, fruits & concrete objects
         "aubergine" to listOf("eggplant"),
@@ -382,87 +406,239 @@ object StockPhotoQueryBuilder {
         "offen" to listOf("open wooden door", "open window sunlight")
     )
 
-    // True homonyms where subtopic determines meaning
+    // True homonyms & domain-sensitive words where subtopic determines the exact visual meaning
     private val homonymDisambiguation: Map<Pair<String, String>, String> = mapOf(
+        // Food & Restaurant
         ("orange" to "food_fruits") to "orange fruit",
         ("orange" to "adj_colors") to "orange color",
         ("date" to "food_fruits") to "date fruit",
-        ("mouse" to "tech_devices") to "computer mouse",
-        ("mouse" to "tech_computers") to "computer mouse",
-        ("mouse" to "nature_animals") to "mouse animal",
-        ("bank" to "city_places") to "bank building",
-        ("bank" to "city_services") to "bank building",
-        ("bank" to "nature_landscape") to "river bank",
-        ("police" to "city_places") to "police station",
-        ("police" to "city_emergency") to "police car",
-        ("spring" to "nature_weather") to "spring flowers",
-        ("fall" to "nature_weather") to "autumn leaves",
-        ("glasses" to "shopping_clothing") to "eyeglasses",
-        ("glasses" to "shopping_shoes") to "eyeglasses",
-        ("light" to "adj_qualities") to "feather",
-        ("light" to "adj_colors") to "sunlight bright",
-        ("glass" to "food_drinks") to "water glass",
-        ("glass" to "home_kitchen") to "drinking glass",
-        ("turkey" to "food_meat_fish") to "roast turkey",
-        ("turkey" to "nature_animals") to "turkey bird",
-        ("seal" to "nature_animals") to "seal animal",
-        ("seal" to "nature_wildlife") to "seal animal",
-        ("bat" to "nature_animals") to "bat animal",
-        ("bat" to "nature_wildlife") to "bat animal",
-        ("crane" to "nature_animals") to "crane bird",
-        ("crane" to "nature_wildlife") to "crane bird",
-        ("jam" to "food_sweets") to "fruit jam",
-        ("toast" to "food_meals") to "toast bread",
-        ("chips" to "food_sweets") to "potato chips",
-        ("match" to "sports_games") to "sports match",
-        ("ring" to "shopping_shoes") to "gold ring jewelry",
-        ("watch" to "shopping_shoes") to "wristwatch",
-        ("tie" to "shopping_clothing") to "necktie suit",
-        ("boot" to "shopping_shoes") to "leather boots",
-        ("suit" to "shopping_clothing") to "business suit",
-        ("coat" to "shopping_clothing") to "winter coat",
-        ("nail" to "work_tools") to "iron nails hammer",
-        ("nail" to "body_parts") to "fingernail hand",
-        ("palm" to "nature_plants") to "palm tree",
-        ("palm" to "body_parts") to "open hand palm",
-        ("bark" to "nature_plants") to "tree bark",
-        ("trunk" to "nature_plants") to "tree trunk",
-        ("bill" to "food_restaurant") to "restaurant bill",
-        ("bill" to "shopping_money") to "banknote money",
-        ("tip" to "food_restaurant") to "restaurant tip coins",
-        ("check" to "food_restaurant") to "restaurant bill",
-        ("fan" to "home_appliances") to "electric fan",
-        ("chip" to "tech_computers") to "microchip processor",
-        ("bug" to "tech_data") to "computer code screen",
-        ("cloud" to "tech_internet") to "cloud computing server",
-        ("cloud" to "nature_weather") to "sky clouds",
-        ("web" to "tech_internet") to "website browser",
-        ("file" to "tech_data") to "computer files folder",
-        ("file" to "work_office") to "office folder binder",
-        ("stamp" to "city_services") to "postage stamp",
-        ("letter" to "city_services") to "envelope mail",
-        ("note" to "music_instruments") to "musical notes sheet",
-        ("note" to "education_exams") to "exam grade paper",
+        ("lime" to "food_fruits") to "green lime fruit",
         ("pepper" to "food_vegetables") to "bell pepper",
         ("pepper" to "food_cooking") to "black pepper spice",
-        ("roll" to "food_meals") to "bread roll bakery",
-        ("bun" to "food_meals") to "bread roll bakery",
+        ("oil" to "food_cooking") to "olive oil cooking",
         ("pot" to "food_cooking") to "cooking pot kitchen",
         ("pan" to "food_cooking") to "frying pan kitchen",
-        ("sink" to "home_bathroom") to "bathroom sink",
-        ("sink" to "home_kitchen") to "kitchen sink",
-        ("iron" to "home_appliances") to "clothes iron",
-        ("pool" to "sports_games") to "swimming pool",
-        ("track" to "sports_games") to "running track stadium",
-        ("court" to "sports_games") to "tennis court",
-        ("coach" to "sports_games") to "sports coach",
+        ("cut" to "food_cooking") to "chopping vegetables knife",
+        ("peel" to "food_cooking") to "peeling potato kitchen",
+        ("stir" to "food_cooking") to "stirring soup pot",
+        ("mix" to "food_cooking") to "mixing dough bowl",
+        ("season" to "food_cooking") to "seasoning food spices",
+        ("serve" to "food_cooking") to "serving dinner plate",
+        ("bake" to "food_cooking") to "baking bread oven",
+        ("fry" to "food_cooking") to "frying pan cooking",
+        ("jam" to "food_sweets") to "fruit jam jar",
+        ("jam" to "food_meals") to "fruit jam jar",
+        ("sweet" to "food_sweets") to "colorful candy sweets",
+        ("gateau" to "food_sweets") to "cream layer cake",
+        ("cream" to "food_sweets") to "whipped cream dessert",
+        ("chips" to "food_sweets") to "potato chips",
+        ("toast" to "food_meals") to "toast bread",
+        ("roll" to "food_meals") to "bread roll bakery",
+        ("bun" to "food_meals") to "bread roll bakery",
+        ("turkey" to "food_meat_fish") to "roast turkey dinner",
+        ("chicken" to "food_meat_fish") to "roast chicken dish",
+        ("duck" to "food_meat_fish") to "roast duck dinner",
+        ("goose" to "food_meat_fish") to "roast goose dinner",
+        ("fish" to "food_meat_fish") to "grilled fish dish",
+        ("crab" to "food_meat_fish") to "cooked crab seafood",
+        ("punch" to "food_drinks") to "mulled wine hot punch",
+        ("glass" to "food_drinks") to "water glass drink",
+        ("starter" to "food_restaurant") to "appetizer food dish",
+        ("order" to "food_restaurant") to "waiter restaurant order",
+        ("table" to "food_restaurant") to "restaurant dining table",
+        ("bill" to "food_restaurant") to "restaurant bill check",
+        ("tip" to "food_restaurant") to "restaurant tip coins",
+        ("check" to "food_restaurant") to "restaurant bill check",
+        ("service" to "food_restaurant") to "waiter restaurant service",
+        ("guest" to "food_restaurant") to "restaurant guests dining",
+        ("reservation" to "food_restaurant") to "reserved restaurant table",
+        ("cup" to "food_restaurant") to "coffee cup cafe",
+
+        // Travel & Navigation
         ("plane" to "travel_transport") to "airplane flying",
         ("train" to "travel_transport") to "passenger train",
         ("ship" to "travel_transport") to "cruise ship sea",
+        ("boat" to "travel_transport") to "boat water sailing",
+        ("fine" to "travel_transport") to "parking ticket fine",
+        ("saddle" to "travel_transport") to "bicycle saddle seat",
+        ("chain" to "travel_transport") to "bicycle chain gear",
         ("gate" to "travel_station") to "airport gate",
+        ("stop" to "travel_station") to "bus stop shelter",
+        ("counter" to "travel_station") to "airport ticket counter",
+        ("seat" to "travel_station") to "train passenger seat",
+        ("track" to "travel_station") to "railway train track",
+        ("hub" to "travel_station") to "airport terminal hub",
+        ("lift" to "travel_hotel") to "hotel elevator doors",
+        ("night" to "travel_hotel") to "hotel bedroom bed",
+        ("key" to "travel_hotel") to "hotel room key",
+        ("room" to "travel_hotel") to "hotel bedroom interior",
+        ("berth" to "travel_hotel") to "marina harbor boat",
+        ("square" to "travel_city_nav") to "european town square",
+        ("map" to "travel_city_nav") to "city street map",
+        ("corner" to "travel_city_nav") to "city street corner",
+        ("stamp" to "travel_vacation") to "passport postage stamp",
+
+        // Health, Body & Fitness
+        ("cold" to "health_illness") to "sick person sneezing tissue",
+        ("plaster" to "health_illness") to "adhesive bandage bandaid",
+        ("plaster" to "city_emergency") to "adhesive bandage bandaid",
+        ("tablet" to "health_illness") to "medicine pills capsule",
+        ("cast" to "medicine_care") to "arm plaster cast medical",
+        ("tissue" to "appearance_hygiene") to "paper tissue box",
+        ("tissue" to "home_bathroom") to "paper tissue box",
+        ("cream" to "appearance_hygiene") to "skin cream jar cosmetics",
+        ("plank" to "fitness_wellness") to "plank exercise fitness",
+        ("coach" to "fitness_wellness") to "fitness trainer gym",
+        ("goal" to "fitness_wellness") to "running finish line",
+        ("nail" to "body_parts") to "fingernail hand closeup",
+        ("palm" to "body_parts") to "open hand palm",
+        ("joint" to "body_parts") to "knee joint anatomy sport",
+        ("chest" to "body_parts") to "fitness torso chest",
+        ("back" to "body_parts") to "human back posture",
+        ("heel" to "body_parts") to "foot heel ankle",
+
+        // City, Services, Shopping & Money
+        ("bank" to "city_places") to "bank building exterior",
+        ("bank" to "city_services") to "bank building exterior",
+        ("bank" to "shopping_money") to "bank building exterior",
+        ("court" to "city_places") to "courthouse justice building",
+        ("court" to "society_politics") to "courtroom justice gavel",
+        ("bar" to "city_places") to "cocktail bar interior",
+        ("club" to "city_places") to "nightclub disco lights",
+        ("police" to "city_places") to "police station building",
+        ("police" to "city_emergency") to "police patrol car",
+        ("stamp" to "city_services") to "postage stamp envelope",
+        ("letter" to "city_services") to "envelope mail letter",
+        ("change" to "city_services") to "euro coins change money",
+        ("change" to "shopping_money") to "euro coins change money",
+        ("branch" to "city_services") to "bank branch storefront",
+        ("branch" to "shopping_money") to "bank branch storefront",
+        ("pin" to "city_services") to "atm keypad pin terminal",
+        ("pin" to "shopping_money") to "atm keypad pin terminal",
+        ("interest" to "city_services") to "bank finance percent chart",
+        ("interest" to "shopping_money") to "bank finance percent chart",
+        ("bill" to "shopping_money") to "euro banknotes money",
+        ("tip" to "shopping_money") to "coins tip jar",
+        ("glasses" to "shopping_clothing") to "eyeglasses fashion",
+        ("glasses" to "shopping_shoes") to "eyeglasses fashion",
+        ("ring" to "shopping_shoes") to "gold ring jewelry",
+        ("watch" to "shopping_shoes") to "wristwatch leather",
+        ("heel" to "shopping_shoes") to "high heel shoe fashion",
+        ("boot" to "shopping_shoes") to "leather boots fashion",
+        ("tie" to "shopping_clothing") to "necktie business suit",
+        ("suit" to "shopping_clothing") to "business suit blazer",
+        ("suit" to "people_appearance") to "business suit blazer",
+        ("coat" to "shopping_clothing") to "winter coat fashion",
+        ("vest" to "shopping_clothing") to "clothing vest waistcoat",
+        ("cap" to "shopping_clothing") to "baseball cap hat",
+        ("hood" to "shopping_materials") to "hoodie jacket hood",
+
+        // Home & Appliances
+        ("glass" to "home_kitchen") to "drinking glass kitchen",
+        ("fan" to "home_appliances") to "electric fan room",
+        ("iron" to "home_appliances") to "clothes steam iron",
+        ("sink" to "home_bathroom") to "bathroom sink faucet",
+        ("sink" to "home_kitchen") to "kitchen sink faucet",
+        ("stool" to "home_furniture") to "wooden bar stool chair",
+
+        // Nature, Animals & Weather
+        ("mouse" to "nature_animals") to "mouse rodent animal",
+        ("turkey" to "nature_animals") to "turkey bird farm",
+        ("duck" to "nature_animals") to "duck pond water",
+        ("calf" to "nature_animals") to "baby cow calf farm",
+        ("seal" to "nature_animals") to "seal marine animal",
+        ("seal" to "nature_wildlife") to "seal marine animal",
+        ("bat" to "nature_animals") to "bat flying animal",
+        ("bat" to "nature_wildlife") to "bat flying animal",
+        ("crane" to "nature_animals") to "crane bird wildlife",
+        ("crane" to "nature_wildlife") to "crane bird wildlife",
         ("bear" to "nature_wildlife") to "brown bear forest",
-        ("duck" to "nature_animals") to "duck pond",
-        ("mole" to "nature_wildlife") to "mole animal"
+        ("mole" to "nature_wildlife") to "mole animal garden",
+        ("fly" to "nature_wildlife") to "housefly insect macro",
+        ("palm" to "nature_plants") to "palm tree tropical",
+        ("bark" to "nature_plants") to "tree bark wood",
+        ("trunk" to "nature_plants") to "tree trunk forest",
+        ("cone" to "nature_plants") to "pine cone conifer",
+        ("spring" to "nature_weather") to "spring blossom flowers",
+        ("spring" to "nature_landscape") to "natural water spring stream",
+        ("fall" to "nature_weather") to "autumn colorful leaves",
+        ("shower" to "nature_weather") to "rain shower clouds",
+        ("cloud" to "nature_weather") to "sky white clouds",
+        ("cold" to "nature_weather") to "winter snow frost ice",
+        ("ice" to "nature_weather") to "frozen ice winter",
+        ("bank" to "nature_landscape") to "river bank nature",
+        ("plain" to "nature_landscape") to "green meadow plain valley",
+        ("port" to "nature_landscape") to "sea harbor port boats",
+
+        // Tech, Science & Data
+        ("mouse" to "tech_devices") to "computer mouse desk",
+        ("mouse" to "tech_computers") to "computer mouse desk",
+        ("tablet" to "tech_devices") to "tablet computer screen",
+        ("switch" to "tech_devices") to "wall light switch",
+        ("key" to "tech_computers") to "computer keyboard key",
+        ("drive" to "tech_computers") to "computer hard drive ssd",
+        ("file" to "tech_computers") to "computer digital files screen",
+        ("folder" to "tech_computers") to "computer folders screen",
+        ("chip" to "tech_computers") to "microchip processor board",
+        ("cloud" to "tech_internet") to "cloud computing server",
+        ("web" to "tech_internet") to "website browser laptop",
+        ("link" to "tech_internet") to "website browser address",
+        ("cookie" to "tech_internet") to "internet privacy computer",
+        ("spam" to "tech_internet") to "email inbox laptop",
+        ("bug" to "tech_data") to "programming code screen",
+        ("file" to "tech_data") to "computer data files screen",
+        ("branch" to "tech_data") to "software programming code",
+        ("port" to "tech_data") to "network ethernet server",
+        ("log" to "tech_data") to "computer terminal code",
+        ("bit" to "tech_data") to "binary code digital data",
+        ("script" to "tech_data") to "coding script laptop",
+        ("cell" to "tech_science") to "microscope biology cell",
+        ("table" to "tech_science") to "spreadsheet data chart",
+
+        // Work, Tools & Office
+        ("file" to "work_office") to "office folder binder",
+        ("stamp" to "work_office") to "rubber stamp office desk",
+        ("shift" to "work_office") to "factory shift work clock",
+        ("order" to "work_business") to "business contract order",
+        ("nail" to "work_tools") to "iron nails hammer wood",
+        ("nut" to "work_tools") to "metal hex nut bolt",
+        ("bolt" to "work_tools") to "metal bolt screw hardware",
+        ("file" to "work_tools") to "metal rasp woodworking file",
+        ("plane" to "work_tools") to "carpenter hand plane wood",
+        ("vice" to "work_tools") to "workshop bench vise clamp",
+        ("mortar" to "work_tools") to "bricklayer cement mortar trowel",
+
+        // Education, Hobbies, Music, Society, People & Adjectives
+        ("ruler" to "education_supplies") to "school ruler measuring",
+        ("letter" to "education_languages") to "alphabet letters wooden",
+        ("rule" to "education_languages") to "grammar textbook study",
+        ("grade" to "education_school") to "school exam paper grade",
+        ("subject" to "education_school") to "school books classroom",
+        ("note" to "education_exams") to "exam grade paper",
+        ("note" to "music_instruments") to "musical notes sheet",
+        ("band" to "music_instruments") to "music band concert stage",
+        ("beat" to "music_instruments") to "music metronome drums",
+        ("stage" to "music_instruments") to "concert music stage",
+        ("match" to "sports_games") to "football sports match",
+        ("pool" to "sports_games") to "swimming pool lanes",
+        ("track" to "sports_games") to "running track stadium",
+        ("court" to "sports_games") to "tennis court net",
+        ("coach" to "sports_games") to "sports coach team",
+        ("goal" to "sports_games") to "soccer goal net stadium",
+        ("level" to "gaming_entertainment") to "video game controller screen",
+        ("play" to "gaming_entertainment") to "theater stage drama performance",
+        ("club" to "people_relationships") to "community club group friends",
+        ("board" to "people_relationships") to "business meeting board table",
+        ("letter" to "people_relationships") to "handwritten letter envelope",
+        ("bell" to "society_religion") to "church bell tower",
+        ("temple" to "society_religion") to "ancient temple architecture",
+        ("host" to "society_festivals") to "party host dinner guests",
+        ("host" to "society_media") to "tv studio presenter microphone",
+        ("tip" to "emotions_communication") to "lightbulb idea advice",
+        ("light" to "adj_qualities") to "floating feather",
+        ("light" to "adj_colors") to "sunlight bright sky",
+        ("current" to "adj_size_time") to "clock watch time",
+        ("double" to "adj_size_time") to "pair twin dice"
     )
 
     internal fun detectPersonGenderHint(
@@ -517,16 +693,52 @@ object StockPhotoQueryBuilder {
         return PersonGenderHint.NONE
     }
 
+    /**
+     * Maps subtopics to official Pixabay API `category` values so homonyms (e.g. food "starter" vs car starter,
+     * work_tools "plane" vs airplane, health "tablet" vs iPad) stay strictly locked to the right domain.
+     */
+    internal fun pixabayCategoryFor(word: WordEntity, genderHint: PersonGenderHint): String? {
+        if (genderHint != PersonGenderHint.NONE) return "people"
+        return when (word.subtopicId) {
+            "food_fruits", "food_vegetables", "food_drinks", "food_meals",
+            "food_meat_fish", "food_sweets", "food_restaurant", "food_cooking" -> "food"
+            "nature_animals", "nature_wildlife" -> "animals"
+            "nature_plants", "nature_landscape", "nature_weather" -> "nature"
+            "travel_transport" -> "transportation"
+            "travel_station", "travel_hotel", "travel_city_nav", "travel_vacation" -> "travel"
+            "city_places", "home_rooms" -> "buildings"
+            "body_parts", "health_illness", "medicine_care", "appearance_hygiene", "fitness_wellness" -> "health"
+            "education_school", "education_university", "education_supplies", "education_exams", "education_languages" -> "education"
+            "tech_computers", "tech_internet", "tech_devices", "tech_data" -> "computer"
+            "tech_science" -> "science"
+            "sports_games" -> "sports"
+            "music_instruments" -> "music"
+            "shopping_clothing", "shopping_shoes", "people_appearance", "shopping_materials" -> "fashion"
+            "work_office", "work_business", "work_career", "shopping_money", "city_services" -> "business"
+            "work_tools", "work_trades" -> "industry"
+            "people_family", "people_relationships", "city_jobs" -> "people"
+            "emotions_positive", "emotions_negative", "emotions_mind", "emotions_traits",
+            "emotions_communication", "people_emotions", "people_character" -> "feelings"
+            "society_religion" -> "religion"
+            else -> null
+        }
+    }
+
     fun build(word: WordEntity): StockPhotoQueryPlan {
-        val steps = ArrayList<PixabaySearchStep>(8)
+        val steps = ArrayList<PixabaySearchStep>(10)
         val seen = HashSet<String>()
 
-        fun addStep(query: String, lang: String = "en", isFallback: Boolean = false) {
+        fun addStep(
+            query: String,
+            lang: String = "en",
+            isFallback: Boolean = false,
+            pixabayCategory: String? = null
+        ) {
             val normalized = query.trim().take(60)
             if (normalized.length < 2) return
-            val key = "$lang:${normalized.lowercase()}"
+            val key = "$lang:${pixabayCategory.orEmpty()}:${normalized.lowercase()}"
             if (seen.add(key)) {
-                steps.add(PixabaySearchStep(normalized, lang, isFallback))
+                steps.add(PixabaySearchStep(normalized, lang, isFallback, pixabayCategory))
             }
         }
 
@@ -534,11 +746,18 @@ object StockPhotoQueryBuilder {
         val enSenses = extractEnglishSenses(word.translationEn)
         val primaryEn = enSenses.firstOrNull().orEmpty()
         val genderHint = detectPersonGenderHint(word, cleanDe, enSenses)
+        val domainCategory = pixabayCategoryFor(word, genderHint)
+        val disambiguatedPrimary = if (primaryEn.isNotBlank()) {
+            homonymDisambiguation[primaryEn to word.subtopicId]
+        } else {
+            null
+        }
 
         // 1. Homonym disambiguation (subtopic-specific beats generic override)
-        if (primaryEn.isNotBlank()) {
-            homonymDisambiguation[primaryEn to word.subtopicId]?.let { disambiguated ->
-                addStep(disambiguated, "en")
+        if (disambiguatedPrimary != null) {
+            addStep(disambiguatedPrimary, "en", pixabayCategory = domainCategory)
+            if (domainCategory != null) {
+                addStep(disambiguatedPrimary, "en", pixabayCategory = null)
             }
         }
 
@@ -548,50 +767,73 @@ object StockPhotoQueryBuilder {
                 genderHint = genderHint,
                 enSenses = enSenses,
                 cleanDe = cleanDe,
-                addStep = ::addStep
+                addStep = { q, lang, isFallback ->
+                    addStep(q, lang, isFallback, if (isFallback) null else domainCategory)
+                }
             )
+            // Uncategorized fallback for rare professions if Pixabay "people" category returns empty
+            if (domainCategory != null && steps.isNotEmpty()) {
+                val lead = steps.first()
+                addStep(lead.query, lead.lang, isFallback = false, pixabayCategory = null)
+            }
         } else {
             // 3. Curated exact override(s) for places, rooms, verbs, and tricky non-person words
-            specialGermanQueries[cleanDe]?.forEach { curated ->
-                addStep(curated, "en")
+            val curatedList = if (disambiguatedPrimary == null) specialGermanQueries[cleanDe] else null
+            curatedList?.forEach { curated ->
+                addStep(curated, "en", pixabayCategory = domainCategory)
             }
 
-            // 4. Primary English sense (concise 1-2 words)
+            // 4. Primary English sense (concise 1-2 words) — skip naked ambiguous primary when disambiguated
             val concisePrimary = if (primaryEn.isNotBlank()) conciseQuery(primaryEn) else ""
-            if (concisePrimary.isNotBlank()) {
-                addStep(concisePrimary, "en")
+            if (disambiguatedPrimary == null && concisePrimary.isNotBlank()) {
+                addStep(concisePrimary, "en", pixabayCategory = domainCategory)
             }
 
             // 5. Secondary English sense after '/' or ',' (e.g., "untidy / messy" -> "messy")
             if (enSenses.size > 1) {
-                addStep(conciseQuery(enSenses[1]), "en")
+                addStep(conciseQuery(enSenses[1]), "en", pixabayCategory = domainCategory)
             }
 
-            // 6. Native German word search BEFORE partial English splits
+            // 6. Native German word search BEFORE uncategorized or partial splits
             // (Pixabay is German-founded and indexes compound German nouns accurately!)
             if (cleanDe.length >= 3 && !cleanDe.equals(primaryEn, ignoreCase = true)) {
-                addStep(cleanDe, "de")
+                addStep(cleanDe, "de", pixabayCategory = domainCategory)
+            }
+
+            // 6b. If domain category yielded zero hits for a niche word, retry top query without category filter
+            if (domainCategory != null) {
+                val bestUncat = curatedList?.firstOrNull()
+                    ?: if (disambiguatedPrimary == null) concisePrimary.takeIf { it.isNotBlank() } else null
+                if (bestUncat != null) {
+                    addStep(bestUncat, "en", pixabayCategory = null)
+                }
+                if (cleanDe.length >= 3 && !cleanDe.equals(primaryEn, ignoreCase = true)) {
+                    addStep(cleanDe, "de", pixabayCategory = null)
+                }
             }
 
             // 7. Single-word head fallback ONLY if not a generic/ambiguous head noun or verb particle
-            if (concisePrimary.isNotBlank()) {
+            if (disambiguatedPrimary == null && concisePrimary.isNotBlank()) {
                 val parts = concisePrimary.split(' ').filter { it.length >= 3 }
                 if (parts.size >= 2) {
                     val lastWord = parts.last().lowercase()
                     if (lastWord !in ambiguousSingleFallbackWords) {
-                        addStep(lastWord, "en")
+                        addStep(lastWord, "en", pixabayCategory = domainCategory)
                     }
                 }
             }
 
             // 8. Concrete capitalized German noun from exampleDe for abstract words
             extractExampleNoun(word.exampleDe, cleanDe)?.let { exampleNoun ->
-                addStep(exampleNoun, "de")
+                addStep(exampleNoun, "de", pixabayCategory = domainCategory)
             }
         }
 
         // 9. Guaranteed visual fallback for subtopic
-        addStep(subtopicFallbackQuery(word.subtopicId, word.categoryId), "en", isFallback = true)
+        addStep(subtopicFallbackQuery(word.subtopicId, word.categoryId), "en", isFallback = true, pixabayCategory = domainCategory)
+        if (domainCategory != null) {
+            addStep(subtopicFallbackQuery(word.subtopicId, word.categoryId), "en", isFallback = true, pixabayCategory = null)
+        }
 
         val primaryStepTokens = steps.firstOrNull { !it.isSubtopicFallback }
             ?.query
@@ -773,19 +1015,29 @@ object StockPhotoQueryBuilder {
                 setOf("portrait", "selfie", "flower", "food", "animal"),
                 false
             )
-            word.categoryId == "food" && word.subtopicId != "food_restaurant" -> Triple(
-                setOf("food", "fruit", "vegetable", "fresh", "dish", "meal", "drink", "eat", "healthy", "organic", "ripe", "sweet", "bakery", "cooking", "ingredient"),
-                setOf("portrait", "woman", "man", "girl", "boy", "child", "children", "people", "person", "face", "selfie"),
+            word.subtopicId == "food_restaurant" -> Triple(
+                setOf("restaurant", "food", "dining", "meal", "dish", "plate", "table", "menu", "cafe", "bistro", "appetizer", "dinner", "lunch", "cuisine", "waiter", "service"),
+                setOf("car", "engine", "motor", "auto", "automotive", "vehicle", "machine", "mechanical", "industrial", "factory", "tool", "computer", "weapon", "animal", "pet", "selfie"),
+                false
+            )
+            word.subtopicId == "food_meat_fish" -> Triple(
+                setOf("food", "meat", "fish", "dish", "meal", "grilled", "roasted", "cooked", "plate", "dinner", "kitchen", "culinary", "seafood", "steak", "fillet"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "children", "people", "person", "face", "selfie", "aquarium", "underwater", "swimming", "pond", "farm", "live", "pet", "bird", "wings", "feathers", "car", "engine", "motor", "machine"),
+                false
+            )
+            word.categoryId == "food" -> Triple(
+                setOf("food", "fruit", "vegetable", "fresh", "dish", "meal", "drink", "eat", "healthy", "organic", "ripe", "sweet", "bakery", "cooking", "ingredient", "kitchen"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "children", "people", "person", "face", "selfie", "car", "engine", "motor", "auto", "machine", "mechanical", "industrial", "factory", "weapon", "computer"),
                 false
             )
             word.subtopicId in setOf("nature_animals", "nature_wildlife") -> Triple(
-                setOf("animal", "wildlife", "mammal", "bird", "pet", "nature", "fauna", "wild"),
-                setOf("portrait", "woman", "man", "girl", "boy", "child", "people", "toy", "plush", "statue", "sculpture", "tattoo"),
+                setOf("animal", "wildlife", "mammal", "bird", "pet", "nature", "fauna", "wild", "insect"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "people", "toy", "plush", "statue", "sculpture", "tattoo", "cooked", "meat", "plate", "food", "car", "airplane", "machine"),
                 false
             )
             word.subtopicId in setOf("nature_plants", "nature_landscape", "nature_weather") -> Triple(
                 setOf("nature", "plant", "flower", "tree", "landscape", "outdoor", "sky", "forest", "mountain", "water", "weather"),
-                setOf("portrait", "woman", "man", "girl", "boy", "child", "selfie"),
+                setOf("portrait", "woman", "man", "girl", "boy", "child", "selfie", "bathroom", "car", "machine", "computer"),
                 false
             )
             word.subtopicId in setOf("travel_transport", "travel_city_nav", "travel_vacation") -> Triple(
@@ -795,37 +1047,47 @@ object StockPhotoQueryBuilder {
             )
             word.subtopicId in setOf("shopping_clothing", "shopping_shoes", "people_appearance", "shopping_materials") -> Triple(
                 setOf("clothing", "fashion", "apparel", "wear", "garment", "shoes", "footwear", "fabric", "textile", "style", "outfit", "accessory"),
-                setOf("landscape", "animal", "food", "car"),
+                setOf("landscape", "animal", "food", "car", "engine", "motor"),
                 false
             )
-            word.subtopicId in setOf("shopping_money", "city_services") -> Triple(
-                setOf("money", "euro", "finance", "bank", "payment", "cash", "card", "receipt", "economy", "mail", "post", "service"),
-                setOf("animal", "pet", "food", "flower"),
+            word.subtopicId in setOf("shopping_money", "city_services", "work_business") -> Triple(
+                setOf("money", "euro", "finance", "bank", "payment", "cash", "card", "receipt", "economy", "mail", "post", "service", "business", "contract"),
+                setOf("animal", "pet", "food", "flower", "tree", "forest"),
                 false
             )
             word.categoryId == "tech" -> Triple(
-                setOf("technology", "computer", "digital", "device", "electronics", "hardware", "screen", "internet", "science", "laboratory", "code", "modern"),
-                setOf("flower", "food", "pet", "vintage"),
+                setOf("technology", "computer", "digital", "device", "electronics", "hardware", "screen", "internet", "science", "laboratory", "code", "modern", "server", "network"),
+                setOf("flower", "food", "baking", "chocolate", "cookie", "pet", "animal", "tree", "forest", "wood", "harbor", "ship", "vintage"),
                 false
             )
             word.categoryId == "education" -> Triple(
                 setOf("education", "school", "study", "university", "book", "books", "classroom", "stationery", "desk", "learning", "exam", "writing"),
-                setOf("beach", "party", "alcohol", "animal"),
+                setOf("beach", "party", "alcohol", "animal", "king", "crown", "monarch"),
                 false
             )
             word.categoryId == "body" -> Triple(
                 setOf("health", "medical", "medicine", "doctor", "care", "body", "fitness", "wellness", "hygiene", "sport", "clean", "hospital"),
-                setOf("horror", "zombie", "skull", "blood", "weapon"),
+                setOf("horror", "zombie", "skull", "blood", "weapon", "ipad", "computer", "laptop", "snow", "winter", "lumber", "wood", "cannabis", "marijuana", "smoke"),
                 false
             )
             word.subtopicId in setOf("sports_games", "music_instruments", "outdoor_activities", "gaming_entertainment") -> Triple(
-                setOf("sport", "sports", "game", "music", "instrument", "concert", "outdoor", "hiking", "camping", "adventure", "gaming", "cinema", "ball"),
-                setOf("office", "medical", "pills"),
+                setOf("sport", "sports", "game", "music", "instrument", "concert", "outdoor", "hiking", "camping", "adventure", "gaming", "cinema", "ball", "stage", "theater"),
+                setOf("office", "medical", "pills", "carpenter", "tool"),
                 false
             )
             word.subtopicId in setOf("city_jobs", "people_family", "people_relationships", "work_career", "work_trades") -> Triple(
-                setOf("person", "people", "portrait", "worker", "professional", "uniform", "doctor", "teacher", "chef", "family", "friends", "team"),
-                setOf("empty", "building", "landscape", "abstract"),
+                setOf("person", "people", "portrait", "worker", "professional", "uniform", "doctor", "teacher", "chef", "family", "friends", "team", "group"),
+                setOf("empty", "building", "landscape", "abstract", "golf", "wood", "surfboard"),
+                false
+            )
+            word.categoryId == "emotions" || word.subtopicId in setOf("people_emotions", "people_character") -> Triple(
+                setOf("person", "people", "face", "emotion", "expression", "feeling", "human", "smile", "hands", "portrait", "lifestyle"),
+                setOf("car", "engine", "machine", "factory", "logo", "icon"),
+                false
+            )
+            word.categoryId == "society" -> Triple(
+                setOf("society", "culture", "city", "people", "history", "building", "architecture", "media", "festival", "celebration", "church", "temple"),
+                setOf("selfie", "car", "engine", "food"),
                 false
             )
             word.categoryId == "verbs" -> Triple(
@@ -849,13 +1111,13 @@ object StockPhotoQueryBuilder {
                 false
             )
             word.subtopicId in setOf("adj_size_time", "adj_sensory") -> Triple(
-                setOf("nature", "weather", "closeup", "texture", "macro", "outdoor", "water", "light", "road"),
+                setOf("nature", "weather", "closeup", "texture", "macro", "outdoor", "water", "light", "road", "clock"),
                 setOf("statue", "monument", "logo", "selfie", "flag"),
                 false
             )
             else -> Triple(
                 emptySet(),
-                emptySet(),
+                setOf("car", "engine", "motor", "logo", "icon"),
                 false
             )
         }

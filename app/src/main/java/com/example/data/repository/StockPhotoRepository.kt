@@ -158,6 +158,7 @@ class StockPhotoRepository private constructor(context: Context) {
 
     init {
         migrateAdjectivePhotoCacheOnce()
+        migrateHomonymPhotoCacheOnce()
     }
 
     /**
@@ -177,9 +178,75 @@ class StockPhotoRepository private constructor(context: Context) {
         prefs.all.keys.forEach { key ->
             if (stalePrefixes.any { prefix -> key.startsWith(prefix) }) {
                 editor.remove(key)
+                localPhotoFileForKey(key).delete()
             }
         }
         editor.putBoolean(KEY_ADJ_CACHE_MIGRATED_V1, true).apply()
+    }
+
+    /**
+     * One-time targeted cleanup of previously cached homonym / uncategorized restaurant photos
+     * (e.g., "Vorspeise" -> car starter motor, "Tablette" -> iPad, "Hobel" -> airplane)
+     * so they immediately refresh with domain-locked Pixabay category & disambiguated queries
+     * while preserving all valid offline photos.
+     */
+    private fun migrateHomonymPhotoCacheOnce() {
+        if (prefs.getBoolean(KEY_HOMONYM_CACHE_MIGRATED_V2, false)) return
+        val staleExactKeys = setOf(
+            "food_cooking_öl", "food_cooking_pfeffer", "food_cooking_pfanne", "food_cooking_topf",
+            "food_cooking_schneiden", "food_cooking_schälen", "food_cooking_rühren",
+            "food_cooking_mischen", "food_cooking_würzen", "food_cooking_servieren",
+            "food_cooking_backen", "food_cooking_braten",
+            "food_sweets_bonbon", "food_sweets_torte", "food_sweets_sahne",
+            "food_meals_marmelade", "food_meals_toast",
+            "food_meat_fish_fisch", "food_meat_fish_hähnchen", "food_meat_fish_ente",
+            "food_meat_fish_gans", "food_meat_fish_truthahn", "food_meat_fish_pute", "food_meat_fish_krabbe",
+            "food_drinks_punsch", "food_fruits_limette", "food_fruits_dattel",
+            "travel_station_haltestelle", "travel_station_schalter", "travel_station_sitzplatz",
+            "travel_station_gleis", "travel_station_drehkreuz",
+            "travel_hotel_aufzug", "travel_hotel_übernachtung", "travel_hotel_zimmer",
+            "travel_hotel_schlüssel", "travel_hotel_liegeplatz", "travel_hotel_wlan",
+            "travel_city_nav_platz", "travel_city_nav_links", "travel_city_nav_rechts",
+            "travel_city_nav_geradeaus", "travel_city_nav_richtung", "travel_city_nav_norden",
+            "travel_city_nav_osten", "travel_city_nav_süden",
+            "travel_transport_strafe", "travel_transport_sattel", "travel_transport_kette",
+            "work_tools_mutter", "work_tools_feile", "work_tools_hobel",
+            "work_tools_schraubstock", "work_tools_mörtel", "work_tools_bolzen", "work_tools_nagel",
+            "work_office_stempel", "work_office_schicht", "work_business_bestellung", "work_business_auftrag",
+            "health_illness_tablette", "health_illness_pflaster", "health_illness_erkältung",
+            "city_emergency_pflaster", "medicine_care_gips", "fitness_wellness_planke",
+            "appearance_hygiene_taschentuch", "appearance_hygiene_creme", "home_bathroom_taschentuch",
+            "body_parts_gelenk", "body_parts_brustkorb", "body_parts_rücken", "body_parts_ferse",
+            "city_places_gericht", "city_places_bar", "city_places_diskothek",
+            "society_politics_gericht", "society_religion_glocke", "society_religion_tempel",
+            "city_services_wechselgeld", "city_services_filiale", "city_services_pin-code", "city_services_zinsen",
+            "shopping_money_wechselgeld", "shopping_money_filiale", "shopping_money_pin", "shopping_money_zinsen",
+            "shopping_materials_kapuze", "shopping_shoes_absatz", "home_furniture_hocker",
+            "education_supplies_lineal", "education_languages_buchstabe", "education_languages_regel",
+            "education_school_note", "education_school_fach",
+            "music_instruments_band", "music_instruments_takt", "music_instruments_bühne",
+            "gaming_entertainment_level", "gaming_entertainment_schauspiel", "gaming_entertainment_theaterstück",
+            "nature_weather_schauer", "nature_weather_kälte", "nature_weather_eis",
+            "nature_landscape_quelle", "nature_landscape_ebene", "nature_landscape_hafen",
+            "nature_plants_zapfen", "nature_wildlife_fliege", "nature_animals_kalb",
+            "tech_computers_taste", "tech_computers_laufwerk", "tech_computers_datei", "tech_computers_ordner",
+            "tech_internet_cookie", "tech_internet_link", "tech_internet_spam",
+            "tech_devices_schalter", "tech_devices_tablet",
+            "tech_data_branch", "tech_data_port", "tech_data_log", "tech_data_bit", "tech_data_skript",
+            "tech_science_tabelle", "tech_science_zelle",
+            "people_relationships_vorstand", "people_relationships_verein", "people_relationships_brief",
+            "adj_size_time_momentan", "adj_size_time_doppelt"
+        )
+        val editor = prefs.edit()
+        prefs.all.keys.forEach { key ->
+            val lower = key.lowercase()
+            if (lower.startsWith("food_restaurant_") || lower in staleExactKeys) {
+                editor.remove(key)
+                localPhotoFileForKey(key).delete()
+            }
+        }
+        staleExactKeys.forEach { key -> localPhotoFileForKey(key).delete() }
+        editor.putBoolean(KEY_HOMONYM_CACHE_MIGRATED_V2, true).apply()
     }
 
     private val pixabayApiKey: String
@@ -668,7 +735,8 @@ class StockPhotoRepository private constructor(context: Context) {
             }
 
             // Cap non-fallback probes once we already found a reasonable fresh hit so speed stays snappy
-            if (!step.isSubtopicFallback && bestFreshHits != null && nonFallbackStepsTried >= MAX_QUALITY_PROBE_STEPS) {
+            val probeLimit = if (fastBulk) MAX_BULK_PROBE_STEPS else MAX_QUALITY_PROBE_STEPS
+            if (!step.isSubtopicFallback && bestFreshHits != null && nonFallbackStepsTried >= probeLimit) {
                 return bestFreshHits
             }
             if (step.isSubtopicFallback && bestFreshHits != null) {
@@ -686,8 +754,9 @@ class StockPhotoRepository private constructor(context: Context) {
                         if (bestFreshHits == null || res.bestScore < bestFreshHits.bestScore) {
                             bestFreshHits = res
                         }
-                        // Fast 1-call exit in bulk offline mode or whenever we hit a high-confidence match
-                        if (fastBulk || step.isSubtopicFallback || res.bestScore <= GOOD_MATCH_SCORE_THRESHOLD) {
+                        // Fast 1-call exit whenever we hit a confident match (bulk mode also self-corrects noisy hits)
+                        val bulkAcceptable = fastBulk && res.bestScore <= BULK_ACCEPTABLE_SCORE_THRESHOLD
+                        if (bulkAcceptable || step.isSubtopicFallback || res.bestScore <= GOOD_MATCH_SCORE_THRESHOLD) {
                             return bestFreshHits
                         }
                     } else if (fallbackDuplicateHits == null || res.bestScore < fallbackDuplicateHits.bestScore) {
@@ -741,8 +810,12 @@ class StockPhotoRepository private constructor(context: Context) {
             return PixabayCallResult.TransientFailure
         }
         val encodedQ = URLEncoder.encode(step.query, "UTF-8")
+        val categoryParam = step.pixabayCategory
+            ?.takeIf { it.isNotBlank() }
+            ?.let { "&category=$it" }
+            .orEmpty()
         val url = "https://pixabay.com/api/?key=$pixabayApiKey&q=$encodedQ&lang=${step.lang}" +
-            "&image_type=photo&orientation=horizontal&safesearch=true&per_page=20"
+            "$categoryParam&image_type=photo&orientation=horizontal&safesearch=true&per_page=20"
 
         val request = Request.Builder()
             .url(url)
@@ -895,6 +968,7 @@ class StockPhotoRepository private constructor(context: Context) {
         private const val TAG = "StockPhotoRepository"
         private const val PREFS_NAME = "deutschlern_stock_photo_cache_v4"
         private const val KEY_ADJ_CACHE_MIGRATED_V1 = "__adj_photo_cache_migrated_v1"
+        private const val KEY_HOMONYM_CACHE_MIGRATED_V2 = "__homonym_photo_cache_migrated_v2"
         private const val DEFAULT_RATE_LIMIT_COOLDOWN_MS = 15_000L
         private const val MIN_VALID_PHOTO_BYTES = 1024L
         private const val TARGET_ASPECT_RATIO = 4f / 3f
@@ -902,7 +976,9 @@ class StockPhotoRepository private constructor(context: Context) {
         internal const val CARD_DECODE_HEIGHT = 480
         internal const val THUMB_DECODE_SIZE = 200
         internal const val GOOD_MATCH_SCORE_THRESHOLD = 0.35f
+        private const val BULK_ACCEPTABLE_SCORE_THRESHOLD = 1.2f
         private const val MAX_QUALITY_PROBE_STEPS = 3
+        private const val MAX_BULK_PROBE_STEPS = 2
 
         private val tagWordSplitRegex = Regex("[\\s\\-/]+")
 
