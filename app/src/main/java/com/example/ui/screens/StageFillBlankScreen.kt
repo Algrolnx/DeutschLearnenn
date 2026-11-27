@@ -216,22 +216,14 @@ fun StageFillBlankScreen(
                         nextStageNumber = nextEnabled,
                         title = "Етап 6 пройдено!",
                         subtitle = when {
-                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            unlockedSrs -> "Усі обрані етапи пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
                             nextEnabled != null -> "Усі речення доповнено на 100%! Далі відкрито Етап $nextEnabled."
-                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі обрані етапи підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 6) },
                         onBackToHub = { viewModel.navigateBack() }
                     )
                 } else {
-                    FillBlankModeToggle(
-                        mode = inputMode,
-                        onSelectMode = { viewModel.setStage5InputMode(it) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
                     Column(
                         modifier = Modifier
                             .weight(1f)

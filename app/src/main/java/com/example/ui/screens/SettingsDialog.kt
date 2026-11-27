@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Lightbulb
@@ -77,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.FillBlankInputMode
 import com.example.ui.LearningViewModel
 import com.example.ui.Stage6InputMode
 import com.example.ui.components.CefrLevels
@@ -110,6 +112,7 @@ fun SettingsDialog(
     val ioStatus by viewModel.ioStatusMessage.collectAsStateWithLifecycle()
     val enabledStages by viewModel.enabledStages.collectAsStateWithLifecycle()
     val dailyReviewLimit by viewModel.dailyReviewLimit.collectAsStateWithLifecycle()
+    val stage5InputMode by viewModel.stage5InputMode.collectAsStateWithLifecycle()
     val stage6InputMode by viewModel.stage6InputMode.collectAsStateWithLifecycle()
     val offlineState by viewModel.offlineDownloadState.collectAsStateWithLifecycle()
 
@@ -734,7 +737,7 @@ fun SettingsDialog(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Поєднання карток, слухання, тестів, артиклів, множини, контексту, правопису з артиклем та фінального міксу активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. Слова потрапляють у цикл «Повторення» лише після проходження всіх 8 етапів підтеми на 100%.",
+                                text = "Поєднання карток, слухання, тестів, артиклів, множини, контексту, правопису з артиклем та фінального міксу активує різні типи пам'яті та забезпечує найміцніше запам'ятовування слів. Якщо вимкнути частину етапів, 100% прогресу та перехід у «Повторення» зараховуються після проходження всіх увімкнених етапів.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 17.sp
@@ -802,6 +805,77 @@ fun SettingsDialog(
                             }
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Stage 6 Fill-in-the-Blank Input Mode Selector (Options vs Keyboard)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Extension,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Введення на Етапі 6 (Пропуски)",
+                        fontFamily = LoraFontFamily,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Оберіть формат проходження пропусків у реченнях на Етапі 6, у Фінальному міксі та в повторенні.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val isFillOptions = stage5InputMode == FillBlankInputMode.OPTIONS
+                    val isFillKeyboard = stage5InputMode == FillBlankInputMode.KEYBOARD
+                    FilterChip(
+                        selected = isFillOptions,
+                        onClick = { viewModel.setStage5InputMode(FillBlankInputMode.OPTIONS) },
+                        label = {
+                            Text(
+                                text = "Обирати варіант",
+                                fontSize = 12.sp,
+                                fontWeight = if (isFillOptions) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("stage5_mode_options")
+                    )
+                    FilterChip(
+                        selected = isFillKeyboard,
+                        onClick = { viewModel.setStage5InputMode(FillBlankInputMode.KEYBOARD) },
+                        label = {
+                            Text(
+                                text = "З клавіатури",
+                                fontSize = 12.sp,
+                                fontWeight = if (isFillKeyboard) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("stage5_mode_keyboard")
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -1012,7 +1086,7 @@ fun SettingsDialog(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "Автоматично читає слово з артиклем на Етапі 1",
+                                text = "Автоматично читає слово в однині та множині на Етапі 1",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1168,7 +1242,7 @@ fun SettingsDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "База слів (Експорт / Імпорт)",
+                            text = "Резервна копія та база слів",
                             fontFamily = LoraFontFamily,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
@@ -1184,7 +1258,7 @@ fun SettingsDialog(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Зберігайте резервну копію словника та прогресу або додавайте власні слова через файли JSON / TSV.",
+                    text = "Експорт у JSON зберігає весь прогрес навчання: вивчені слова, пройдені етапи, графік повторень, речення та налаштування. Після перевстановлення програми оберіть цей файл через імпорт.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1196,7 +1270,7 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedButton(
-                        onClick = { exportJsonLauncher.launch("deutschlern_words.json") },
+                        onClick = { exportJsonLauncher.launch("deutschlern_backup.json") },
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, extended.cardBorder),
                         modifier = Modifier
@@ -1206,7 +1280,7 @@ fun SettingsDialog(
                     ) {
                         Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Експорт JSON", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Копія JSON", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
 
                     OutlinedButton(
@@ -1244,7 +1318,7 @@ fun SettingsDialog(
                 ) {
                     Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Імпортувати слова (JSON / TSV)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Відновити / Імпортувати (JSON / TSV)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
 
                 ioStatus?.let { status ->

@@ -185,9 +185,9 @@ fun StageListeningScreen(
                         nextStageNumber = nextEnabled,
                         title = "Етап 2 пройдено!",
                         subtitle = when {
-                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            unlockedSrs -> "Усі обрані етапи пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
                             nextEnabled != null -> "Усі слова розпізнано на слух на 100%! Далі відкрито Етап $nextEnabled."
-                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі обрані етапи підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 2) },
                         onBackToHub = { viewModel.navigateBack() }

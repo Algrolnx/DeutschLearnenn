@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -279,6 +280,42 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
+    /**
+     * Pronounces a short sequence of German utterances in order (for example, singular + plural
+     * in Stage 1 flashcards), reusing offline-cached HD audio files seamlessly.
+     */
+    fun speakSequence(texts: List<String>, slow: Boolean = _isSlowMode.value) {
+        val cleanedParts = texts.map { it.trim() }.filter { it.isNotEmpty() }
+        if (cleanedParts.isEmpty()) return
+        if (cleanedParts.size == 1) {
+            speak(cleanedParts.first(), slow)
+            return
+        }
+
+        stopPlaybackOnly()
+
+        if (_useHdVoice.value) {
+            speakJob = scope.launch {
+                for ((index, part) in cleanedParts.withIndex()) {
+                    if (!isActive) return@launch
+                    val cachedFile = resolveOrFetchHdAudio(part)
+                    if (!isActive) return@launch
+                    val played = cachedFile != null && playAudioFileAndWait(cachedFile, slow)
+                    if (!played) {
+                        val remaining = cleanedParts.drop(index).joinToString(", ")
+                        speakOfflineFallback(remaining, slow)
+                        return@launch
+                    }
+                    if (index < cleanedParts.lastIndex) {
+                        delay(220L)
+                    }
+                }
+            }
+        } else {
+            speakOfflineFallback(cleanedParts.joinToString(", "), slow)
+        }
+    }
+
     fun isHdAudioCached(text: String): Boolean {
         val cleaned = text.trim()
         if (cleaned.isEmpty()) return true
@@ -432,6 +469,69 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
             false
         }
     }
+
+    private suspend fun playAudioFileAndWait(file: File, slow: Boolean): Boolean =
+        suspendCancellableCoroutine { cont ->
+            try {
+                val mp = MediaPlayer()
+                mediaPlayer = mp
+                mp.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                mp.setDataSource(file.absolutePath)
+                mp.prepare()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    val speed = if (slow) 0.78f else 1.0f
+                    try {
+                        mp.playbackParams = PlaybackParams().setSpeed(speed)
+                    } catch (_: Throwable) {
+                    }
+                }
+                mp.setOnCompletionListener { player ->
+                    _isSpeaking.value = false
+                    if (mediaPlayer === player) mediaPlayer = null
+                    try {
+                        player.release()
+                    } catch (_: Throwable) {
+                    }
+                    if (cont.isActive) cont.resume(true)
+                }
+                mp.setOnErrorListener { player, _, _ ->
+                    _isSpeaking.value = false
+                    if (mediaPlayer === player) mediaPlayer = null
+                    try {
+                        player.release()
+                    } catch (_: Throwable) {
+                    }
+                    if (cont.isActive) cont.resume(false)
+                    true
+                }
+                cont.invokeOnCancellation {
+                    if (mediaPlayer === mp) {
+                        releaseMediaPlayer()
+                    } else {
+                        try {
+                            if (mp.isPlaying) mp.stop()
+                        } catch (_: Throwable) {
+                        }
+                        try {
+                            mp.release()
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    _isSpeaking.value = false
+                }
+                _isSpeaking.value = true
+                mp.start()
+            } catch (t: Throwable) {
+                Log.w("TtsManager", "MediaPlayer failed on sequence audio: ${t.message}")
+                releaseMediaPlayer()
+                if (cont.isActive) cont.resume(false)
+            }
+        }
 
     private fun speakOfflineFallback(text: String, slow: Boolean) {
         if (!isInitialized) {

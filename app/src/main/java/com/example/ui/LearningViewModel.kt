@@ -773,6 +773,16 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun speakWordWithPlural(word: WordEntity, slow: Boolean = false) {
+        ttsManager.speakSequence(buildSingularAndPluralSpeechParts(word), slow)
+    }
+
+    fun speakWordWithPluralIfAuto(word: WordEntity, slow: Boolean = false) {
+        if (_autoPronounce.value) {
+            speakWordWithPlural(word, slow)
+        }
+    }
+
     // === Main Bottom Navigation Tab ===
     private val _selectedMainTab = MutableStateFlow(MainTab.TOPICS)
     val selectedMainTab: StateFlow<MainTab> = _selectedMainTab.asStateFlow()
@@ -820,6 +830,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             .putString("enabled_stages_csv", updated.sorted().joinToString(","))
             .putBoolean("stages_migrated_to_8", true)
             .apply()
+        viewModelScope.launch {
+            repository.enrollCompletedSubtopicsForEnabledStages(updated)
+            refreshReviewDashboard()
+        }
     }
 
     fun getFirstEnabledStage(): Int = _enabledStages.value.minOrNull() ?: 1
@@ -989,7 +1003,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
                 }
                 val total = totalWordCount.value
-                _ioStatusMessage.value = IoStatusMessage("Експортовано $total слів у формат JSON")
+                _ioStatusMessage.value = IoStatusMessage("Збережено повну резервну копію ($total слів та весь прогрес)")
             } catch (e: Exception) {
                 _ioStatusMessage.value = IoStatusMessage("Помилка експорту: ${e.message}", isError = true)
             }
@@ -1011,6 +1025,28 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun reloadRestoredPreferencesAndProgress() {
+        _selectedLevel.value = prefs.getString("selected_cefr_level", _selectedLevel.value) ?: "A1"
+        _enabledStages.value = loadEnabledStages()
+        _dailyReviewLimit.value = loadDailyReviewLimit()
+        _stage5InputMode.value = FillBlankInputMode.entries.firstOrNull {
+            it.name == prefs.getString("stage5_fillblank_input_mode", FillBlankInputMode.OPTIONS.name)
+        } ?: FillBlankInputMode.OPTIONS
+        _stage6InputMode.value = Stage6InputMode.entries.firstOrNull {
+            it.name == prefs.getString("stage6_input_mode", Stage6InputMode.LETTER_TILES.name)
+        } ?: Stage6InputMode.LETTER_TILES
+        _streakDays.value = computeCurrentStreak(
+            savedStreak = prefs.getInt("streak_days", 0),
+            lastActiveDate = prefs.getString("streak_last_active_date", null),
+            today = todayDateKey(),
+            yesterday = yesterdayDateKey()
+        )
+        _reviewsDoneToday.value = loadReviewsDoneToday()
+        _learnedSentenceIds.value = sentencesRepository.getLearnedIds()
+        _favoriteSentenceIds.value = sentencesRepository.getFavoriteIds()
+        refreshReviewDashboard()
+    }
+
     fun importVocabularyStream(inputStream: InputStream) {
         viewModelScope.launch {
             try {
@@ -1018,14 +1054,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { it.readText() }
                 }
                 val summary = repository.importWordsFromString(text)
-                if (summary.importedCount == 0 && summary.updatedCount == 0) {
+                reloadRestoredPreferencesAndProgress()
+                if (summary.importedCount == 0 && summary.updatedCount == 0 && summary.restoredSubtopicsCount == 0) {
                     _ioStatusMessage.value = IoStatusMessage(
-                        "Не знайдено коректних слів у файлі. Перевірте формат JSON або TSV.",
+                        "Не знайдено коректних даних у файлі. Перевірте формат JSON або TSV.",
                         isError = true
                     )
                 } else {
+                    val details = buildList {
+                        if (summary.restoredSubtopicsCount > 0) add("підтем із прогресом: ${summary.restoredSubtopicsCount}")
+                        if (summary.restoredSrsWordsCount > 0) add("слів у повторенні: ${summary.restoredSrsWordsCount}")
+                        if (summary.importedCount > 0) add("+${summary.importedCount} нових слів")
+                        if (summary.updatedCount > 0) add("оновлено слів: ${summary.updatedCount}")
+                    }
                     _ioStatusMessage.value = IoStatusMessage(
-                        "Імпортовано: +${summary.importedCount} нових, оновлено: ${summary.updatedCount}"
+                        "Відновлено: ${details.joinToString(", ")}"
                     )
                 }
             } catch (e: Exception) {
@@ -2986,6 +3029,19 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         const val DEFAULT_DAILY_REVIEW_LIMIT = 60
         const val MIXED_ROUND_SIZE = 15
         val ALL_STAGES: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7, 8)
+
+        internal fun buildSingularAndPluralSpeechParts(word: WordEntity): List<String> {
+            val singular = word.displayWithArticle.trim()
+            if (singular.isEmpty()) return emptyList()
+            val art = word.article.trim().lowercase()
+            val plural = word.plural.trim()
+            val hasValidNounPlural = art in setOf("der", "die", "das") &&
+                plural.isNotEmpty() &&
+                plural != "-" &&
+                !plural.contains(",") &&
+                !plural.equals(singular, ignoreCase = true)
+            return if (hasValidNounPlural) listOf(singular, plural) else listOf(singular)
+        }
         val DAILY_LIMIT_PRESETS: List<Int> = listOf(40, 60, 80)
 
         internal fun orderWordsByTopicCatalog(words: List<WordEntity>): List<WordEntity> {

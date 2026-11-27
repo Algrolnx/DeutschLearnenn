@@ -204,7 +204,7 @@ fun ReviewTabContent(
                                 )
                                 Text(
                                     text = when {
-                                        dashboard.enrolledCount == 0 -> "Пройдіть усі 8 етапів першої підтеми на 100% — слова з'являться тут через 6 годин"
+                                        dashboard.enrolledCount == 0 -> "Пройдіть усі обрані етапи першої підтеми на 100% — слова з'являться тут через 6 годин"
                                         dailyLimitCapped -> "Щоб не перевтомлюватись, решта слів спокійно чекатиме завтра (ліміт ${dashboard.dailyLimit}/день)"
                                         dashboard.availableTodayCount > 0 -> "Короткий раунд до $nextRoundCount слів у перемішку з різними етапами"
                                         nextTs != null -> "Наступна порція: $nextBatchLabel${SpacedRepetition.formatTimeUntilUk(nextTs)}"

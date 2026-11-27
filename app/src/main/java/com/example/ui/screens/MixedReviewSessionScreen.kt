@@ -252,9 +252,9 @@ fun MixedReviewSessionScreen(
                             nextStageNumber = null,
                             title = if (unlockedSrs) "Підтему завершено на 100%!" else "Етап 8 пройдено!",
                             subtitle = if (unlockedSrs) {
-                                "Вітаємо! Ви успішно склали фінальний мікс і завершили всі 8 етапів підтеми на 100%. Слова додано у вкладку «Повторення» (перше повторення через 6 годин)."
+                                "Вітаємо! Ви успішно склали фінальний мікс і завершили всі обрані етапи підтеми на 100%. Слова додано у вкладку «Повторення» (перше повторення через 6 годин)."
                             } else {
-                                "Фінальний мікс пройдено на 100%! Щоб слова потрапили в цикл «Повторення», завершіть усі 8 етапів цієї підтеми."
+                                "Фінальний мікс пройдено на 100%! Щоб слова потрапили в цикл «Повторення», завершіть усі обрані етапи цієї підтеми."
                             },
                             onNextStage = { viewModel.navigateBack() },
                             onBackToHub = { viewModel.navigateBack() }
@@ -742,14 +742,6 @@ fun MixedReviewSessionScreen(
 
                         is MixedReviewItem.FillBlankReview -> {
                             val isFillBlankAnswered = selectedString != null || fillBlankStatus.isResolved
-                            FillBlankModeToggle(
-                                mode = fillBlankInputMode,
-                                onSelectMode = { viewModel.setStage5InputMode(it) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
                             Column(
                                 modifier = Modifier
                                     .weight(1f)

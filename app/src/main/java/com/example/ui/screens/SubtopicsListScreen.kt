@@ -79,6 +79,11 @@ fun SubtopicsListScreen(
     val allProgress by viewModel.allProgress.collectAsStateWithLifecycle()
     val selectedLevel by viewModel.selectedLevel.collectAsStateWithLifecycle()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsStateWithLifecycle()
+    val enabledStages by viewModel.enabledStages.collectAsStateWithLifecycle()
+    val activeStages = remember(enabledStages) {
+        enabledStages.ifEmpty { com.example.data.repository.VocabularyRepository.ALL_STAGES }
+    }
+    val totalActiveStages = activeStages.size.coerceAtLeast(1)
 
     val countMap = remember(subtopicLevelCounts, selectedLevel) {
         val exact = subtopicLevelCounts
@@ -175,7 +180,11 @@ fun SubtopicsListScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Оберіть тему для карток та 8 етапів",
+                                text = if (totalActiveStages == 8) {
+                                    "Оберіть тему для карток та 8 етапів"
+                                } else {
+                                    "Оберіть тему для карток та $totalActiveStages обраних етапів"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -201,8 +210,8 @@ fun SubtopicsListScreen(
 
             items(mainTopic.subtopics, key = { it.id }) { subtopic ->
                 val progress = allProgress.firstOrNull { it.subtopicId == subtopic.id }
-                val completedStages = remember(allProgress, selectedLevel, subtopic.id) {
-                    viewModel.getCompletedStageSetForSubtopic(subtopic.id).size
+                val completedStages = remember(allProgress, selectedLevel, subtopic.id, activeStages) {
+                    viewModel.getCompletedStageSetForSubtopic(subtopic.id).count { it in activeStages }
                 }
                 val stars = progress?.stars ?: 0
                 val wordsCount = countMap.first[subtopic.id] ?: countMap.second[subtopic.id] ?: 12
@@ -211,6 +220,7 @@ fun SubtopicsListScreen(
                     subtopic = subtopic,
                     topicColor = mainTopic.color,
                     completedStages = completedStages,
+                    totalStages = totalActiveStages,
                     stars = stars,
                     wordsCount = wordsCount,
                     selectedLevel = selectedLevel,
@@ -236,6 +246,7 @@ fun SubtopicRowCard(
     subtopic: Subtopic,
     topicColor: Color,
     completedStages: Int,
+    totalStages: Int = 8,
     stars: Int,
     wordsCount: Int = 12,
     selectedLevel: String = "A1",
@@ -243,6 +254,8 @@ fun SubtopicRowCard(
     modifier: Modifier = Modifier
 ) {
     val extended = LocalAppExtendedColors.current
+    val safeTotalStages = totalStages.coerceAtLeast(1)
+    val isFullyCompleted = completedStages >= safeTotalStages
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -263,7 +276,7 @@ fun SubtopicRowCard(
                 modifier = Modifier
                     .width(5.dp)
                     .fillMaxHeight()
-                    .background(if (completedStages >= 8) SuccessGreen else topicColor)
+                    .background(if (isFullyCompleted) SuccessGreen else topicColor)
             )
 
             Column(
@@ -278,7 +291,7 @@ fun SubtopicRowCard(
                 ) {
                     TopicPixelIcon(
                         iconKey = subtopic.iconKey,
-                        accentColor = if (completedStages >= 8) SuccessGreen else topicColor,
+                        accentColor = if (isFullyCompleted) SuccessGreen else topicColor,
                         innerPadding = 6.dp,
                         modifier = Modifier.size(40.dp)
                     )
@@ -351,7 +364,7 @@ fun SubtopicRowCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        for (i in 1..8) {
+                        for (i in 1..safeTotalStages) {
                             val isDone = i <= completedStages
                             Box(
                                 modifier = Modifier
@@ -360,7 +373,7 @@ fun SubtopicRowCard(
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(
                                         if (isDone) {
-                                            if (completedStages >= 8) SuccessGreen else topicColor
+                                            if (isFullyCompleted) SuccessGreen else topicColor
                                         } else {
                                             extended.cardBorder
                                         }
@@ -369,11 +382,11 @@ fun SubtopicRowCard(
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "${completedStages.coerceAtMost(8)} / 8",
+                            text = "${completedStages.coerceAtMost(safeTotalStages)} / $safeTotalStages",
                             fontFamily = MonoFontFamily,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (completedStages >= 8) SuccessGreen else topicColor
+                            color = if (isFullyCompleted) SuccessGreen else topicColor
                         )
                     }
 

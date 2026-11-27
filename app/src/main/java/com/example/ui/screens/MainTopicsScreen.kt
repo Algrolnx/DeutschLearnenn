@@ -105,6 +105,7 @@ fun MainTopicsScreen(
     val topicsContentMode by viewModel.topicsContentMode.collectAsStateWithLifecycle()
     val learnedSentenceIds by viewModel.learnedSentenceIds.collectAsStateWithLifecycle()
     val favoriteSentenceIds by viewModel.favoriteSentenceIds.collectAsStateWithLifecycle()
+    val enabledStages by viewModel.enabledStages.collectAsStateWithLifecycle()
 
     val showFavoritesOnly = selectedTab == MainTab.FAVORITES
     val isSentencesMode = !showFavoritesOnly && topicsContentMode == TopicsContentMode.SENTENCES
@@ -126,13 +127,15 @@ fun MainTopicsScreen(
         }
     }
 
-    val progressByTopic = remember(allProgress, selectedLevel) {
+    val progressByTopic = remember(allProgress, selectedLevel, enabledStages) {
+        val activeStages = enabledStages.ifEmpty { VocabularyRepository.ALL_STAGES }
+        val stagesPerSubtopic = activeStages.size.coerceAtLeast(1)
         TopicCatalog.mainTopics.associate { topic ->
             val subtopicsCount = topic.subtopics.size
             val completedStages = topic.subtopics.sumOf { sub ->
-                viewModel.getCompletedStageSetForSubtopic(sub.id).size
+                viewModel.getCompletedStageSetForSubtopic(sub.id).count { it in activeStages }
             }
-            val totalPossibleStages = subtopicsCount * VocabularyRepository.TOTAL_STAGES
+            val totalPossibleStages = subtopicsCount * stagesPerSubtopic
             val ratio = if (totalPossibleStages > 0) (completedStages.toFloat() / totalPossibleStages).coerceIn(0f, 1f) else 0f
             topic.id to ratio
         }

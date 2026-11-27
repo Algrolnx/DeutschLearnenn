@@ -113,7 +113,7 @@ fun StageFlashcardsScreen(
 
     LaunchedEffect(currentIndex, currentWord?.id, isFinished) {
         if (currentWord != null && !isFinished) {
-            viewModel.speakIfAuto(currentWord.displayWithArticle)
+            viewModel.speakWordWithPluralIfAuto(currentWord)
             val repo = StockPhotoRepository.getInstance(context)
             repo.prefetchWordsAsync(
                 listOfNotNull(
@@ -208,9 +208,9 @@ fun StageFlashcardsScreen(
                         nextStageNumber = nextEnabled,
                         title = "Етап 1 пройдено!",
                         subtitle = when {
-                            unlockedSrs -> "Усі 8 етапів пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
+                            unlockedSrs -> "Усі обрані етапи пройдено на 100%! Через 6 годин слова з'являться у вкладці «Повторення»."
                             nextEnabled != null -> "Ви ознайомилися з усіма словами на 100%. Далі відкрито Етап $nextEnabled!"
-                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі 8 етапів підтеми."
+                            else -> "Етап пройдено на 100%! Щоб слова потрапили в «Повторення», пройдіть усі обрані етапи підтеми."
                         },
                         onNextStage = { viewModel.startNextEnabledStage(subtopicId, 1) },
                         onBackToHub = { viewModel.navigateBack() }

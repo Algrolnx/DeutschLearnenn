@@ -156,8 +156,14 @@ interface WordDao {
     @Query("SELECT * FROM subtopic_progress")
     fun getAllSubtopicProgress(): Flow<List<SubtopicProgressEntity>>
 
+    @Query("SELECT * FROM subtopic_progress")
+    suspend fun getAllSubtopicProgressOnce(): List<SubtopicProgressEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSubtopicProgress(progress: SubtopicProgressEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveAllSubtopicProgress(items: List<SubtopicProgressEntity>)
 
     @Query("DELETE FROM subtopic_progress")
     suspend fun deleteAllSubtopicProgress()

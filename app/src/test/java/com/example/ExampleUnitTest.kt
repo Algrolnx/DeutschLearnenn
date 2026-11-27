@@ -708,6 +708,12 @@ class ExampleUnitTest {
         assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 5, 6)))
         assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(8)))
         assertFalse(VocabularyRepository.isAllStagesCompleted(emptySet()))
+
+        // Custom reduced set of 6 enabled stages -> 100% mastery once all 6 are completed
+        val sixStages = setOf(1, 2, 3, 4, 6, 7)
+        assertTrue(VocabularyRepository.isAllStagesCompleted(sixStages, sixStages))
+        assertTrue(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 5, 6, 7), sixStages))
+        assertFalse(VocabularyRepository.isAllStagesCompleted(setOf(1, 2, 3, 4, 6), sixStages))
     }
 
     @Test
@@ -1333,5 +1339,52 @@ class ExampleUnitTest {
         }
 
         assertTrue(all.all { it.german.isNotBlank() && it.ukrainian.isNotBlank() && it.situationId.isNotBlank() })
+    }
+
+    @Test
+    fun stage1SingularAndPluralSpeechPartsWorkAcrossPartsOfSpeech() {
+        val apple = WordEntity(
+            german = "Apfel", article = "der", plural = "die Äpfel",
+            translationUk = "яблуко", translationEn = "apple",
+            categoryId = "food", subtopicId = "food_fruits"
+        )
+        assertEquals(listOf("der Apfel", "die Äpfel"), LearningViewModel.buildSingularAndPluralSpeechParts(apple))
+
+        val milk = WordEntity(
+            german = "Milch", article = "die", plural = "-",
+            translationUk = "молоко", translationEn = "milk",
+            categoryId = "food", subtopicId = "food_drinks"
+        )
+        assertEquals(listOf("die Milch"), LearningViewModel.buildSingularAndPluralSpeechParts(milk))
+
+        val verb = WordEntity(
+            german = "gehen", article = "", plural = "ging, gegangen",
+            translationUk = "йти", translationEn = "to go",
+            categoryId = "verbs", subtopicId = "verbs_motion"
+        )
+        assertEquals(listOf("gehen"), LearningViewModel.buildSingularAndPluralSpeechParts(verb))
+    }
+
+    @Test
+    fun generatedUkrainianExamplesAvoidBrokenNeuterGenderAgreement() {
+        val hotel = WordEntity(
+            german = "Hotel", article = "das", plural = "die Hotels",
+            translationUk = "готель", translationEn = "hotel",
+            exampleDe = "Wir übernachten in einem kleinen Hotel.",
+            exampleUk = "Ми ночуємо в маленькому готелі.",
+            categoryId = "travel", subtopicId = "travel_accommodation"
+        )
+        val examples = WordExampleGenerator.buildExamplesForWord(hotel)
+        assertEquals(3, examples.size)
+        val forbiddenFragments = listOf("допомогло", "потрібне", "важливе", "корисне", "цікаве", "зручне")
+        for (ex in examples) {
+            for (bad in forbiddenFragments) {
+                assertFalse(
+                    "Generated Ukrainian translation '${ex.uk}' must not contain broken neuter form '$bad'",
+                    ex.uk.lowercase().contains(bad)
+                )
+            }
+            assertNotNull(LearningViewModel.buildFillBlankMatch(hotel, ex.de))
+        }
     }
 }

@@ -359,7 +359,7 @@ fun SubtopicHubScreen(
                         text = if (visibleStages.size == 8) {
                             "Пройдіть усі 8 етапів на 100%, щоб відкрити інтервальне повторення"
                         } else {
-                            "Частину етапів вимкнено · для «Повторення» потрібні всі 8 етапів на 100%"
+                            "Пройдіть усі ${visibleStages.size} обрані етапи на 100%, щоб відкрити інтервальне повторення"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
